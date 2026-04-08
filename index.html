@@ -1965,41 +1965,6 @@ function saveDB(){
 
 let cloudSyncStatus = 'idle'; // idle, syncing, error
 
-// JSONP方式でGASを呼び出し
-function callCloudAPIJsonp(action, params = {}) {
-  return new Promise((resolve, reject) => {
-    const callbackName = 'gasCallback_' + Date.now();
-    const url = new URL(CLOUD_CONFIG.GAS_URL);
-    url.searchParams.set('action', action);
-    url.searchParams.set('apiKey', CLOUD_CONFIG.API_KEY);
-    url.searchParams.set('callback', callbackName);
-    Object.keys(params).forEach(k => url.searchParams.set(k, params[k]));
-    
-    window[callbackName] = function(data) {
-      delete window[callbackName];
-      document.body.removeChild(script);
-      resolve(data);
-    };
-    
-    const script = document.createElement('script');
-    script.src = url.toString();
-    script.onerror = function() {
-      delete window[callbackName];
-      document.body.removeChild(script);
-      reject(new Error('JSONP request failed'));
-    };
-    document.body.appendChild(script);
-    
-    setTimeout(() => {
-      if (window[callbackName]) {
-        delete window[callbackName];
-        if (script.parentNode) document.body.removeChild(script);
-        reject(new Error('JSONP timeout'));
-      }
-    }, 30000);
-  });
-}
-
 async function callCloudAPI(action, params = {}, postData = null) {
   if (!CLOUD_CONFIG.CLOUD_MODE || !CLOUD_CONFIG.GAS_URL || CLOUD_CONFIG.GAS_URL.includes('YOUR_DEPLOYMENT_ID')) {
     console.log('Cloud mode disabled or not configured');
@@ -2015,21 +1980,21 @@ async function callCloudAPI(action, params = {}, postData = null) {
     cloudSyncStatus = 'syncing';
     updateSyncIndicator();
     
-    // POSTの場合は従来のfetchを使用
+    let response;
     if (postData) {
-      const response = await fetch(url.toString(), {
+      response = await fetch(url.toString(), {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(postData)
+        body: JSON.stringify(postData),
+        redirect: 'follow'
       });
-      const result = await response.json();
-      cloudSyncStatus = result.error ? 'error' : 'idle';
-      updateSyncIndicator();
-      return result;
+    } else {
+      response = await fetch(url.toString(), {
+        method: 'GET',
+        redirect: 'follow'
+      });
     }
     
-    // GETの場合はJSONP方式を使用
-    const result = await callCloudAPIJsonp(action, params);
+    const result = await response.json();
     cloudSyncStatus = result.error ? 'error' : 'idle';
     updateSyncIndicator();
     return result;
