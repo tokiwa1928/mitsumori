@@ -2572,6 +2572,27 @@ function partSel(partNames, val='', id){
   return `<select style="font-size:12px;padding:3px 4px;width:100%" onchange="calc(${id})"><option value="">─</option>${opts}</select>`;
 }
 
+// 仕上サイズのselect（品目別グループ）- rowPaperBookより前に定義が必要
+const FINISH_SIZE_GROUPS_EARLY=[
+  {label:'A判',sizes:['A0','A1','A2','A3','A3ノビ','A4','A5','A6','A7','A8'],cats:['帳票','冊子','その他']},
+  {label:'B判',sizes:['B0','B1','B2','B3','B4','B5','B6','B7'],cats:['帳票','冊子','その他']},
+  {label:'葉書・カード',sizes:['葉書','往復葉書','二つ折葉書','名刺'],cats:['帳票','冊子','その他']},
+  {label:'長形封筒',sizes:['長3','長4','長40','長30','洋長3'],cats:['封筒']},
+  {label:'角形封筒',sizes:['角0','角1','角2','角3','角4','角5','角6','角7','角8'],cats:['封筒']},
+  {label:'洋形封筒',sizes:['洋0','洋1','洋2','洋3','洋4','洋6','洋7'],cats:['封筒']},
+  {label:'その他',sizes:['その他'],cats:['封筒','帳票','冊子','その他']},
+];
+const finishSizeOptsEarly=(val='', cat='')=>FINISH_SIZE_GROUPS_EARLY
+  .filter(g => !cat || g.cats.includes(cat))
+  .map(g=>
+    `<optgroup label="${g.label}">${g.sizes.map(s=>`<option value="${s}"${s===val?' selected':''}>${s}</option>`).join('')}</optgroup>`
+  ).join('');
+const finishSel=(val, id, cat='')=>{
+  return `<select data-field="finish" style="font-size:11px;padding:2px 3px;width:100%" onchange="autoMenRow(this.closest('tr'),'');calcPaperRowAmt(this.closest('tr'));calc(${id})">
+    <option value="">─</option>${finishSizeOptsEarly(val, cat)}<option value="custom">手入力</option>
+  </select>`;
+};
+
 // 用紙行（封筒）: パーツ | 封筒マスター | 封筒名 | 台数 | 仕上サイズ | 切数 | 面付数 | 枚数 | 予備数 | 必要枚数 | 全紙単価 | 金額
 function rowPaperEnv(id,d,tabId){
   // 封筒行: サイズ・パーツ種別なし
@@ -2754,19 +2775,8 @@ const FINISH_SIZE_GROUPS_ALL=[
   {label:'その他',sizes:['その他'],cats:['封筒','帳票','冊子','その他']},
 ];
 
-// 品目に応じたサイズ選択肢を生成
-const finishSizeOpts=(val='', cat='')=>FINISH_SIZE_GROUPS_ALL
-  .filter(g => !cat || g.cats.includes(cat))
-  .map(g=>
-    `<optgroup label="${g.label}">${g.sizes.map(s=>`<option value="${s}"${s===val?' selected':''}>${s}</option>`).join('')}</optgroup>`
-  ).join('');
-
-// 品目別サイズ選択（用紙行用）
-const finishSel=(val, id, cat='')=>{
-  return `<select data-field="finish" style="font-size:11px;padding:2px 3px;width:100%" onchange="autoMenRow(this.closest('tr'),'');calcPaperRowAmt(this.closest('tr'));calc(${id})">
-    <option value="">─</option>${finishSizeOpts(val, cat)}<option value="custom">手入力</option>
-  </select>`;
-};
+// 品目に応じたサイズ選択肢を生成（後方互換用エイリアス）
+const finishSizeOpts = finishSizeOptsEarly;
 
 // 用紙テーブルヘッダ
 const paperTH=(partLabel)=>`<thead><tr>
