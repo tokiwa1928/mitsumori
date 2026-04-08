@@ -10,7 +10,7 @@
 // ═══════════════════════════════════════════════════════════════
 const CLOUD_CONFIG = {
   // Google Apps Script のデプロイURL
-  GAS_URL: 'https://script.google.com/macros/s/AKfycbw1bA_izmJEeVKtRM46kbSRckT2g-uSumO1sk7eLAkpklxFujGuaMroAUA2Gwv045mhEA/exec',
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbzDsImfLC4GAQQh6uJv3YCStgdFN_ShjcsBJnXySUhLbhIfuLZprHagJxzRD4C9MWw5wQ/exec',
   // APIキー（GASのスクリプトプロパティで設定したものと同じ）
   API_KEY: 'mitsumori-2024',
   // クラウドモード（true: GAS連携, false: ローカルのみ）
@@ -163,6 +163,26 @@ textarea{resize:vertical;font-size:12px;line-height:1.5}
 .pv-tbl th{background:#f4f3f0;padding:5px 8px;border:1px solid #e0ddd6;font-weight:700;font-size:11px}
 .pv-tbl td{padding:5px 8px;border:1px solid #e0ddd6;vertical-align:top}
 .pv-num{text-align:right}
+/* 統合受信BOX */
+.inbox-filter-btn{background:#f5f5f5;border:1px solid #ddd;padding:6px 12px;border-radius:4px;font-size:12px;cursor:pointer;transition:all .15s}
+.inbox-filter-btn:hover{background:#e5e5e5}
+.inbox-filter-btn.active{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+.inbox-item{background:#fff;border:1px solid #e0ddd6;border-radius:8px;padding:12px 16px;cursor:pointer;transition:all .15s}
+.inbox-item:hover{border-color:#1a1a1a;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.inbox-item.unread{border-left:4px solid #3b82f6}
+.inbox-item.in_progress{border-left:4px solid #f59e0b}
+.inbox-item.done{border-left:4px solid #10b981;opacity:.7}
+.inbox-type{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-right:8px}
+.inbox-type.email{background:#dbeafe;color:#1d4ed8}
+.inbox-type.fax{background:#fef3c7;color:#b45309}
+.inbox-type.line{background:#dcfce7;color:#15803d}
+.inbox-type.internal{background:#f3e8ff;color:#7c3aed}
+.inbox-type.voice{background:#ffe4e6;color:#be123c}
+.inbox-status-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;margin-left:8px}
+.inbox-status-badge.unread{background:#dbeafe;color:#1d4ed8}
+.inbox-status-badge.in_progress{background:#fef3c7;color:#b45309}
+.inbox-status-badge.done{background:#dcfce7;color:#15803d}
+.inbox-preview{max-width:200px;max-height:150px;object-fit:contain;border:1px solid #ddd;border-radius:4px;margin-top:8px}
 </style>
 </head>
 <body>
@@ -217,6 +237,7 @@ textarea{resize:vertical;font-size:12px;line-height:1.5}
   <button class="tb-btn" data-page="master" onclick="swPage('master',this)">マスター管理</button>
   <button class="tb-btn" data-page="history" onclick="swPage('history',this)">実績一覧</button>
   <button class="tb-btn" data-page="calendar" onclick="swPage('calendar',this)">📅 納品カレンダー</button>
+  <button class="tb-btn" data-page="inbox" onclick="swPage('inbox',this)">📥 受信BOX</button>
   <button class="tb-btn" data-page="interco" onclick="swPage('interco',this)">🔄 社間依頼</button>
   <button class="tb-btn" data-page="companies" onclick="swPage('companies',this)">🏢 会社管理</button>
   <button class="tb-btn" data-page="settings" onclick="swPage('settings',this)">⚙ 設定</button>
@@ -475,6 +496,116 @@ textarea{resize:vertical;font-size:12px;line-height:1.5}
       </thead>
       <tbody id="sysuser-body"></tbody>
     </table>
+  </div>
+</div>
+
+<!-- 統合受信BOXページ -->
+<div class="page" id="page-inbox">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <button class="inbox-filter-btn active" data-filter="all" onclick="filterInbox('all',this)">すべて</button>
+      <button class="inbox-filter-btn" data-filter="unread" onclick="filterInbox('unread',this)">⚪ 未対応</button>
+      <button class="inbox-filter-btn" data-filter="in_progress" onclick="filterInbox('in_progress',this)">🟡 対応中</button>
+      <button class="inbox-filter-btn" data-filter="done" onclick="filterInbox('done',this)">🟢 完了</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="btn" onclick="fetchEmails()">📧 メール取得</button>
+      <button class="btn" onclick="openInternalMessageModal()">🏢 社内連絡</button>
+      <button class="btn" onclick="openVoiceMemoModal()">🎤 音声メモ</button>
+    </div>
+  </div>
+  
+  <div class="sec">
+    <div class="st">📥 統合受信BOX <span id="inbox-count" style="font-size:11px;color:#888;margin-left:8px"></span></div>
+    <div id="inbox-list" style="display:flex;flex-direction:column;gap:8px;max-height:70vh;overflow-y:auto;padding:8px 0">
+      <!-- 動的に生成 -->
+      <div style="text-align:center;color:#888;padding:2rem">読み込み中...</div>
+    </div>
+  </div>
+</div>
+
+<!-- 受信BOX詳細モーダル -->
+<div id="inbox-detail-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:min(800px,95vw);max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="padding:1rem 1.5rem;border-bottom:1px solid #e5e5e5;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-weight:700;font-size:16px" id="inbox-detail-title">詳細</span>
+      <button onclick="closeInboxDetail()" style="background:none;border:none;font-size:20px;cursor:pointer">×</button>
+    </div>
+    <div id="inbox-detail-content" style="padding:1.5rem">
+      <!-- 動的に生成 -->
+    </div>
+  </div>
+</div>
+
+<!-- 社内連絡モーダル -->
+<div id="internal-msg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:min(600px,95vw);max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="padding:1rem 1.5rem;border-bottom:1px solid #e5e5e5;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-weight:700;font-size:16px">🏢 社内連絡を投稿</span>
+      <button onclick="closeInternalMessageModal()" style="background:none;border:none;font-size:20px;cursor:pointer">×</button>
+    </div>
+    <div style="padding:1.5rem;display:flex;flex-direction:column;gap:1rem">
+      <div class="f">
+        <label style="font-weight:700">宛先（会社）</label>
+        <div id="internal-msg-to" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 0">
+          <!-- 動的に生成 -->
+        </div>
+      </div>
+      <div class="f">
+        <label style="font-weight:700">種別</label>
+        <select id="internal-msg-type" style="font-size:14px;padding:8px">
+          <option value="confirm">📋 確認依頼</option>
+          <option value="question">❓ 質問</option>
+          <option value="info">📢 共有</option>
+          <option value="urgent">⚠️ 緊急</option>
+          <option value="handover">🔄 引継ぎ</option>
+        </select>
+      </div>
+      <div class="f">
+        <label style="font-weight:700">関連案件（任意）</label>
+        <select id="internal-msg-project" style="font-size:14px;padding:8px">
+          <option value="">（なし）</option>
+          <!-- 動的に生成 -->
+        </select>
+      </div>
+      <div class="f">
+        <label style="font-weight:700">件名</label>
+        <input id="internal-msg-subject" type="text" placeholder="件名を入力" style="font-size:14px;padding:8px">
+      </div>
+      <div class="f">
+        <label style="font-weight:700">内容</label>
+        <textarea id="internal-msg-body" rows="5" placeholder="内容を入力" style="font-size:14px;padding:8px"></textarea>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn" onclick="closeInternalMessageModal()">キャンセル</button>
+        <button class="btn btn-p" onclick="sendInternalMessage()">投稿</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 音声メモモーダル -->
+<div id="voice-memo-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:min(500px,95vw);box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="padding:1rem 1.5rem;border-bottom:1px solid #e5e5e5;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-weight:700;font-size:16px">🎤 音声メモ</span>
+      <button onclick="closeVoiceMemoModal()" style="background:none;border:none;font-size:20px;cursor:pointer">×</button>
+    </div>
+    <div style="padding:2rem;text-align:center">
+      <div id="voice-record-status" style="font-size:14px;color:#888;margin-bottom:1rem">マイクボタンを押して録音開始</div>
+      <button id="voice-record-btn" onclick="toggleVoiceRecording()" style="width:80px;height:80px;border-radius:50%;border:none;background:#dc2626;color:#fff;font-size:32px;cursor:pointer;transition:all .2s">
+        🎤
+      </button>
+      <div id="voice-timer" style="font-size:24px;font-weight:700;margin-top:1rem;display:none">0:00</div>
+      <div id="voice-transcript" style="margin-top:1rem;padding:1rem;background:#f5f5f5;border-radius:8px;text-align:left;display:none">
+        <div style="font-size:11px;color:#888;margin-bottom:4px">文字起こし：</div>
+        <div id="voice-transcript-text"></div>
+      </div>
+      <div style="margin-top:1.5rem;display:flex;justify-content:center;gap:8px">
+        <button class="btn" onclick="closeVoiceMemoModal()">キャンセル</button>
+        <button class="btn btn-p" id="voice-send-btn" onclick="sendVoiceMemo()" disabled>送信</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -6779,6 +6910,593 @@ function completeIntercoOrder(idx){
   renderIntercoOrders();
 }
 
+// ═══════════════════ 統合受信BOX ═══════════════════
+
+let inboxItems = [];
+let currentInboxFilter = 'all';
+
+// 受信BOXアイテム一覧を取得
+async function loadInboxItems() {
+  if(!CLOUD_CONFIG.CLOUD_MODE) {
+    inboxItems = DB.inbox || [];
+    renderInboxList();
+    return;
+  }
+  
+  try {
+    const result = await callCloudAPI('getInboxItems', { companyId: currentAuth.companyId });
+    if(result && result.success) {
+      inboxItems = result.items || [];
+      DB.inbox = inboxItems;
+      renderInboxList();
+    }
+  } catch(e) {
+    console.error('受信BOX取得エラー:', e);
+  }
+}
+
+// フィルタ変更
+function filterInbox(filter, btn) {
+  currentInboxFilter = filter;
+  document.querySelectorAll('.inbox-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderInboxList();
+}
+
+// 受信BOXリストを描画
+function renderInboxList() {
+  const list = document.getElementById('inbox-list');
+  if(!list) return;
+  
+  let items = inboxItems;
+  if(currentInboxFilter !== 'all') {
+    items = items.filter(item => item.status === currentInboxFilter);
+  }
+  
+  const countEl = document.getElementById('inbox-count');
+  if(countEl) {
+    const unreadCount = inboxItems.filter(i => i.status === 'unread').length;
+    countEl.textContent = unreadCount > 0 ? `未対応: ${unreadCount}件` : '';
+  }
+  
+  if(items.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:#888;padding:2rem">アイテムがありません</div>';
+    return;
+  }
+  
+  list.innerHTML = items.map(item => {
+    const typeLabel = {
+      email: '📧 メール',
+      fax: '📠 FAX',
+      line: '💬 LINE',
+      internal: '🏢 社内',
+      voice: '🎤 音声'
+    }[item.type] || item.type;
+    
+    const typeClass = item.type || 'email';
+    const statusLabel = {
+      unread: '⚪ 未対応',
+      in_progress: '🟡 対応中',
+      done: '🟢 完了'
+    }[item.status] || item.status;
+    
+    const date = item.createdAt ? new Date(item.createdAt).toLocaleString('ja-JP', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+    
+    const assigneeInfo = item.assigneeName ? `<span style="color:#666;font-size:11px;margin-left:8px">👤 ${item.assigneeName}</span>` : '';
+    const workStatusInfo = item.workStatus ? `<span style="color:#b45309;font-size:11px;margin-left:8px">📋 ${item.workStatus}</span>` : '';
+    const waitingInfo = item.waitingFor ? `<span style="color:#dc2626;font-size:11px;margin-left:8px">⏳ ${item.waitingFor}</span>` : '';
+    
+    // 添付ファイルプレビュー
+    let previewHtml = '';
+    const attachments = item.attachments || [];
+    if(attachments.length > 0 && attachments[0].data && attachments[0].type?.startsWith('image/')) {
+      previewHtml = `<img src="data:${attachments[0].type};base64,${attachments[0].data}" class="inbox-preview" alt="プレビュー">`;
+    }
+    
+    return `
+      <div class="inbox-item ${item.status}" onclick="openInboxDetail('${item.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="flex:1">
+            <span class="inbox-type ${typeClass}">${typeLabel}</span>
+            <span style="font-weight:700">${escapeHtml(item.from || '不明')}</span>
+            <span class="inbox-status-badge ${item.status}">${statusLabel}</span>
+            ${assigneeInfo}${workStatusInfo}${waitingInfo}
+          </div>
+          <div style="font-size:11px;color:#888">${date}</div>
+        </div>
+        <div style="margin-top:6px;font-size:13px;font-weight:600">${escapeHtml(item.subject || '(件名なし)')}</div>
+        <div style="margin-top:4px;font-size:12px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml((item.body || '').substring(0, 100))}</div>
+        ${item.ocrText ? `<div style="margin-top:4px;font-size:11px;color:#0369a1;background:#f0f9ff;padding:4px 8px;border-radius:4px">📝 OCR: ${escapeHtml(item.ocrText.substring(0, 80))}...</div>` : ''}
+        ${previewHtml}
+      </div>
+    `;
+  }).join('');
+}
+
+// HTMLエスケープ
+function escapeHtml(str) {
+  if(!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// メール取得
+async function fetchEmails() {
+  if(!CLOUD_CONFIG.CLOUD_MODE) {
+    alert('クラウドモードが無効です');
+    return;
+  }
+  
+  try {
+    const result = await callCloudAPI('getEmails', { maxResults: 20 });
+    if(result && result.success && result.emails) {
+      // メールを受信BOXに追加
+      for(const email of result.emails) {
+        const existing = inboxItems.find(i => i.id === email.messageId);
+        if(!existing) {
+          const newItem = {
+            id: email.messageId,
+            companyId: currentAuth.companyId,
+            type: 'email',
+            status: email.isUnread ? 'unread' : 'done',
+            from: email.from,
+            subject: email.subject,
+            body: email.body,
+            attachments: email.attachments || [],
+            createdAt: email.date
+          };
+          await callCloudAPI('saveInboxItem', newItem, 'POST');
+        }
+      }
+      await loadInboxItems();
+      alert(`${result.emails.length}件のメールを取得しました`);
+    }
+  } catch(e) {
+    console.error('メール取得エラー:', e);
+    alert('メール取得に失敗しました');
+  }
+}
+
+// 受信BOX詳細を開く
+async function openInboxDetail(itemId) {
+  const item = inboxItems.find(i => i.id === itemId);
+  if(!item) return;
+  
+  const modal = document.getElementById('inbox-detail-modal');
+  const title = document.getElementById('inbox-detail-title');
+  const content = document.getElementById('inbox-detail-content');
+  
+  const typeLabel = {
+    email: '📧 メール',
+    fax: '📠 FAX',
+    line: '💬 LINE',
+    internal: '🏢 社内連絡',
+    voice: '🎤 音声メモ'
+  }[item.type] || item.type;
+  
+  title.textContent = typeLabel + ' - ' + (item.subject || '(件名なし)');
+  
+  const date = item.createdAt ? new Date(item.createdAt).toLocaleString('ja-JP') : '';
+  
+  // 添付ファイルプレビュー
+  let attachmentsHtml = '';
+  const attachments = item.attachments || [];
+  if(attachments.length > 0) {
+    attachmentsHtml = `
+      <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid #e5e5e5">
+        <div style="font-weight:700;margin-bottom:8px">📎 添付ファイル (${attachments.length}件)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px">
+          ${attachments.map((att, idx) => {
+            if(att.data && att.type?.startsWith('image/')) {
+              return `<div style="text-align:center">
+                <img src="data:${att.type};base64,${att.data}" style="max-width:300px;max-height:200px;border:1px solid #ddd;border-radius:4px">
+                <div style="font-size:11px;color:#888;margin-top:4px">${att.name || 'image'}</div>
+              </div>`;
+            } else if(att.type === 'application/pdf' && att.data) {
+              return `<div style="padding:12px;background:#f5f5f5;border-radius:8px">
+                <div>📄 ${att.name || 'document.pdf'}</div>
+                <button class="btn" style="margin-top:8px" onclick="ocrAttachment('${itemId}', ${idx})">📝 OCR実行</button>
+              </div>`;
+            } else {
+              return `<div style="padding:8px;background:#f5f5f5;border-radius:4px">${att.name || '添付ファイル'}</div>`;
+            }
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+  
+  // OCR結果
+  const ocrHtml = item.ocrText ? `
+    <div style="margin-top:1rem;padding:1rem;background:#f0f9ff;border-radius:8px;border:1px solid #bae6fd">
+      <div style="font-weight:700;margin-bottom:8px">📝 OCR抽出結果</div>
+      <div style="white-space:pre-wrap;font-size:13px">${escapeHtml(item.ocrText)}</div>
+      <button class="btn" style="margin-top:8px" onclick="copyToClipboard('${escapeHtml(item.ocrText).replace(/'/g,"\\'")}')">コピー</button>
+    </div>
+  ` : '';
+  
+  // 履歴
+  const history = item.history || [];
+  const historyHtml = history.length > 0 ? `
+    <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid #e5e5e5">
+      <div style="font-weight:700;margin-bottom:8px">📜 対応履歴</div>
+      ${history.map(h => `
+        <div style="font-size:12px;padding:4px 0;border-bottom:1px solid #f0f0f0">
+          ${new Date(h.date).toLocaleString('ja-JP')} - ${h.user} - ${h.action} ${h.note ? `(${h.note})` : ''}
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
+  
+  content.innerHTML = `
+    <div style="margin-bottom:1rem">
+      <div><strong>From:</strong> ${escapeHtml(item.from || '')}</div>
+      <div><strong>日時:</strong> ${date}</div>
+      <div><strong>ステータス:</strong> 
+        <select id="inbox-detail-status" style="padding:4px 8px">
+          <option value="unread" ${item.status==='unread'?'selected':''}>⚪ 未対応</option>
+          <option value="in_progress" ${item.status==='in_progress'?'selected':''}>🟡 対応中</option>
+          <option value="done" ${item.status==='done'?'selected':''}>🟢 完了</option>
+        </select>
+      </div>
+    </div>
+    
+    <div style="padding:1rem;background:#f9f9f9;border-radius:8px;white-space:pre-wrap;font-size:13px;max-height:300px;overflow-y:auto">${escapeHtml(item.body || '(本文なし)')}</div>
+    
+    ${attachmentsHtml}
+    ${ocrHtml}
+    
+    <div style="margin-top:1rem;padding:1rem;background:#f5f5f5;border-radius:8px">
+      <div style="font-weight:700;margin-bottom:8px">ステータス更新</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+        <select id="inbox-work-status" style="padding:6px 10px;font-size:12px">
+          <option value="">作業状況を選択...</option>
+          <option ${item.workStatus==='見積作成中'?'selected':''}>見積作成中</option>
+          <option ${item.workStatus==='外注見積待ち'?'selected':''}>外注見積待ち</option>
+          <option ${item.workStatus==='見積提出済'?'selected':''}>見積提出済</option>
+          <option ${item.workStatus==='校正作成中'?'selected':''}>校正作成中</option>
+          <option ${item.workStatus==='お客様確認待ち'?'selected':''}>お客様確認待ち</option>
+          <option ${item.workStatus==='修正中'?'selected':''}>修正中</option>
+          <option ${item.workStatus==='発注処理中'?'selected':''}>発注処理中</option>
+          <option ${item.workStatus==='内容確認中'?'selected':''}>内容確認中</option>
+        </select>
+        <input id="inbox-waiting-for" placeholder="待ち先（任意）" value="${item.waitingFor||''}" style="padding:6px 10px;font-size:12px;width:150px">
+      </div>
+      <div style="display:flex;gap:8px">
+        <input id="inbox-note" placeholder="メモを追加..." style="flex:1;padding:6px 10px;font-size:12px">
+        <button class="btn btn-p" onclick="updateInboxItem('${itemId}')">更新</button>
+      </div>
+    </div>
+    
+    ${historyHtml}
+    
+    <div style="margin-top:1.5rem;display:flex;justify-content:space-between;align-items:center">
+      <button class="btn" onclick="linkToProject('${itemId}')">📋 案件に紐づけ</button>
+      <button class="btn btn-p" onclick="createProjectFromInbox('${itemId}')">＋ 新規案件として登録</button>
+    </div>
+  `;
+  
+  modal.style.display = 'flex';
+}
+
+// 受信BOX詳細を閉じる
+function closeInboxDetail() {
+  document.getElementById('inbox-detail-modal').style.display = 'none';
+}
+
+// 受信BOXアイテムを更新
+async function updateInboxItem(itemId) {
+  const status = document.getElementById('inbox-detail-status').value;
+  const workStatus = document.getElementById('inbox-work-status').value;
+  const waitingFor = document.getElementById('inbox-waiting-for').value;
+  const note = document.getElementById('inbox-note').value;
+  
+  const updateData = {
+    id: itemId,
+    status: status,
+    assignee: currentAuth.userId,
+    assigneeName: currentAuth.userName,
+    workStatus: workStatus,
+    waitingFor: waitingFor,
+    userName: currentAuth.userName,
+    action: status === 'in_progress' ? '対応開始' : status === 'done' ? '対応完了' : 'ステータス更新',
+    note: note
+  };
+  
+  if(CLOUD_CONFIG.CLOUD_MODE) {
+    await callCloudAPI('updateInboxStatus', updateData, 'POST');
+  }
+  
+  // ローカル更新
+  const idx = inboxItems.findIndex(i => i.id === itemId);
+  if(idx >= 0) {
+    inboxItems[idx].status = status;
+    inboxItems[idx].assignee = currentAuth.userId;
+    inboxItems[idx].assigneeName = currentAuth.userName;
+    inboxItems[idx].workStatus = workStatus;
+    inboxItems[idx].waitingFor = waitingFor;
+    if(!inboxItems[idx].history) inboxItems[idx].history = [];
+    inboxItems[idx].history.push({
+      date: new Date().toISOString(),
+      user: currentAuth.userName,
+      action: updateData.action,
+      note: note
+    });
+  }
+  
+  closeInboxDetail();
+  renderInboxList();
+  alert('更新しました');
+}
+
+// OCR実行
+async function ocrAttachment(itemId, attachmentIndex) {
+  if(!CLOUD_CONFIG.CLOUD_MODE) {
+    alert('クラウドモードが無効です');
+    return;
+  }
+  
+  try {
+    const item = inboxItems.find(i => i.id === itemId);
+    if(!item) return;
+    
+    alert('OCR処理中...');
+    const result = await callCloudAPI('ocrAttachment', { messageId: itemId, attachmentIndex: attachmentIndex });
+    
+    if(result && result.success && result.text) {
+      // OCR結果を保存
+      item.ocrText = result.text;
+      await callCloudAPI('saveInboxItem', { ...item, attachments: JSON.stringify(item.attachments) }, 'POST');
+      openInboxDetail(itemId); // 再描画
+      alert('OCR完了');
+    } else {
+      alert('OCR処理に失敗しました: ' + (result?.error || ''));
+    }
+  } catch(e) {
+    console.error('OCRエラー:', e);
+    alert('OCRエラー');
+  }
+}
+
+// クリップボードにコピー
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => alert('コピーしました'));
+}
+
+// 案件に紐づけ
+function linkToProject(itemId) {
+  // TODO: 案件選択モーダルを表示
+  alert('案件選択機能は開発中です');
+}
+
+// 新規案件として登録
+function createProjectFromInbox(itemId) {
+  const item = inboxItems.find(i => i.id === itemId);
+  if(!item) return;
+  
+  // 案件管理ページに遷移してフォームに値を設定
+  swPage('project', document.querySelector('[data-page="project"]'));
+  
+  // 少し待ってからフォームに値を設定
+  setTimeout(() => {
+    const custInput = document.getElementById('proj-cust');
+    const prodInput = document.getElementById('proj-prod');
+    if(custInput) custInput.value = item.from || '';
+    if(prodInput) prodInput.value = item.subject || '';
+    
+    closeInboxDetail();
+  }, 100);
+}
+
+// ═══════════════════ 社内連絡 ═══════════════════
+
+function openInternalMessageModal() {
+  const modal = document.getElementById('internal-msg-modal');
+  const toDiv = document.getElementById('internal-msg-to');
+  const projectSel = document.getElementById('internal-msg-project');
+  
+  // 会社チェックボックスを生成
+  toDiv.innerHTML = (DB.companies || []).map(c => `
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px">
+      <input type="checkbox" value="${c.id}" ${c.id === currentAuth.companyId ? 'checked' : ''}> ${c.name || c.code}
+    </label>
+  `).join('');
+  
+  // 案件選択肢を生成
+  projectSel.innerHTML = '<option value="">(なし)</option>' + 
+    (DB.projects || []).slice(0, 50).map(p => `<option value="${p.id}">${p.cust} - ${p.prod}</option>`).join('');
+  
+  modal.style.display = 'flex';
+}
+
+function closeInternalMessageModal() {
+  document.getElementById('internal-msg-modal').style.display = 'none';
+  document.getElementById('internal-msg-subject').value = '';
+  document.getElementById('internal-msg-body').value = '';
+}
+
+async function sendInternalMessage() {
+  const toCompanyIds = [...document.querySelectorAll('#internal-msg-to input:checked')].map(cb => cb.value);
+  const type = document.getElementById('internal-msg-type').value;
+  const projectId = document.getElementById('internal-msg-project').value;
+  const subject = document.getElementById('internal-msg-subject').value;
+  const body = document.getElementById('internal-msg-body').value;
+  
+  if(!subject || !body) {
+    alert('件名と内容を入力してください');
+    return;
+  }
+  
+  const message = {
+    fromCompanyId: currentAuth.companyId,
+    fromUserId: currentAuth.userId,
+    fromUserName: currentAuth.userName,
+    fromDepartment: currentAuth.department,
+    toCompanyIds: toCompanyIds,
+    type: type,
+    relatedProjectId: projectId,
+    subject: subject,
+    body: body
+  };
+  
+  if(CLOUD_CONFIG.CLOUD_MODE) {
+    const result = await callCloudAPI('postInternalMessage', message, 'POST');
+    if(result && result.success) {
+      // 受信BOXにも追加
+      const inboxItem = {
+        id: result.message.id,
+        companyId: currentAuth.companyId,
+        type: 'internal',
+        status: 'unread',
+        from: `${currentAuth.userName}（${currentAuth.companyName}）`,
+        subject: `【${type === 'confirm' ? '確認依頼' : type === 'question' ? '質問' : type === 'urgent' ? '緊急' : '共有'}】${subject}`,
+        body: body,
+        createdAt: new Date().toISOString()
+      };
+      await callCloudAPI('saveInboxItem', inboxItem, 'POST');
+    }
+  }
+  
+  closeInternalMessageModal();
+  await loadInboxItems();
+  alert('送信しました');
+}
+
+// ═══════════════════ 音声メモ ═══════════════════
+
+let mediaRecorder = null;
+let audioChunks = [];
+let voiceRecordingInterval = null;
+let voiceStartTime = null;
+let recognition = null;
+let voiceTranscript = '';
+
+function openVoiceMemoModal() {
+  const modal = document.getElementById('voice-memo-modal');
+  document.getElementById('voice-record-status').textContent = 'マイクボタンを押して録音開始';
+  document.getElementById('voice-timer').style.display = 'none';
+  document.getElementById('voice-transcript').style.display = 'none';
+  document.getElementById('voice-send-btn').disabled = true;
+  document.getElementById('voice-record-btn').style.background = '#dc2626';
+  audioChunks = [];
+  voiceTranscript = '';
+  modal.style.display = 'flex';
+}
+
+function closeVoiceMemoModal() {
+  if(mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+  }
+  if(recognition) {
+    recognition.stop();
+  }
+  if(voiceRecordingInterval) {
+    clearInterval(voiceRecordingInterval);
+  }
+  document.getElementById('voice-memo-modal').style.display = 'none';
+}
+
+async function toggleVoiceRecording() {
+  const btn = document.getElementById('voice-record-btn');
+  const status = document.getElementById('voice-record-status');
+  const timer = document.getElementById('voice-timer');
+  
+  if(!mediaRecorder || mediaRecorder.state === 'inactive') {
+    // 録音開始
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+      
+      mediaRecorder.ondataavailable = (e) => {
+        audioChunks.push(e.data);
+      };
+      
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+      };
+      
+      mediaRecorder.start();
+      btn.textContent = '⏹';
+      btn.style.background = '#16a34a';
+      status.textContent = '録音中...';
+      timer.style.display = 'block';
+      voiceStartTime = Date.now();
+      
+      voiceRecordingInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - voiceStartTime) / 1000);
+        const min = Math.floor(elapsed / 60);
+        const sec = elapsed % 60;
+        timer.textContent = `${min}:${sec.toString().padStart(2, '0')}`;
+      }, 1000);
+      
+      // 音声認識（対応ブラウザのみ）
+      if('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.lang = 'ja-JP';
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        
+        recognition.onresult = (e) => {
+          let transcript = '';
+          for(let i = 0; i < e.results.length; i++) {
+            transcript += e.results[i][0].transcript;
+          }
+          voiceTranscript = transcript;
+          document.getElementById('voice-transcript').style.display = 'block';
+          document.getElementById('voice-transcript-text').textContent = transcript;
+        };
+        
+        recognition.start();
+      }
+    } catch(e) {
+      alert('マイクへのアクセスが許可されていません');
+      console.error(e);
+    }
+  } else {
+    // 録音停止
+    mediaRecorder.stop();
+    if(recognition) recognition.stop();
+    if(voiceRecordingInterval) clearInterval(voiceRecordingInterval);
+    
+    btn.textContent = '🎤';
+    btn.style.background = '#dc2626';
+    status.textContent = '録音完了';
+    document.getElementById('voice-send-btn').disabled = false;
+  }
+}
+
+async function sendVoiceMemo() {
+  if(audioChunks.length === 0) {
+    alert('録音データがありません');
+    return;
+  }
+  
+  const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+  const reader = new FileReader();
+  
+  reader.onload = async () => {
+    const base64 = reader.result.split(',')[1];
+    
+    const memoData = {
+      companyId: currentAuth.companyId,
+      fromUserName: currentAuth.userName,
+      transcript: voiceTranscript,
+      audioData: base64
+    };
+    
+    if(CLOUD_CONFIG.CLOUD_MODE) {
+      await callCloudAPI('saveVoiceMemo', memoData, 'POST');
+    }
+    
+    closeVoiceMemoModal();
+    await loadInboxItems();
+    alert('音声メモを送信しました');
+  };
+  
+  reader.readAsDataURL(audioBlob);
+}
+
 // ═══════════════════ 起動 ════════════════════
 loadDB();
 loadAuth();
@@ -6794,6 +7512,8 @@ if(currentAuth.loggedIn && currentAuth.companyId){
   updateUserDisplay();
   if(DB.conf&&DB.conf.appName) document.getElementById('app-title').textContent=DB.conf.appName;
   addTab();
+  // 受信BOXを読み込み
+  loadInboxItems();
 } else {
   // 未ログイン → ログイン画面
   showLoginScreen();
