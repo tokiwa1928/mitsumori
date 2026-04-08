@@ -7034,8 +7034,9 @@ async function fetchEmails() {
   
   try {
     const result = await callCloudAPI('getEmails', { maxResults: 20 });
+    console.log('メール取得結果:', result);
     if(result && result.success && result.emails) {
-      // メールを受信BOXに追加
+      // メールを受信BOXに追加（ローカルに直接追加）
       for(const email of result.emails) {
         const existing = inboxItems.find(i => i.id === email.messageId);
         if(!existing) {
@@ -7048,13 +7049,23 @@ async function fetchEmails() {
             subject: email.subject,
             body: email.body,
             attachments: email.attachments || [],
-            createdAt: email.date
+            createdAt: email.date,
+            history: []
           };
-          await callCloudAPI('saveInboxItem', newItem, 'POST');
+          inboxItems.push(newItem);
+          // クラウドにも保存を試みる（失敗しても続行）
+          try {
+            await callCloudAPI('saveInboxItem', newItem, 'POST');
+          } catch(e) {
+            console.log('クラウド保存スキップ:', e);
+          }
         }
       }
-      await loadInboxItems();
+      renderInboxList();
       alert(`${result.emails.length}件のメールを取得しました`);
+    } else {
+      console.log('メール取得失敗:', result);
+      alert('メールの取得に失敗しました');
     }
   } catch(e) {
     console.error('メール取得エラー:', e);
