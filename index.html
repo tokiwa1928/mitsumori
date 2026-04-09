@@ -186,6 +186,27 @@ textarea{resize:vertical;font-size:12px;line-height:1.5}
 </style>
 </head>
 <body>
+<!-- DIC番号サジェスト -->
+<datalist id="dic-suggestions">
+  <option value="DIC156">赤</option>
+  <option value="DIC157">紅</option>
+  <option value="DIC161">オレンジ</option>
+  <option value="DIC109">黄</option>
+  <option value="DIC113">山吹</option>
+  <option value="DIC361">緑</option>
+  <option value="DIC362">深緑</option>
+  <option value="DIC183">青</option>
+  <option value="DIC184">水色</option>
+  <option value="DIC300">スカイブルー</option>
+  <option value="DIC579">紺</option>
+  <option value="DIC202">紫</option>
+  <option value="DIC25">ピンク</option>
+  <option value="DIC471">茶</option>
+  <option value="DIC620">金</option>
+  <option value="DIC623">銀</option>
+  <option value="DIC641">朱</option>
+</datalist>
+
 <!-- ログイン画面 -->
 <div id="login-screen" style="display:none;position:fixed;inset:0;background:linear-gradient(135deg,#1a1a1a 0%,#2d2d2d 100%);z-index:1000;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:12px;padding:2rem 2.5rem;width:min(400px,90vw);box-shadow:0 20px 60px rgba(0,0,0,.3)">
@@ -2955,10 +2976,312 @@ function rowPaperBook(id,d,partNames,cat='帳票'){
 }
 
 // 印刷行（封筒・帳票）: マスター | 工程名 | 枚数 | 台数(自動) | 単価 | 金額
+// DIC色データベース（代表的な色）
+const DIC_COLORS = {
+  // 赤系
+  'DIC156': '#E60012', 'DIC157': '#D7003A', 'DIC158': '#C9171E', 'DIC159': '#A22041', 'DIC160': '#D9333F',
+  // オレンジ系
+  'DIC161': '#FF6600', 'DIC162': '#F39800', 'DIC163': '#EB6100', 'DIC164': '#F08300', 'DIC165': '#E17B34',
+  // 黄系
+  'DIC109': '#FFFF00', 'DIC110': '#FFE600', 'DIC111': '#FFF100', 'DIC112': '#F9BF45', 'DIC113': '#FFDD00',
+  // 緑系
+  'DIC361': '#009944', 'DIC362': '#009B6B', 'DIC363': '#3EB370', 'DIC364': '#6B8E23', 'DIC365': '#228B22',
+  'DIC366': '#007B43', 'DIC367': '#00A960', 'DIC368': '#98D98E', 'DIC369': '#68BE8D', 'DIC370': '#00552E',
+  // 青系
+  'DIC183': '#0068B7', 'DIC184': '#00A0E9', 'DIC185': '#0095D9', 'DIC186': '#2CA9E1', 'DIC187': '#4169E1',
+  'DIC188': '#1E90FF', 'DIC189': '#007DC4', 'DIC190': '#00308F', 'DIC191': '#003F8E', 'DIC192': '#0F2350',
+  // 紫系
+  'DIC202': '#9B30FF', 'DIC203': '#8B008B', 'DIC204': '#800080', 'DIC205': '#7B68EE', 'DIC206': '#6A5ACD',
+  // ピンク系
+  'DIC25': '#FF69B4', 'DIC26': '#FF1493', 'DIC27': '#DB7093', 'DIC28': '#FFB6C1', 'DIC29': '#FFC0CB',
+  // 茶系
+  'DIC471': '#8B4513', 'DIC472': '#A0522D', 'DIC473': '#D2691E', 'DIC474': '#CD853F', 'DIC475': '#DEB887',
+  // 金銀
+  'DIC620': '#C9A34A', 'DIC621': '#D4AF37', 'DIC622': '#CFB53B', 'DIC623': '#C0C0C0', 'DIC624': '#B8B8B8',
+  // その他
+  'DIC300': '#4B9AD4', 'DIC579': '#1E50A2', 'DIC641': '#E94709',
+};
+
+// PANTONE色データベース（代表的な色）
+const PANTONE_COLORS = {
+  // 赤系
+  '185C': '#E4002B', '186C': '#C8102E', '187C': '#A6192E', '199C': '#D50032', '200C': '#BA0C2F',
+  // オレンジ系
+  '021C': '#FE5000', '1505C': '#FF6900', '151C': '#FF8200', '716C': '#F68D2E',
+  // 黄系
+  '108C': '#FEDB00', '109C': '#FFD100', '116C': '#FFCD00', '123C': '#FFC72C',
+  // 緑系
+  '347C': '#009639', '348C': '#00843D', '349C': '#046A38', '356C': '#007A33', '3415C': '#007749',
+  // 青系
+  '286C': '#0033A0', '287C': '#003DA5', '288C': '#002D72', '300C': '#005EB8', '301C': '#004B87',
+  '072C': '#10069F', 'ReflexBlueC': '#001489', 'ProcessBlueC': '#0085CA',
+  // 紫系
+  '2685C': '#56008E', '267C': '#6D2077', '2592C': '#9E007E', '519C': '#612141',
+  // ピンク系
+  '219C': '#DA1884', '226C': '#D0006F', 'RhodamineRedC': '#E10098',
+  // 茶系
+  '469C': '#603D20', '470C': '#693F23', '4625C': '#4B3621',
+  // 金銀
+  '871C': '#8B6F4E', '877C': '#8A8D8F',
+};
+
+// 用紙の色リスト
+const PAPER_COLORS = [
+  { value: '', label: '─', bg: '#FFFFFF', border: '#ccc' },
+  { value: '白', label: '白', bg: '#FFFFFF', border: '#ddd' },
+  { value: 'クリーム', label: 'クリーム', bg: '#FFFDD0', border: '#E6E4BC' },
+  { value: 'アイボリー', label: 'アイボリー', bg: '#FFFFF0', border: '#E5E5D0' },
+  { value: '淡クリーム', label: '淡クリーム', bg: '#FFFEF5', border: '#E8E7E0' },
+  { value: 'ピンク', label: 'ピンク', bg: '#FFB6C1', border: '#E89DA8' },
+  { value: '淡ピンク', label: '淡ピンク', bg: '#FFE4E9', border: '#E8CDD2' },
+  { value: '水色', label: '水色', bg: '#B0E0E6', border: '#9AC8CE' },
+  { value: '淡水色', label: '淡水色', bg: '#E0FFFF', border: '#C8E8E8' },
+  { value: '黄', label: '黄', bg: '#FFFF99', border: '#E8E88A' },
+  { value: '淡黄', label: '淡黄', bg: '#FFFFCC', border: '#E8E8B5' },
+  { value: '緑', label: '緑', bg: '#98FB98', border: '#82E282' },
+  { value: '淡緑', label: '淡緑', bg: '#E0FFE0', border: '#C8E8C8' },
+  { value: 'グレー', label: 'グレー', bg: '#C0C0C0', border: '#A8A8A8' },
+  { value: '淡グレー', label: '淡グレー', bg: '#E8E8E8', border: '#D0D0D0' },
+  { value: 'ブルー', label: 'ブルー', bg: '#ADD8E6', border: '#96C0CE' },
+  { value: 'オレンジ', label: 'オレンジ', bg: '#FFD8B1', border: '#E8C19A' },
+  { value: 'クラフト', label: 'クラフト', bg: '#D2B48C', border: '#BA9D76' },
+];
+
+// 用紙の色からアイコン情報を取得
+function getPaperColorIcon(colorValue) {
+  const color = PAPER_COLORS.find(c => c.value === colorValue);
+  if (color) {
+    return { bg: color.bg, border: color.border };
+  }
+  return { bg: '#FFFFFF', border: '#ccc' };
+}
+
+// 色系統のリスト
+const COLOR_CATEGORIES = [
+  { value: '', label: '─', color: '#ccc' },
+  { value: '墨', label: '墨（黒）', color: '#000000' },
+  { value: '赤系', label: '赤系', color: '#E60012' },
+  { value: 'オレンジ系', label: 'オレンジ系', color: '#F39800' },
+  { value: '黄系', label: '黄系', color: '#FFE600' },
+  { value: '緑系', label: '緑系', color: '#009944' },
+  { value: '青系', label: '青系', color: '#0068B7' },
+  { value: '紫系', label: '紫系', color: '#800080' },
+  { value: 'ピンク系', label: 'ピンク系', color: '#FF69B4' },
+  { value: '茶系', label: '茶系', color: '#8B4513' },
+  { value: '金', label: '金', color: '#D4AF37' },
+  { value: '銀', label: '銀', color: '#C0C0C0' },
+  { value: '白', label: '白', color: '#FFFFFF' },
+];
+
+// 色番号から色コードを取得
+function getColorCode(colorType, code) {
+  if (!code) return null;
+  const cleanCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  
+  if (colorType === 'DIC') {
+    if (DIC_COLORS[cleanCode]) return DIC_COLORS[cleanCode];
+    if (DIC_COLORS['DIC' + cleanCode]) return DIC_COLORS['DIC' + cleanCode];
+  } else if (colorType === 'PANTONE') {
+    if (PANTONE_COLORS[cleanCode]) return PANTONE_COLORS[cleanCode];
+    if (PANTONE_COLORS[cleanCode + 'C']) return PANTONE_COLORS[cleanCode + 'C'];
+  }
+  return null;
+}
+
+// 色系統から代表色を取得
+function getCategoryColor(category) {
+  const cat = COLOR_CATEGORIES.find(c => c.value === category);
+  return cat ? cat.color : '#ccc';
+}
+
 const IRO_OPTS=['─','墨1色','2色','3色','4色(CMYK)','特色1色','特色2色','なし'];
+
+// 色入力コンポーネント（改良版）
+function createColorInput(id, index) {
+  return `
+    <div class="color-input-row" style="display:flex;align-items:center;gap:3px;margin-top:4px;padding:5px;background:#f5f5f3;border-radius:4px;flex-wrap:wrap">
+      <span class="color-icon" style="width:18px;height:18px;border-radius:50%;background:#ccc;border:1px solid #999;flex-shrink:0"></span>
+      <select class="color-category" style="font-size:10px;width:65px" onchange="onColorCategoryChange(this,${id})" title="色系統">
+        ${COLOR_CATEGORIES.map(c => `<option value="${c.value}">${c.label}</option>`).join('')}
+      </select>
+      <select class="color-type" style="font-size:10px;width:55px" onchange="onColorTypeChange(this,${id})" title="色指定方法">
+        <option value="">指定なし</option>
+        <option value="DIC">DIC</option>
+        <option value="PANTONE">PANTONE</option>
+        <option value="見本">見本</option>
+      </select>
+      <input type="text" class="color-code-input" placeholder="番号" style="font-size:10px;width:50px;display:none" 
+        oninput="onColorCodeInput(this,${id})">
+      <span class="sample-badge" style="display:none;font-size:9px;background:#f59e0b;color:#fff;padding:1px 4px;border-radius:3px">📋見本</span>
+    </div>
+  `;
+}
+
+// 色系統変更時
+function onColorCategoryChange(sel, id) {
+  const row = sel.closest('.color-input-row');
+  const icon = row.querySelector('.color-icon');
+  const category = sel.value;
+  const color = getCategoryColor(category);
+  
+  // 色番号入力がない場合のみ色を更新
+  const codeInput = row.querySelector('.color-code-input');
+  if (!codeInput.value) {
+    icon.style.background = color;
+    icon.style.border = category === '白' ? '1px solid #999' : '1px solid ' + color;
+  }
+  calc(id);
+}
+
+// 色指定方法変更時
+function onColorTypeChange(sel, id) {
+  const row = sel.closest('.color-input-row');
+  const codeInput = row.querySelector('.color-code-input');
+  const sampleBadge = row.querySelector('.sample-badge');
+  const colorType = sel.value;
+  
+  if (colorType === 'DIC' || colorType === 'PANTONE') {
+    codeInput.style.display = 'block';
+    codeInput.placeholder = colorType === 'DIC' ? 'DIC番号' : 'PANTONE番号';
+    sampleBadge.style.display = 'none';
+  } else if (colorType === '見本') {
+    codeInput.style.display = 'none';
+    codeInput.value = '';
+    sampleBadge.style.display = 'inline';
+  } else {
+    codeInput.style.display = 'none';
+    codeInput.value = '';
+    sampleBadge.style.display = 'none';
+  }
+  
+  // アイコンをリセット
+  const catSel = row.querySelector('.color-category');
+  if (catSel && catSel.value) {
+    const catColor = getCategoryColor(catSel.value);
+    const icon = row.querySelector('.color-icon');
+    icon.style.background = catColor;
+    icon.style.border = catSel.value === '白' ? '1px solid #999' : '1px solid ' + catColor;
+  }
+  
+  calc(id);
+}
+
+// 色番号入力時
+function onColorCodeInput(input, id) {
+  const row = input.closest('.color-input-row');
+  const icon = row.querySelector('.color-icon');
+  const typeSel = row.querySelector('.color-type');
+  const colorType = typeSel.value;
+  const code = input.value.trim();
+  
+  const color = getColorCode(colorType, code);
+  
+  if (color) {
+    icon.style.background = color;
+    icon.style.border = '2px solid ' + color;
+    input.style.borderColor = '#22c55e';
+    input.style.background = '#f0fdf4';
+  } else if (code) {
+    // 番号はあるがデータベースにない場合
+    const catSel = row.querySelector('.color-category');
+    if (catSel && catSel.value) {
+      const catColor = getCategoryColor(catSel.value);
+      icon.style.background = catColor;
+      icon.style.border = '2px dashed ' + catColor;
+    } else {
+      icon.style.background = '#ccc';
+      icon.style.border = '2px dashed #999';
+    }
+    input.style.borderColor = '#f59e0b';
+    input.style.background = '#fffbeb';
+  } else {
+    // 番号なし - 色系統の色を表示
+    const catSel = row.querySelector('.color-category');
+    if (catSel && catSel.value) {
+      const catColor = getCategoryColor(catSel.value);
+      icon.style.background = catColor;
+      icon.style.border = '1px solid ' + catColor;
+    }
+    input.style.borderColor = '';
+    input.style.background = '';
+  }
+  calc(id);
+}
+
+// 色数変更時の処理
+function onIroNumChange(sel, id) {
+  const container = sel.closest('.iro-selector');
+  const detailsDiv = container.querySelector('.iro-details');
+  const numVal = sel.value;
+  
+  // 色の数を判定
+  let colorCount = 0;
+  if (numVal.includes('1色')) colorCount = 1;
+  else if (numVal.includes('2色')) colorCount = 2;
+  else if (numVal.includes('3色')) colorCount = 3;
+  else if (numVal.includes('4色')) colorCount = 4;
+  
+  if (colorCount === 0 || numVal === '4色(CMYK)') {
+    detailsDiv.style.display = 'none';
+    detailsDiv.innerHTML = '';
+  } else {
+    detailsDiv.style.display = 'block';
+    let html = '';
+    for (let i = 0; i < colorCount; i++) {
+      html += createColorInput(id, i + 1);
+    }
+    detailsDiv.innerHTML = html;
+  }
+  
+  calc(id);
+}
+
+// 印刷色データを取得
+function getIroData(container) {
+  const numSel = container.querySelector('.iro-num');
+  const colorRows = container.querySelectorAll('.color-input-row');
+  
+  const data = {
+    num: numSel?.value || '',
+    colors: []
+  };
+  
+  colorRows.forEach(row => {
+    const category = row.querySelector('.color-category')?.value || '';
+    const colorType = row.querySelector('.color-type')?.value || '';
+    const code = row.querySelector('.color-code-input')?.value || '';
+    data.colors.push({ category, colorType, code });
+  });
+  
+  return data;
+}
+
+// 従来のIRO_SELを改良版に置き換え
 const IRO_SEL=(id,field='iro_omote',v='')=>{
-  const opts=IRO_OPTS.map(o=>`<option${v===o?' selected':''}>${o}</option>`).join('');
-  return `<select data-field="${field}" style="font-size:11px;width:100%" onchange="calc(${id})">${opts}</select>`;
+  // 色数選択と詳細入力
+  let html = `<div class="iro-selector" data-field="${field}" style="display:flex;flex-direction:column;gap:2px">`;
+  html += `<select class="iro-num" style="font-size:11px;width:100%" onchange="onIroNumChange(this,${id})">
+    ${IRO_OPTS.map(o => `<option${v===o?' selected':''}>${o}</option>`).join('')}
+  </select>`;
+  
+  // 初期表示時の色詳細
+  let colorCount = 0;
+  if (v.includes('1色') && !v.includes('CMYK')) colorCount = 1;
+  else if (v.includes('2色')) colorCount = 2;
+  else if (v.includes('3色')) colorCount = 3;
+  
+  if (colorCount > 0) {
+    html += `<div class="iro-details" style="display:block">`;
+    for (let i = 0; i < colorCount; i++) {
+      html += createColorInput(id, i + 1);
+    }
+    html += `</div>`;
+  } else {
+    html += `<div class="iro-details" style="display:none"></div>`;
+  }
+  
+  html += `</div>`;
+  return html;
 };
 
 function rowPrintEnv(id,d){
@@ -4807,21 +5130,46 @@ function renderMaster(id){
     const str=JSON.stringify(r).toLowerCase();return str.includes(q);
   });
   if(id==='paper'){
-    html+=`<div style="font-size:11px;color:#aaa;margin-bottom:.5rem">${data.length}件表示（全${DB.master.paper.length}件）</div>
+    // 有効なデータのみ表示（デフォルト）または全て表示
+    const showInactive = document.getElementById('show-inactive-paper')?.checked || false;
+    const filteredData = showInactive ? data : data.filter(r => r.active !== false);
+    
+    html+=`<div style="font-size:11px;color:#aaa;margin-bottom:.5rem;display:flex;align-items:center;gap:12px">
+      <span>${filteredData.length}件表示（全${DB.master.paper.length}件）</span>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+        <input type="checkbox" id="show-inactive-paper" ${showInactive?'checked':''} onchange="renderMaster('paper')">
+        <span>無効データも表示</span>
+      </label>
+    </div>
     <div style="overflow-x:auto;max-height:500px;overflow-y:auto">
-    <table class="m-tbl"><thead><tr><th>品名</th><th>判型</th><th>仕入先</th><th>斤量</th><th>紙種</th><th style="text-align:right;width:70px">単価（円）</th><th class="dx"></th></tr></thead><tbody>`;
-    data.slice(0,200).forEach((r,i)=>{const oi=DB.master.paper.indexOf(r);
-      html+=`<tr>
-        <td><input type="text" value="${r.nm||''}" onchange="DB.master.paper[${oi}].nm=this.value"></td>
-        <td><input type="text" value="${r.sz||''}" style="width:60px" onchange="DB.master.paper[${oi}].sz=this.value"></td>
-        <td><input type="text" value="${r.mk||''}" style="width:60px" onchange="DB.master.paper[${oi}].mk=this.value"></td>
-        <td><input type="text" value="${r.wt||''}" style="width:60px" onchange="DB.master.paper[${oi}].wt=this.value"></td>
-        <td><input type="text" value="${r.kd||''}" style="width:60px" onchange="DB.master.paper[${oi}].kd=this.value"></td>
-        <td><input class="r" type="number" value="${r.p!=null?r.p:''}" style="width:65px" onchange="DB.master.paper[${oi}].p=this.value?parseFloat(this.value):null"></td>
-        <td class="dx"><button class="del-btn" onclick="DB.master.paper.splice(${oi},1);renderMaster('paper')">×</button></td>
+    <table class="m-tbl"><thead><tr><th>状態</th><th>色</th><th>品名</th><th>判型</th><th>仕入先</th><th>斤量</th><th>紙種</th><th style="text-align:right;width:70px">単価（円）</th><th class="dx"></th></tr></thead><tbody>`;
+    filteredData.slice(0,200).forEach((r,i)=>{const oi=DB.master.paper.indexOf(r);
+      const isActive = r.active !== false;
+      const rowStyle = isActive ? '' : 'background:#f5f5f5;opacity:0.6';
+      const paperColor = r.color || '';
+      const colorIcon = getPaperColorIcon(paperColor);
+      html+=`<tr style="${rowStyle}">
+        <td style="width:50px;text-align:center">
+          <span style="cursor:pointer;font-size:16px" onclick="toggleMasterActive('paper',${oi})" title="${isActive?'クリックで無効化':'クリックで有効化'}">${isActive?'✅':'⬜'}</span>
+        </td>
+        <td style="width:70px">
+          <div style="display:flex;align-items:center;gap:4px">
+            <span class="paper-color-icon" style="width:18px;height:18px;border-radius:50%;background:${colorIcon.bg};border:1px solid ${colorIcon.border};flex-shrink:0"></span>
+            <select style="font-size:10px;width:50px" onchange="updateMasterField('paper',${oi},'color',this.value);renderMaster('paper')">
+              ${PAPER_COLORS.map(c => `<option value="${c.value}"${paperColor===c.value?' selected':''}>${c.label}</option>`).join('')}
+            </select>
+          </div>
+        </td>
+        <td><input type="text" value="${r.nm||''}" onchange="updateMasterField('paper',${oi},'nm',this.value)"></td>
+        <td><input type="text" value="${r.sz||''}" style="width:60px" onchange="updateMasterField('paper',${oi},'sz',this.value)"></td>
+        <td><input type="text" value="${r.mk||''}" style="width:60px" onchange="updateMasterField('paper',${oi},'mk',this.value)"></td>
+        <td><input type="text" value="${r.wt||''}" style="width:60px" onchange="updateMasterField('paper',${oi},'wt',this.value)"></td>
+        <td><input type="text" value="${r.kd||''}" style="width:60px" onchange="updateMasterField('paper',${oi},'kd',this.value)"></td>
+        <td><input class="r" type="number" value="${r.p!=null?r.p:''}" style="width:65px" onchange="updateMasterField('paper',${oi},'p',this.value?parseFloat(this.value):null)"></td>
+        <td class="dx"><button class="btn" style="font-size:10px;padding:2px 6px" onclick="showMasterHistory('paper',${oi})">履歴</button></td>
       </tr>`;
     });
-    if(data.length>200)html+=`<tr><td colspan="7" style="padding:6px;color:#aaa;font-size:11px;text-align:center">※ 検索で絞り込んでください（残り${data.length-200}件）</td></tr>`;
+    if(filteredData.length>200)html+=`<tr><td colspan="9" style="padding:6px;color:#aaa;font-size:11px;text-align:center">※ 検索で絞り込んでください（残り${filteredData.length-200}件）</td></tr>`;
     html+='</tbody></table></div>';
   } else if(id==='envelope'){
     html+=`<table class="m-tbl"><thead><tr><th>封筒名</th><th>規格・仕様</th><th style="text-align:right;width:80px">単価（円）</th><th class="dx"></th></tr></thead><tbody>`;
@@ -7015,6 +7363,10 @@ function renderInboxList() {
     const workStatusInfo = item.workStatus ? `<span style="color:#b45309;font-size:11px;margin-left:8px">📋 ${item.workStatus}</span>` : '';
     const waitingInfo = item.waitingFor ? `<span style="color:#dc2626;font-size:11px;margin-left:8px">⏳ ${item.waitingFor}</span>` : '';
     
+    // カテゴリと振り分け先
+    const categoryInfo = item.category ? `<span style="background:#e0f2fe;color:#0369a1;font-size:10px;padding:2px 6px;border-radius:3px;margin-left:6px">${item.category}</span>` : '';
+    const assignedInfo = item.assignedCompany ? `<span style="background:#fef3c7;color:#b45309;font-size:10px;padding:2px 6px;border-radius:3px;margin-left:6px">→${item.assignedCompany.companyName}</span>` : '';
+    
     // 添付ファイルプレビュー
     let previewHtml = '';
     const attachments = item.attachments || [];
@@ -7046,6 +7398,7 @@ function renderInboxList() {
             <span class="inbox-type ${typeClass}">${typeLabel}</span>
             <span style="font-weight:700">${escapeHtml(item.from || '不明')}</span>
             <span class="inbox-status-badge ${item.status}">${statusLabel}</span>
+            ${categoryInfo}${assignedInfo}
             ${assigneeInfo}${workStatusInfo}${waitingInfo}
           </div>
           <div style="font-size:11px;color:#888">${date}</div>
@@ -7566,6 +7919,106 @@ async function sendVoiceMemo() {
   reader.readAsDataURL(audioBlob);
 }
 
+// ═══════════════════ マスター履歴管理 ═══════════════════
+
+// マスターフィールドの更新（履歴付き）
+function updateMasterField(masterType, index, field, value) {
+  const item = DB.master[masterType][index];
+  if(!item) return;
+  
+  const oldValue = item[field];
+  if(oldValue === value) return; // 変更なし
+  
+  // 履歴を保存
+  if(!item._history) item._history = [];
+  item._history.push({
+    date: new Date().toISOString(),
+    field: field,
+    oldValue: oldValue,
+    newValue: value,
+    user: currentAuth.userName || 'unknown'
+  });
+  
+  // 値を更新
+  item[field] = value;
+  item._lastModified = new Date().toISOString();
+  item._modifiedBy = currentAuth.userName || 'unknown';
+  
+  saveDB();
+}
+
+// マスターの有効/無効を切り替え
+function toggleMasterActive(masterType, index) {
+  const item = DB.master[masterType][index];
+  if(!item) return;
+  
+  const newActive = item.active === false ? true : false;
+  
+  // 履歴を保存
+  if(!item._history) item._history = [];
+  item._history.push({
+    date: new Date().toISOString(),
+    field: 'active',
+    oldValue: item.active,
+    newValue: newActive,
+    user: currentAuth.userName || 'unknown'
+  });
+  
+  item.active = newActive;
+  item._lastModified = new Date().toISOString();
+  item._modifiedBy = currentAuth.userName || 'unknown';
+  
+  saveDB();
+  renderMaster(masterType);
+}
+
+// マスターの履歴を表示
+function showMasterHistory(masterType, index) {
+  const item = DB.master[masterType][index];
+  if(!item) return;
+  
+  const history = item._history || [];
+  const name = item.nm || item.n || item.org || '(名称なし)';
+  
+  let html = `
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1200;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">
+      <div style="background:#fff;border-radius:12px;width:min(600px,95vw);max-height:80vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+        <div style="padding:1rem 1.5rem;border-bottom:1px solid #e5e5e5;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:700;font-size:16px">📜 変更履歴: ${escapeHtml(name)}</span>
+          <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;font-size:20px;cursor:pointer">×</button>
+        </div>
+        <div style="padding:1.5rem">
+          <div style="margin-bottom:1rem;padding:8px 12px;background:#f5f5f5;border-radius:6px;font-size:12px">
+            <div><strong>作成日:</strong> ${item._created ? new Date(item._created).toLocaleString('ja-JP') : '不明'}</div>
+            <div><strong>最終更新:</strong> ${item._lastModified ? new Date(item._lastModified).toLocaleString('ja-JP') : '不明'}</div>
+            <div><strong>更新者:</strong> ${item._modifiedBy || '不明'}</div>
+            <div><strong>状態:</strong> ${item.active !== false ? '✅ 有効' : '⬜ 無効'}</div>
+          </div>
+  `;
+  
+  if(history.length === 0) {
+    html += '<div style="color:#888;text-align:center;padding:2rem">変更履歴はありません</div>';
+  } else {
+    html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+    html += '<thead><tr style="background:#f9f9f9"><th style="padding:8px;text-align:left;border-bottom:1px solid #ddd">日時</th><th style="padding:8px;text-align:left;border-bottom:1px solid #ddd">項目</th><th style="padding:8px;text-align:left;border-bottom:1px solid #ddd">変更前</th><th style="padding:8px;text-align:left;border-bottom:1px solid #ddd">変更後</th><th style="padding:8px;text-align:left;border-bottom:1px solid #ddd">更新者</th></tr></thead>';
+    html += '<tbody>';
+    history.slice().reverse().forEach(h => {
+      html += `<tr>
+        <td style="padding:8px;border-bottom:1px solid #eee">${new Date(h.date).toLocaleString('ja-JP')}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee">${h.field}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;color:#dc2626">${h.oldValue ?? '-'}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;color:#16a34a">${h.newValue ?? '-'}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee">${h.user}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+  }
+  
+  html += '</div></div></div>';
+  
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
 // ═══════════════════ 起動 ════════════════════
 loadDB();
 loadAuth();
@@ -7583,9 +8036,174 @@ if(currentAuth.loggedIn && currentAuth.companyId){
   addTab();
   // 受信BOXを読み込み
   loadInboxItems();
+  // 自動メール取得開始（1分ごと）
+  startAutoFetchEmails();
 } else {
   // 未ログイン → ログイン画面
   showLoginScreen();
+}
+
+// ═══════════════════ 自動メール取得 ═══════════════════
+
+let autoFetchInterval = null;
+
+function startAutoFetchEmails() {
+  if(autoFetchInterval) clearInterval(autoFetchInterval);
+  // 30秒ごとに自動取得
+  autoFetchInterval = setInterval(async () => {
+    if(CLOUD_CONFIG.CLOUD_MODE && currentAuth.loggedIn) {
+      console.log('自動メール取得実行...');
+      await fetchEmailsSilent();
+    }
+  }, 30000); // 30秒
+  // 初回も実行
+  setTimeout(() => fetchEmailsSilent(), 2000);
+  // ブラウザ通知の許可を求める
+  requestNotificationPermission();
+}
+
+// ブラウザ通知の許可を求める
+function requestNotificationPermission() {
+  if('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+// ブラウザ通知を表示
+function showBrowserNotification(title, body) {
+  if('Notification' in window && Notification.permission === 'granted') {
+    const notification = new Notification(title, {
+      body: body,
+      icon: '📧',
+      tag: 'new-mail'
+    });
+    notification.onclick = () => {
+      window.focus();
+      swPage('inbox', document.querySelector('[data-page="inbox"]'));
+      notification.close();
+    };
+  }
+}
+
+// 静かにメール取得（アラートなし）
+async function fetchEmailsSilent() {
+  if(!CLOUD_CONFIG.CLOUD_MODE) return;
+  
+  try {
+    const result = await callCloudAPI('getEmails', { maxResults: 20 });
+    if(result && result.success && result.emails) {
+      let addedCount = 0;
+      for(const email of result.emails) {
+        const existing = inboxItems.find(i => i.id === email.messageId);
+        if(!existing) {
+          let attachmentsWithData = email.attachments || [];
+          if(email.hasAttachments) {
+            try {
+              const detail = await callCloudAPI('getEmailDetail', { messageId: email.messageId });
+              if(detail && detail.success && detail.email && detail.email.attachments) {
+                attachmentsWithData = detail.email.attachments;
+              }
+            } catch(e) {}
+          }
+          
+          const newItem = {
+            id: email.messageId,
+            companyId: currentAuth.companyId,
+            type: 'email',
+            status: 'unread',
+            from: email.from,
+            subject: email.subject,
+            body: email.body,
+            attachments: attachmentsWithData,
+            createdAt: email.date,
+            history: [],
+            // 振り分け情報
+            category: categorizeEmail(email),
+            assignedCompany: assignEmailToCompany(email)
+          };
+          inboxItems.unshift(newItem); // 先頭に追加
+          addedCount++;
+        }
+      }
+      if(addedCount > 0) {
+        saveInboxToLocal();
+        renderInboxList();
+        // 通知
+        showNewMailNotification(addedCount);
+      }
+    }
+  } catch(e) {
+    console.error('自動メール取得エラー:', e);
+  }
+}
+
+// 新着メール通知
+function showNewMailNotification(count) {
+  const indicator = document.getElementById('inbox-count');
+  if(indicator) {
+    indicator.innerHTML = `<span style="color:#dc2626;font-weight:bold">🔔 新着${count}件</span>`;
+    setTimeout(() => {
+      const unreadCount = inboxItems.filter(i => i.status === 'unread').length;
+      indicator.textContent = unreadCount > 0 ? `未対応: ${unreadCount}件` : '';
+    }, 5000);
+  }
+  // ブラウザ通知
+  showBrowserNotification(`📧 新着メール ${count}件`, 'クリックして確認');
+  // 音を鳴らす（オプション）
+  playNotificationSound();
+}
+
+// 通知音
+function playNotificationSound() {
+  try {
+    const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Coverage');
+    audio.volume = 0.3;
+    audio.play().catch(e => {});
+  } catch(e) {}
+}
+
+// ═══════════════════ メール振り分け ═══════════════════
+
+// 振り分けルール（送信元アドレス → 会社）
+const EMAIL_ROUTING_RULES = [
+  { pattern: /@murainp\.com/i, companyId: 'COMP001', companyName: '村山印刷' },
+  { pattern: /@tokiwa/i, companyId: 'COMP002', companyName: 'トキワ印刷' },
+  { pattern: /@tsushima/i, companyId: 'COMP003', companyName: '津島プリント社' },
+  { pattern: /@kitakami/i, companyId: 'COMP004', companyName: '北上プリント' },
+  { pattern: /@art-s/i, companyId: 'COMP005', companyName: 'アート・エス' },
+  { pattern: /@nakao/i, companyId: 'COMP006', companyName: '中尾印刷' },
+  { pattern: /@yamauchi/i, companyId: 'COMP007', companyName: 'ヤマウチ印刷' },
+];
+
+// カテゴリ振り分け（件名や送信元から判定）
+function categorizeEmail(email) {
+  const subject = (email.subject || '').toLowerCase();
+  const from = (email.from || '').toLowerCase();
+  
+  if(subject.includes('見積') || subject.includes('quote')) return '見積依頼';
+  if(subject.includes('発注') || subject.includes('order')) return '発注';
+  if(subject.includes('校正') || subject.includes('proof')) return '校正';
+  if(subject.includes('納品') || subject.includes('delivery')) return '納品';
+  if(subject.includes('請求') || subject.includes('invoice')) return '請求';
+  if(from.includes('fax') || subject.includes('fax')) return 'FAX';
+  return 'その他';
+}
+
+// 会社振り分け
+function assignEmailToCompany(email) {
+  const from = email.from || '';
+  for(const rule of EMAIL_ROUTING_RULES) {
+    if(rule.pattern.test(from)) {
+      return { companyId: rule.companyId, companyName: rule.companyName };
+    }
+  }
+  return null;
+}
+
+// 振り分けルール設定画面を開く
+function openRoutingRulesModal() {
+  // TODO: 振り分けルール編集モーダル
+  alert('振り分けルール設定は開発中です');
 }
 </script>
 </body>
