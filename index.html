@@ -291,6 +291,8 @@ textarea{resize:vertical;font-size:12px;line-height:1.5}
 <!-- PDF出力用ライブラリ (jsPDF + html2canvas) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- 校正BOX 差分検出用 (jsdiff) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/5.1.0/diff.min.js"></script>
 <!-- Google Maps API（配送経路最適化） -->
 <script>
 // Google Maps API設定 - APIキーを設定してください
@@ -7992,6 +7994,7 @@ function showProofingDetail(proofingId){
       <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center">
         ${v.driveUrl ? `<a href="${v.driveUrl}" target="_blank" style="font-size:11px;color:#0369a1">🔗 Drive</a>` : (v.shareLink ? `<a href="${v.shareLink}" target="_blank" style="font-size:11px;color:#0369a1">🔗 共有</a>` : '')}
         ${v.driveFileId ? `<button onclick="previewProofVersion('${proofingId}','${v.id}')" style="font-size:11px;padding:2px 8px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;background:#fff">👁 プレビュー</button>` : ''}
+        ${v.driveFileId ? `<button onclick="ocrProofVersion('${proofingId}','${v.id}')" style="font-size:11px;padding:2px 8px;border:1px solid #818cf8;border-radius:4px;cursor:pointer;background:#e0e7ff;color:#3730a3" title="PDF からテキストを抽出 (データ修正時のコピペ用)">📋 テキスト抽出</button>` : ''}
         ${annoCount > 0 ? `<span style="font-size:10px;color:#92400e">📝 注釈 ${annoCount}件</span>` : ''}
       </div>
       ${v.feedback ? `<div style="margin-top:6px;padding:6px;background:#fef3c7;border-radius:4px;font-size:11px">
@@ -8033,6 +8036,7 @@ function showProofingDetail(proofingId){
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-p" onclick="uploadProofVersion('${p.id}')">📤 校正アップロード</button>
       ${canCompare ? `<button class="btn" style="background:#dbeafe;border-color:#93c5fd" onclick="startProofComparison('${p.id}')">📐 検版開始</button>` : ''}
+      ${canCompare ? `<button class="btn" style="background:#fef3c7;border-color:#fcd34d" onclick="startTextDiff('${p.id}')">📝 テキスト差分</button>` : ''}
       <button class="btn" onclick="sendProofLink('${p.id}')">📧 リンク送信</button>
       <button class="btn" style="color:#991b1b;border-color:#fca5a5" onclick="deleteProofing('${p.id}')">🗑 削除</button>
     </div>
@@ -8294,6 +8298,453 @@ function updateProofCompareIframes(){
     const labelEl = document.getElementById('cmp-right-label');
     if(labelEl) labelEl.textContent = `第${idx+1}校 ${right.fileName||''}`;
   }
+}
+
+// ── テキスト差分モード (jsdiff) ────────────────────────────
+
+function startTextDiff(proofingId){
+  const p = (DB.proofings || []).find(x => x.id === proofingId);
+  if(!p) return;
+  const versions = p.versions || [];
+  if(versions.length < 2){
+    alert('テキスト差分には2バージョン以上必要です');
+    return;
+  }
+  showTextDiffModal(p);
+}
+
+function showTextDiffModal(proofing){
+  const modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+
+  const versions = proofing.versions || [];
+  const opts = versions.map((v, i) => {
+    const kindLabel = ({manuscript:'原稿',instruction:'修正指示',proof:'校正',final:'校了'})[v.kind] || '校正';
+    return `<option value="${v.id}">第${i+1}校 [${kindLabel}] ${v.fileName||''}</option>`;
+  }).join('');
+
+  modal.innerHTML = `
+    <div style="background:#fff;width:96vw;height:96vh;border-radius:8px;display:flex;flex-direction:column">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #e0ddd6;gap:12px;flex-wrap:wrap">
+        <strong style="font-size:13px">📝 テキスト差分: ${proofing.custName||''} / ${proofing.prodName||''}</strong>
+        <button onclick="this.closest('.proof-modal').remove()" style="font-size:24px;border:none;background:none;cursor:pointer;line-height:1">×</button>
+      </div>
+      <div style="padding:8px 16px;border-bottom:1px solid #e0ddd6;font-size:11px;color:#555;background:#fef9c3">
+        💡 各バージョンの PDF を Drive で開き、<strong>Ctrl+A → Ctrl+C</strong> で全文コピーして下のテキストエリアに貼り付けてください。
+      </div>
+      <div style="display:flex;flex:1;overflow:hidden;min-height:0">
+        <div style="flex:1;border-right:1px solid #e0ddd6;display:flex;flex-direction:column;padding:8px">
+          <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">
+            <span style="font-size:11px;background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:8px;font-weight:700;white-space:nowrap">旧 (修正前)</span>
+            <select id="diff-left-ver" style="font-size:11px;padding:4px;flex:1">${opts}</select>
+            <button id="ocr-btn-left" onclick="extractTextForSide('left')" style="font-size:11px;padding:4px 8px;background:#e0e7ff;border:1px solid #818cf8;border-radius:4px;cursor:pointer;white-space:nowrap" title="Drive OCR で PDF からテキスト自動取得">📋 OCR取得</button>
+          </div>
+          <textarea id="diff-left-text" placeholder="旧バージョンのテキストを貼り付け… (または OCR取得 ボタン)" style="flex:1;width:100%;border:1px solid #d1d5db;border-radius:4px;padding:8px;font-size:12px;font-family:'Yu Gothic',sans-serif;resize:none;line-height:1.6"></textarea>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;padding:8px">
+          <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">
+            <span style="font-size:11px;background:#dcfce7;color:#065f46;padding:2px 8px;border-radius:8px;font-weight:700;white-space:nowrap">新 (修正後)</span>
+            <select id="diff-right-ver" style="font-size:11px;padding:4px;flex:1">${opts}</select>
+            <button id="ocr-btn-right" onclick="extractTextForSide('right')" style="font-size:11px;padding:4px 8px;background:#e0e7ff;border:1px solid #818cf8;border-radius:4px;cursor:pointer;white-space:nowrap" title="Drive OCR で PDF からテキスト自動取得">📋 OCR取得</button>
+          </div>
+          <textarea id="diff-right-text" placeholder="新バージョンのテキストを貼り付け… (または OCR取得 ボタン)" style="flex:1;width:100%;border:1px solid #d1d5db;border-radius:4px;padding:8px;font-size:12px;font-family:'Yu Gothic',sans-serif;resize:none;line-height:1.6"></textarea>
+        </div>
+      </div>
+      <div style="padding:8px 16px;border-top:1px solid #e0ddd6;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-p" onclick="runTextDiff()">📊 比較実行</button>
+        <select id="diff-mode" style="font-size:11px;padding:4px 8px">
+          <option value="words">単語単位</option>
+          <option value="chars">文字単位</option>
+          <option value="lines">行単位</option>
+        </select>
+        <span id="diff-summary" style="font-size:11px;color:#666;margin-left:auto"></span>
+      </div>
+      <div id="diff-result-section" style="display:none;background:#f9fafb;padding:12px 16px;max-height:40vh;overflow-y:auto;border-top:2px solid #e0ddd6">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px">差分結果 <span style="font-size:10px;color:#888;font-weight:normal">(緑=追加 / 赤=削除)</span></div>
+        <div id="diff-result" style="font-family:'Yu Gothic',sans-serif;font-size:13px;white-space:pre-wrap;line-height:1.8"></div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  window._proofTextDiffData = { proofing: proofing };
+
+  // デフォルトで末尾2つを選択
+  if(versions.length >= 2){
+    document.getElementById('diff-left-ver').value = versions[versions.length - 2].id;
+    document.getElementById('diff-right-ver').value = versions[versions.length - 1].id;
+  }
+}
+
+// OCR で PDF テキスト抽出 (バックエンド経由)
+async function extractTextForSide(side){
+  const data = window._proofTextDiffData;
+  if(!data){ alert('テキスト差分モードが初期化されていません'); return; }
+
+  const verId = document.getElementById(`diff-${side}-ver`)?.value;
+  const v = (data.proofing.versions || []).find(x => x.id === verId);
+  if(!v?.driveFileId){
+    alert('このバージョンには Drive ファイル ID がありません。\n再度アップロードしてください。');
+    return;
+  }
+
+  const btn = document.getElementById(`ocr-btn-${side}`);
+  const textarea = document.getElementById(`diff-${side}-text`);
+  if(!btn || !textarea) return;
+
+  const origLabel = btn.textContent;
+  btn.textContent = '⏳ OCR 中…';
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+
+  try {
+    const result = await callCloudAPI('extractPdfText', { fileId: v.driveFileId });
+    if(result?.success){
+      textarea.value = result.text || '';
+      btn.textContent = `✅ ${result.charCount || 0}文字`;
+      btn.style.background = '#dcfce7';
+      btn.style.borderColor = '#86efac';
+      setTimeout(() => {
+        btn.textContent = origLabel;
+        btn.style.background = '#e0e7ff';
+        btn.style.borderColor = '#818cf8';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+      }, 2500);
+    } else {
+      alert('OCR 失敗: ' + (result?.error || '不明なエラー'));
+      btn.textContent = origLabel;
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
+  } catch(e){
+    alert('OCR エラー: ' + e.message + '\n\nバックエンドの設定確認が必要かもしれません (Drive Advanced Service の有効化など)');
+    btn.textContent = origLabel;
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
+}
+
+function runTextDiff(){
+  const leftText = document.getElementById('diff-left-text')?.value || '';
+  const rightText = document.getElementById('diff-right-text')?.value || '';
+  const mode = document.getElementById('diff-mode')?.value || 'words';
+
+  if(!leftText && !rightText){
+    alert('両方のテキストを入力してください');
+    return;
+  }
+
+  if(typeof Diff === 'undefined'){
+    alert('jsdiff ライブラリが読み込まれていません。ページをリロードしてください。');
+    return;
+  }
+
+  let diff;
+  if(mode === 'chars'){
+    diff = Diff.diffChars(leftText, rightText);
+  } else if(mode === 'lines'){
+    diff = Diff.diffLines(leftText, rightText);
+  } else {
+    diff = Diff.diffWordsWithSpace(leftText, rightText);
+  }
+
+  let html = '';
+  let added = 0, removed = 0, sameCount = 0;
+  let addedChars = 0, removedChars = 0;
+
+  diff.forEach(part => {
+    const text = _escDiff(part.value);
+    if(part.added){
+      html += `<span style="background:#dcfce7;color:#065f46;border-radius:2px;padding:1px 2px">${text}</span>`;
+      added++;
+      addedChars += part.value.length;
+    } else if(part.removed){
+      html += `<span style="background:#fee2e2;color:#991b1b;text-decoration:line-through;border-radius:2px;padding:1px 2px">${text}</span>`;
+      removed++;
+      removedChars += part.value.length;
+    } else {
+      html += `<span style="color:#1a1a1a">${text}</span>`;
+      sameCount++;
+    }
+  });
+
+  const resultSection = document.getElementById('diff-result-section');
+  const resultDiv = document.getElementById('diff-result');
+  const summarySpan = document.getElementById('diff-summary');
+  if(resultDiv) resultDiv.innerHTML = html;
+  if(resultSection) resultSection.style.display = 'block';
+  if(summarySpan) summarySpan.textContent = `🟢 追加: ${added}箇所 (${addedChars}文字) / 🔴 削除: ${removed}箇所 (${removedChars}文字)`;
+
+  if(resultDiv) resultDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function _escDiff(str){
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── OCR テキスト抽出 (作業者がコピペで使う用) ──────────────────
+
+async function ocrProofVersion(proofingId, versionId){
+  const p = (DB.proofings || []).find(x => x.id === proofingId);
+  if(!p) return;
+  const v = (p.versions || []).find(x => x.id === versionId);
+  if(!v?.driveFileId){ alert('Drive ファイル ID がありません'); return; }
+
+  // ローディングオーバーレイ
+  const overlay = document.createElement('div');
+  overlay.id = 'ocr-loading';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;color:#fff';
+  overlay.innerHTML = `
+    <div style="background:#1e293b;padding:20px 30px;border-radius:8px;text-align:center;min-width:280px">
+      <div style="font-size:28px;margin-bottom:8px">⏳</div>
+      <div style="font-size:14px;font-weight:700">OCR 処理中…</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:6px">${v.fileName || ''}</div>
+      <div style="font-size:10px;color:#64748b;margin-top:8px">Drive で OCR 変換 (10〜30秒程度)</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  try {
+    const result = await callCloudAPI('extractPdfText', { fileId: v.driveFileId });
+    overlay.remove();
+    if(!result?.success){
+      alert('OCR 失敗: ' + (result?.error || '不明なエラー') + '\n\n権限承認 (drive スコープ) と Drive Advanced Service の有効化を確認してください。');
+      return;
+    }
+    showOcrTextModal(v, result.text || '');
+  } catch(e){
+    overlay.remove();
+    alert('OCR エラー: ' + e.message);
+  }
+}
+
+function showOcrTextModal(version, text){
+  const modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+
+  modal.innerHTML = `
+    <div style="background:#fff;width:100%;max-width:900px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:12px 18px;background:#3730a3;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:11px;color:#c7d2fe">📋 OCR で抽出したテキスト</div>
+          <div style="font-size:14px;font-weight:700">${version.fileName || ''}</div>
+        </div>
+        <button onclick="this.closest('.proof-modal').remove()" style="font-size:24px;border:none;background:none;color:#fff;cursor:pointer;line-height:1;padding:0 8px">×</button>
+      </div>
+      <div style="padding:8px 18px;background:#f9fafb;border-bottom:1px solid #e0ddd6;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;color:#666">
+        <span><strong>${text.length}</strong> 文字 抽出</span>
+        <span style="margin-left:8px;color:#888">テキストエディタや Illustrator などに貼り付けてください</span>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn" onclick="selectAllOcrText()">全選択</button>
+          <button class="btn btn-p" onclick="copyOcrText()">📋 全文コピー</button>
+          <button class="btn" onclick="downloadOcrText('${(version.fileName || 'ocr.txt').replace(/'/g,'')}')">💾 .txt</button>
+        </div>
+      </div>
+      <textarea id="ocr-text-area" style="flex:1;width:100%;border:0;padding:14px 18px;font-size:13px;font-family:'Yu Gothic',sans-serif;line-height:1.7;resize:none;outline:none;min-height:300px"></textarea>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  const ta = document.getElementById('ocr-text-area');
+  if(ta){
+    ta.value = text;
+    setTimeout(() => ta.focus(), 100);
+  }
+}
+
+function selectAllOcrText(){
+  const ta = document.getElementById('ocr-text-area');
+  if(!ta) return;
+  ta.focus();
+  ta.select();
+}
+
+async function copyOcrText(){
+  const ta = document.getElementById('ocr-text-area');
+  if(!ta) return;
+  try {
+    await navigator.clipboard.writeText(ta.value);
+    _toastMsg('✅ 全文をクリップボードにコピーしました');
+  } catch(e){
+    ta.select();
+    try { document.execCommand('copy'); _toastMsg('✅ コピーしました'); }
+    catch(ee){ alert('コピーに失敗しました'); }
+  }
+}
+
+function downloadOcrText(filename){
+  const ta = document.getElementById('ocr-text-area');
+  if(!ta) return;
+  const cleanName = (filename || 'ocr').replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|]/g, '_');
+  const blob = new Blob([ta.value], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = cleanName + '.txt';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function _toastMsg(msg){
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 20px;border-radius:6px;z-index:10001;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.2)';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2000);
+}
+
+// ── 作業指示ビュー (案件単位) ────────────────────────────────
+
+function showWorkInstructionView(projectId){
+  const project = (DB.projects || []).find(p => p.id === projectId);
+  if(!project){ alert('案件が見つかりません'); return; }
+
+  // 関連校正セッションと最新の指示・校正データを抽出
+  const linkedProofs = (DB.proofings || []).filter(pr => pr.projectId === projectId);
+  let latestInstruction = null;
+  let latestProof = null;
+  linkedProofs.forEach(pr => {
+    (pr.versions || []).forEach(v => {
+      if(!v.driveFileId) return;
+      if(v.kind === 'instruction'){
+        if(!latestInstruction || new Date(v.uploadedAt) > new Date(latestInstruction.uploadedAt)) latestInstruction = v;
+      } else if(v.kind === 'proof' || v.kind === 'final' || !v.kind){
+        if(!latestProof || new Date(v.uploadedAt) > new Date(latestProof.uploadedAt)) latestProof = v;
+      }
+    });
+  });
+
+  // 工程ボタン
+  const stepsHtml = (typeof PROC_STEPS !== 'undefined' ? PROC_STEPS : ['版下','校了','印刷','加工','納品']).map(step => {
+    const val = project.steps?.[step] || '─';
+    const isDone = val === '完了' || val === 'OK' || val === '納品済' || val === '発送済';
+    const isActive = val && val !== '─' && val !== '未着手' && !isDone;
+    const bg = isDone ? '#065f46' : isActive ? '#1e40af' : '#e0ddd6';
+    const col = isDone || isActive ? '#fff' : '#666';
+    return `<button onclick="toggleProjectStepInModal('${projectId}','${step}')"
+      style="padding:8px 14px;background:${bg};color:${col};border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700;min-width:90px;display:flex;flex-direction:column;align-items:center;gap:2px">
+      <span>${step}</span><span style="font-size:10px;font-weight:normal;opacity:0.9">${val}</span>
+    </button>`;
+  }).join('');
+
+  // 該当バージョンを校正セッションごと検索するヘルパ (OCR ボタンから呼ぶため)
+  const findProofingForVersion = (versionId) => {
+    return linkedProofs.find(pr => (pr.versions || []).some(v => v.id === versionId));
+  };
+  const instructionProofing = latestInstruction ? findProofingForVersion(latestInstruction.id) : null;
+  const proofProofing = latestProof ? findProofingForVersion(latestProof.id) : null;
+
+  const previewHeight = '50vh';
+  const instructionPane = latestInstruction
+    ? `<div style="background:#fef9c3;padding:12px;border-radius:8px;margin-top:8px">
+         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+           <strong style="font-size:13px;color:#78350f">🔴 最新の修正指示</strong>
+           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+             <span style="font-size:11px;color:#78350f">${latestInstruction.uploadedAt?.split('T')[0] || ''} | ${latestInstruction.fileName || ''}</span>
+             <button onclick="ocrProofVersion('${instructionProofing?.id || ''}','${latestInstruction.id}')" style="font-size:11px;padding:3px 10px;border:1px solid #818cf8;border-radius:4px;cursor:pointer;background:#e0e7ff;color:#3730a3;font-weight:700" title="この PDF からテキストを抽出 (修正作業のコピペ用)">📋 テキスト抽出</button>
+           </div>
+         </div>
+         <iframe src="https://drive.google.com/file/d/${latestInstruction.driveFileId}/preview"
+           style="width:100%;height:${previewHeight};border:1px solid #fcd34d;border-radius:4px;background:#fff"
+           allow="autoplay"></iframe>
+       </div>`
+    : `<div style="background:#f9fafb;padding:14px;border-radius:8px;margin-top:8px;text-align:center;color:#888;font-size:12px">🔴 修正指示はまだアップロードされていません</div>`;
+
+  const proofPane = latestProof
+    ? `<div style="background:#dbeafe;padding:12px;border-radius:8px;margin-top:8px">
+         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+           <strong style="font-size:13px;color:#1e3a8a">📐 最新の校正データ</strong>
+           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+             <span style="font-size:11px;color:#1e3a8a">${latestProof.uploadedAt?.split('T')[0] || ''} | ${latestProof.fileName || ''}</span>
+             <button onclick="ocrProofVersion('${proofProofing?.id || ''}','${latestProof.id}')" style="font-size:11px;padding:3px 10px;border:1px solid #818cf8;border-radius:4px;cursor:pointer;background:#e0e7ff;color:#3730a3;font-weight:700" title="この PDF からテキストを抽出">📋 テキスト抽出</button>
+           </div>
+         </div>
+         <iframe src="https://drive.google.com/file/d/${latestProof.driveFileId}/preview"
+           style="width:100%;height:${previewHeight};border:1px solid #93c5fd;border-radius:4px;background:#fff"
+           allow="autoplay"></iframe>
+       </div>`
+    : `<div style="background:#f9fafb;padding:14px;border-radius:8px;margin-top:8px;text-align:center;color:#888;font-size:12px">📐 校正データはまだアップロードされていません</div>`;
+
+  const modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+
+  modal.innerHTML = `
+    <div style="background:#fff;width:100%;max-width:1400px;max-height:96vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:14px 20px;background:#1e293b;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:11px;color:#cbd5e1;letter-spacing:.05em">作業指示書</div>
+          <div style="font-size:18px;font-weight:700">${project.id} · ${project.item || '─'}</div>
+        </div>
+        <button onclick="this.closest('.proof-modal').remove()" style="font-size:28px;border:none;background:none;color:#fff;cursor:pointer;line-height:1;padding:0 8px">×</button>
+      </div>
+
+      <div style="overflow-y:auto;padding:18px 20px;flex:1">
+        <!-- 基本情報 -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:16px;background:#f9fafb;padding:12px;border-radius:8px">
+          <div><span style="font-size:10px;color:#888">得意先</span><div style="font-size:14px;font-weight:700">${project.cust || '─'}</div></div>
+          <div><span style="font-size:10px;color:#888">数量</span><div style="font-size:14px;font-weight:700">${(project.qty || 0).toLocaleString()}${project.unit || ''}</div></div>
+          <div><span style="font-size:10px;color:#888">納期</span><div style="font-size:14px;font-weight:700;color:#dc2626">${project.dueDate || '─'}</div></div>
+          <div><span style="font-size:10px;color:#888">ステータス</span><div style="font-size:14px;font-weight:700">${project.status || '─'}</div></div>
+          <div><span style="font-size:10px;color:#888">担当</span><div style="font-size:14px;font-weight:700">${project.assignee || '─'}</div></div>
+          <div><span style="font-size:10px;color:#888">受注日</span><div style="font-size:13px">${project.orderDate || '─'}</div></div>
+        </div>
+
+        ${project.spec ? `
+          <div style="margin-bottom:12px">
+            <div style="font-size:11px;font-weight:700;color:#888;letter-spacing:.05em;margin-bottom:4px">📝 仕様・規格</div>
+            <div style="background:#fff;border:1px solid #e0ddd6;padding:10px;border-radius:6px;font-size:13px;white-space:pre-wrap;line-height:1.6">${project.spec}</div>
+          </div>` : ''}
+
+        ${project.memo ? `
+          <div style="margin-bottom:12px">
+            <div style="font-size:11px;font-weight:700;color:#888;letter-spacing:.05em;margin-bottom:4px">📋 備考・メモ</div>
+            <div style="background:#fef3c7;border:1px solid #fde68a;padding:10px;border-radius:6px;font-size:13px;white-space:pre-wrap;line-height:1.6">${project.memo}</div>
+          </div>` : ''}
+
+        ${instructionPane}
+        ${proofPane}
+
+        <div style="margin-top:18px">
+          <div style="font-size:11px;font-weight:700;color:#888;letter-spacing:.05em;margin-bottom:8px">⚙ 工程ステータス (クリックで状態変更)</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">${stepsHtml}</div>
+        </div>
+
+        ${linkedProofs.length > 0 ? `
+          <div style="margin-top:18px;padding-top:14px;border-top:1px solid #e0ddd6">
+            <button class="btn" style="background:#dbeafe;border-color:#93c5fd;width:100%" onclick="document.querySelector('.proof-modal').remove();jumpToProofing('${linkedProofs[0].id}')">📐 校正BOX で詳細を見る (${linkedProofs.length}セッション)</button>
+          </div>` : `
+          <div style="margin-top:18px;padding-top:14px;border-top:1px solid #e0ddd6">
+            <button class="btn" style="width:100%" onclick="document.querySelector('.proof-modal').remove();createProofingFromProjectId('${project.id}')">📐 校正セッションを作成</button>
+          </div>`}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+// 工程ステータスをモーダル内で循環変更
+function toggleProjectStepInModal(projectId, step){
+  const project = (DB.projects || []).find(p => p.id === projectId);
+  if(!project) return;
+  if(!project.steps) project.steps = {};
+  const cur = project.steps[step] || '─';
+  const cycle = ['─', '進行中', '完了'];
+  const idx = cycle.indexOf(cur);
+  const next = cycle[(idx + 1) % cycle.length];
+  project.steps[step] = next;
+  if(!project.stepDates) project.stepDates = {};
+  if(next === '完了') project.stepDates[step] = new Date().toISOString().slice(0,10);
+  saveDB();
+  // モーダル再描画
+  const modal = document.querySelector('.proof-modal');
+  if(modal) modal.remove();
+  showWorkInstructionView(projectId);
+  renderProjects();
 }
 
 // LINE WORKS Drive設定を読み込み
@@ -10390,6 +10841,7 @@ function renderProjects(){
     const proofBadge = linkedProofs.length > 0
       ? `<button class="use-btn" style="background:#dbeafe;border-color:#93c5fd;color:#1e3a8a;white-space:nowrap" onclick="jumpToProofing('${linkedProofs[0].id}')">📐 校正 ${linkedProofs.length}件</button>`
       : `<button class="use-btn" style="white-space:nowrap" onclick="createProofingFromProjectId('${r.id}')">📐 校正セッション作成</button>`;
+    const workBtn = `<button class="use-btn" style="background:#1e293b;color:#fff;border-color:#1e293b;white-space:nowrap" onclick="showWorkInstructionView('${r.id}')">🔧 作業指示</button>`;
     const specRow=`<tr id="proj-acc-${oi}" style="display:none;background:#f9f9f7">
       <td colspan="12" style="padding:.5rem 1rem .75rem 2rem">
         <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">
@@ -10399,6 +10851,7 @@ function renderProjects(){
             ${r.qty?`<div style="margin-top:6px;font-size:11px;color:#888">数量: <strong>${r.qty.toLocaleString()}${r.unit||''}</strong>　原価合計: <strong>${r.grand?fmt(r.grand):''}</strong></div>`:''}
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+            ${workBtn}
             ${proofBadge}
             <button class="use-btn" style="white-space:nowrap" onclick="editProjDetail(${oi})">✏ 編集</button>
           </div>
