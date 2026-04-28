@@ -7975,21 +7975,33 @@ function showProofingDetail(proofingId){
     <option value="approved"${p.status==='approved'?' selected':''}>校了</option>
   `;
   
+  const kindLabels = { manuscript: '原稿', instruction: '修正指示', proof: '校正', final: '校了' };
+  const kindColors = { manuscript: '#fef9c3', instruction: '#fee2e2', proof: '#dbeafe', final: '#dcfce7' };
+
   let versionsHtml = '';
   (p.versions || []).forEach((v, i) => {
+    const kindLabel = kindLabels[v.kind] || '校正';
+    const kindColor = kindColors[v.kind] || '#dbeafe';
+    const annoCount = (v.annotations || []).length;
     versionsHtml += `<div style="background:#fff;border:1px solid #e0ddd6;border-radius:6px;padding:10px;margin-bottom:6px">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <strong style="font-size:12px">第${i+1}校</strong>
+        <strong style="font-size:12px">第${i+1}校 <span style="font-weight:normal;background:${kindColor};padding:1px 6px;border-radius:8px;font-size:10px">${kindLabel}</span></strong>
         <span style="font-size:10px;color:#888">${v.uploadedAt?.split('T')[0] || ''}</span>
       </div>
       <div style="font-size:11px;color:#555;margin-top:4px">${v.fileName || 'ファイル名不明'}</div>
-      ${v.shareLink ? `<a href="${v.shareLink}" target="_blank" style="font-size:11px;color:#0369a1">🔗 共有リンク</a>` : ''}
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center">
+        ${v.driveUrl ? `<a href="${v.driveUrl}" target="_blank" style="font-size:11px;color:#0369a1">🔗 Drive</a>` : (v.shareLink ? `<a href="${v.shareLink}" target="_blank" style="font-size:11px;color:#0369a1">🔗 共有</a>` : '')}
+        ${v.driveFileId ? `<button onclick="previewProofVersion('${proofingId}','${v.id}')" style="font-size:11px;padding:2px 8px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;background:#fff">👁 プレビュー</button>` : ''}
+        ${annoCount > 0 ? `<span style="font-size:10px;color:#92400e">📝 注釈 ${annoCount}件</span>` : ''}
+      </div>
       ${v.feedback ? `<div style="margin-top:6px;padding:6px;background:#fef3c7;border-radius:4px;font-size:11px">
         <strong>お客様コメント:</strong><br>${v.feedback}
       </div>` : ''}
     </div>`;
   });
-  
+
+  const canCompare = (p.versions || []).filter(v => v.driveFileId).length >= 2;
+
   container.innerHTML = `
     <div style="margin-bottom:1rem">
       <div style="font-weight:700;font-size:14px">${p.custName || '─'}</div>
@@ -8007,6 +8019,7 @@ function showProofingDetail(proofingId){
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-p" onclick="uploadProofVersion('${p.id}')">📤 校正アップロード</button>
+      ${canCompare ? `<button class="btn" style="background:#dbeafe;border-color:#93c5fd" onclick="startProofComparison('${p.id}')">📐 検版開始</button>` : ''}
       <button class="btn" onclick="sendProofLink('${p.id}')">📧 リンク送信</button>
       <button class="btn" style="color:#991b1b;border-color:#fca5a5" onclick="deleteProofing('${p.id}')">🗑 削除</button>
     </div>
@@ -8047,31 +8060,54 @@ function updateProofingStatus(proofingId, status){
   }
 }
 
-// 校正をアップロード（簡易版）
+// 校正をアップロード (Drive URL 貼り付け方式)
 function uploadProofVersion(proofingId){
   const p = (DB.proofings || []).find(x => x.id === proofingId);
   if(!p) return;
-  
-  const fileName = prompt('ファイル名（例: ABC_v2.pdf）:');
-  if(!fileName) return;
-  
+
+  const driveUrl = prompt('Google Drive の共有 URL を貼り付けてください\n(例: https://drive.google.com/file/d/.../view)\n\n事前に Drive にアップロード → 「リンクを知っている全員」で共有 してください');
+  if(!driveUrl) return;
+
+  const fileId = extractDriveFileId(driveUrl);
+  if(!fileId){
+    alert('Drive URL の形式が不正です。\nhttps://drive.google.com/file/d/.../view のような URL を貼ってください。');
+    return;
+  }
+
+  const fileName = prompt('ファイル名 (任意):', '') || ('PDF_' + new Date().toISOString().split('T')[0]);
+  const versionKind = prompt('種類を選んでください:\nmanuscript = 原稿\ninstruction = 修正指示\nproof = 校正データ (デフォルト)\nfinal = 校了データ', 'proof') || 'proof';
+
   const version = {
     id: 'VER' + Date.now(),
     fileName: fileName,
+    kind: versionKind,
+    driveFileId: fileId,
+    driveUrl: driveUrl,
+    drivePreviewUrl: 'https://drive.google.com/file/d/' + fileId + '/preview',
     uploadedAt: new Date().toISOString(),
-    shareLink: '', // LINE WORKS Drive連携後に自動設定
-    feedback: ''
+    shareLink: driveUrl,
+    feedback: '',
+    annotations: []
   };
-  
+
   if(!p.versions) p.versions = [];
   p.versions.push(version);
   p.status = 'waiting';
   saveDB();
-  
+
   showProofingDetail(proofingId);
   renderProofingList();
-  
-  alert(`第${p.versions.length}校をアップロードしました\n\n※実際のファイルアップロードはLINE WORKS Drive連携後に動作します`);
+}
+
+// Drive URL からファイル ID を抽出
+function extractDriveFileId(url){
+  if(!url) return '';
+  let m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if(m) return m[1];
+  m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if(m) return m[1];
+  if(/^[a-zA-Z0-9_-]{20,}$/.test(url.trim())) return url.trim();
+  return '';
 }
 
 // 校正リンクを送信
@@ -8105,6 +8141,120 @@ function deleteProofing(proofingId){
   saveDB();
   renderProofingList();
   document.getElementById('proofing-detail').innerHTML = '<div style="text-align:center;color:#888;padding:2rem;font-size:12px">校正を選択してください</div>';
+}
+
+// ── 校正BOX プレビュー & 検版機能 ─────────────────────────────
+
+// 単体プレビュー (モーダル)
+function previewProofVersion(proofingId, versionId){
+  const p = (DB.proofings || []).find(x => x.id === proofingId);
+  if(!p) return;
+  const v = (p.versions || []).find(x => x.id === versionId);
+  if(!v || !v.driveFileId){ alert('プレビューできません (Drive 連携情報がありません)'); return; }
+  showProofPreviewModal(v);
+}
+
+function showProofPreviewModal(version){
+  const modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+  const previewUrl = version.drivePreviewUrl || ('https://drive.google.com/file/d/' + version.driveFileId + '/preview');
+  modal.innerHTML = `
+    <div style="background:#fff;width:92vw;height:92vh;border-radius:8px;display:flex;flex-direction:column">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #e0ddd6">
+        <strong>${version.fileName || 'プレビュー'}</strong>
+        <button onclick="this.closest('.proof-modal').remove()" style="font-size:24px;border:none;background:none;cursor:pointer;line-height:1;padding:0 8px">×</button>
+      </div>
+      <iframe src="${previewUrl}" style="flex:1;border:0;width:100%" allow="autoplay"></iframe>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+// 検版開始 (並列プレビュー)
+function startProofComparison(proofingId){
+  const p = (DB.proofings || []).find(x => x.id === proofingId);
+  if(!p) return;
+  const eligible = (p.versions || []).filter(v => v.driveFileId);
+  if(eligible.length < 2){
+    alert('検版するには Drive 連携済みのバージョンが2つ以上必要です');
+    return;
+  }
+  showProofCompareModal(p, eligible);
+}
+
+function showProofCompareModal(proofing, eligibleVersions){
+  const modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+
+  const allVersions = proofing.versions || [];
+  const optsHtml = eligibleVersions.map(v => {
+    const idx = allVersions.indexOf(v);
+    const kindLabel = ({manuscript:'原稿',instruction:'修正指示',proof:'校正',final:'校了'})[v.kind] || '校正';
+    return `<option value="${v.id}">第${idx+1}校 [${kindLabel}] ${v.fileName||''}</option>`;
+  }).join('');
+
+  const defaultLeft = eligibleVersions[eligibleVersions.length - 2].id;
+  const defaultRight = eligibleVersions[eligibleVersions.length - 1].id;
+
+  modal.innerHTML = `
+    <div style="background:#fff;width:96vw;height:96vh;border-radius:8px;display:flex;flex-direction:column">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #e0ddd6;gap:12px;flex-wrap:wrap">
+        <strong style="font-size:13px">📐 検版: ${proofing.custName||''} / ${proofing.prodName||''}</strong>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="cmp-left" style="font-size:11px;padding:4px 8px" onchange="updateProofCompareIframes()">${optsHtml}</select>
+          <span style="font-size:11px;color:#888">↔</span>
+          <select id="cmp-right" style="font-size:11px;padding:4px 8px" onchange="updateProofCompareIframes()">${optsHtml}</select>
+        </div>
+        <button onclick="this.closest('.proof-modal').remove();window._proofCompareData=null" style="font-size:24px;border:none;background:none;cursor:pointer;line-height:1">×</button>
+      </div>
+      <div style="flex:1;display:flex;background:#f9fafb;min-height:0">
+        <div style="flex:1;border-right:2px solid #e0ddd6;display:flex;flex-direction:column">
+          <div style="padding:4px 10px;background:#fef3c7;font-size:11px;color:#78350f">左: <span id="cmp-left-label"></span></div>
+          <iframe id="cmp-iframe-left" src="" style="border:0;width:100%;flex:1" allow="autoplay"></iframe>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column">
+          <div style="padding:4px 10px;background:#dbeafe;font-size:11px;color:#1e3a8a">右: <span id="cmp-right-label"></span></div>
+          <iframe id="cmp-iframe-right" src="" style="border:0;width:100%;flex:1" allow="autoplay"></iframe>
+        </div>
+      </div>
+      <div style="padding:8px 16px;border-top:1px solid #e0ddd6;font-size:11px;color:#666;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <span>💡 各ペインは独立してスクロール・ズーム可能。ページ送りで両側を同期させながら目視確認してください。</span>
+        <span>※ 自動差分検出は次フェーズで追加予定</span>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  window._proofCompareData = { proofing, versions: eligibleVersions };
+
+  document.getElementById('cmp-left').value = defaultLeft;
+  document.getElementById('cmp-right').value = defaultRight;
+  updateProofCompareIframes();
+}
+
+function updateProofCompareIframes(){
+  const data = window._proofCompareData;
+  if(!data) return;
+  const leftId = document.getElementById('cmp-left')?.value;
+  const rightId = document.getElementById('cmp-right')?.value;
+  const left = data.versions.find(v => v.id === leftId);
+  const right = data.versions.find(v => v.id === rightId);
+  const allVersions = data.proofing.versions || [];
+
+  if(left){
+    const idx = allVersions.indexOf(left);
+    document.getElementById('cmp-iframe-left').src = left.drivePreviewUrl || ('https://drive.google.com/file/d/' + left.driveFileId + '/preview');
+    const labelEl = document.getElementById('cmp-left-label');
+    if(labelEl) labelEl.textContent = `第${idx+1}校 ${left.fileName||''}`;
+  }
+  if(right){
+    const idx = allVersions.indexOf(right);
+    document.getElementById('cmp-iframe-right').src = right.drivePreviewUrl || ('https://drive.google.com/file/d/' + right.driveFileId + '/preview');
+    const labelEl = document.getElementById('cmp-right-label');
+    if(labelEl) labelEl.textContent = `第${idx+1}校 ${right.fileName||''}`;
+  }
 }
 
 // LINE WORKS Drive設定を読み込み
