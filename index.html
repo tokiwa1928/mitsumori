@@ -389,6 +389,7 @@ function loadGoogleMapsAPI() {
       <div style="font-size:10px;opacity:.85">業務に関する質問にお答えします</div>
     </div>
     <div style="display:flex;gap:6px">
+      <button onclick="showDevFeedbackList()" id="dev-feedback-btn" style="background:#fbbf24;border:1px solid #f59e0b;color:#78350f;padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-weight:700" title="開発依頼一覧 (記録済を確認・コピー)">🛠 開発依頼 <span id="dev-feedback-count" style="background:#dc2626;color:#fff;padding:1px 5px;border-radius:8px;font-size:9px;margin-left:2px;display:none">0</span></button>
       <button onclick="clearChatHistory()" style="background:transparent;border:1px solid rgba(255,255,255,.3);color:#fff;padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer" title="履歴を消去">🗑</button>
       <button onclick="toggleChatbot()" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0 4px">×</button>
     </div>
@@ -399,6 +400,7 @@ function loadGoogleMapsAPI() {
       <button class="chatbot-quick" onclick="sendChatMessage('今月の売上は？')">今月の売上</button>
       <button class="chatbot-quick" onclick="sendChatMessage('未対応の問い合わせを教えて')">未対応問い合わせ</button>
       <button class="chatbot-quick" onclick="sendChatMessage('納期が近い案件は？')">納期間近</button>
+      <button class="chatbot-quick" style="background:#fef3c7;color:#78350f;border-color:#fde047" onclick="promptDevFeedback()">🛠 開発依頼を残す</button>
     </div>
     <div style="display:flex;gap:6px">
       <input id="chatbot-input" placeholder="質問を入力..." style="flex:1;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:inherit" onkeypress="if(event.key==='Enter') sendChatMessage()">
@@ -11283,6 +11285,196 @@ function showProjectTimeline(projectId){
 // ─────────────────────────────────────────────────────
 
 var _chatbotHistory = [];
+
+// ─────────────────────────────────────────────────────
+// 🛠 開発依頼 (チャットから吸い上げて開発者に渡す機能)
+// ─────────────────────────────────────────────────────
+var DEV_FEEDBACK_KEY = 'tokiwa_hub_dev_feedback';
+
+function _loadDevFeedback_(){
+  try { return JSON.parse(localStorage.getItem(DEV_FEEDBACK_KEY) || '[]'); }
+  catch(e){ return []; }
+}
+function _saveDevFeedback_(arr){
+  try { localStorage.setItem(DEV_FEEDBACK_KEY, JSON.stringify(arr)); } catch(e){}
+}
+function _updateDevFeedbackCount_(){
+  var arr = _loadDevFeedback_();
+  var badge = document.getElementById('dev-feedback-count');
+  if(badge){
+    badge.textContent = arr.length;
+    badge.style.display = arr.length ? 'inline-block' : 'none';
+  }
+}
+
+// 開発依頼を入力するプロンプト
+function promptDevFeedback(){
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:520px;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#f59e0b;color:#fff;display:flex;justify-content:space-between;align-items:center">' +
+        '<strong style="font-size:14px">🛠 開発依頼を残す</strong>' +
+        '<button onclick="this.closest(\'.proof-modal\').remove()" style="font-size:24px;border:none;background:none;color:#fff;cursor:pointer;line-height:1;padding:0 8px">×</button>' +
+      '</div>' +
+      '<div style="padding:18px 20px">' +
+        '<div style="font-size:12px;color:#78350f;background:#fef3c7;padding:8px 10px;border-radius:6px;margin-bottom:12px;line-height:1.5">' +
+          '使いにくい所、こうしてほしい所、エラーやバグなど、開発担当への要望を自由に書いてください。<br>' +
+          '<strong>例:</strong> 「見積管理の納期で並び替えできるようにしてほしい」「ログイン後の画面が小さい」など' +
+        '</div>' +
+        '<select id="dev-fb-category" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;font-size:13px;margin-bottom:10px">' +
+          '<option value="改善要望">💡 改善要望 (こうしてほしい)</option>' +
+          '<option value="バグ">🐛 バグ (動かない・おかしい)</option>' +
+          '<option value="新機能">✨ 新機能 (こんな機能がほしい)</option>' +
+          '<option value="UIUX">🎨 デザイン・使いやすさ</option>' +
+          '<option value="質問">❓ 質問・確認</option>' +
+        '</select>' +
+        '<textarea id="dev-fb-text" rows="6" placeholder="気になる点・要望を入力..." style="width:100%;padding:10px;border:1px solid #ccc;border-radius:6px;font-size:13px;font-family:inherit;resize:vertical"></textarea>' +
+        '<input id="dev-fb-where" placeholder="該当画面 (任意): 例) 見積依頼タブ" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;font-size:12px;margin-top:8px">' +
+        '<div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px">' +
+          '<button class="btn" onclick="this.closest(\'.proof-modal\').remove()">キャンセル</button>' +
+          '<button class="btn btn-p" style="background:#f59e0b;border-color:#f59e0b" onclick="submitDevFeedback()">📝 記録する</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  setTimeout(function(){ document.getElementById('dev-fb-text')?.focus(); }, 100);
+}
+
+function submitDevFeedback(){
+  var text = (document.getElementById('dev-fb-text')?.value || '').trim();
+  if(!text){ alert('内容を入力してください'); return; }
+  var category = document.getElementById('dev-fb-category')?.value || '改善要望';
+  var where = (document.getElementById('dev-fb-where')?.value || '').trim();
+  var arr = _loadDevFeedback_();
+  arr.push({
+    id: 'FB-' + Date.now(),
+    category: category,
+    text: text,
+    where: where,
+    by: currentAuth?.userName || '匿名',
+    company: currentAuth?.companyName || '',
+    at: new Date().toISOString()
+  });
+  _saveDevFeedback_(arr);
+  _updateDevFeedbackCount_();
+  document.querySelector('.proof-modal')?.remove();
+  // チャットにも反映
+  if(typeof _addChatMsg_ === 'function'){
+    _addChatMsg_('user', '🛠 [開発依頼] ' + category + (where ? ' / ' + where : '') + '\n' + text);
+    _addChatMsg_('assistant', '✅ 開発依頼として記録しました。「🛠 開発依頼」ボタンから一覧をコピーして開発担当に渡せます。');
+  } else {
+    alert('✅ 開発依頼を記録しました');
+  }
+}
+
+// 開発依頼一覧モーダル
+function showDevFeedbackList(){
+  var arr = _loadDevFeedback_();
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+
+  var listHtml = arr.length === 0
+    ? '<div style="text-align:center;color:#888;padding:40px"><div style="font-size:36px;margin-bottom:10px">🛠</div>記録された開発依頼はありません<br><span style="font-size:11px">チャットの「🛠 開発依頼を残す」ボタンから入力できます</span></div>'
+    : arr.slice().reverse().map(function(fb, idx){
+        var realIdx = arr.length - 1 - idx;
+        var dateStr = new Date(fb.at).toLocaleString('ja-JP');
+        var catColor = { '改善要望':'#3b82f6', 'バグ':'#dc2626', '新機能':'#16a34a', 'UIUX':'#7c3aed', '質問':'#0891b2' }[fb.category] || '#6b7280';
+        return '<div style="padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:8px;border-left:4px solid ' + catColor + '">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+            '<div><span style="background:' + catColor + ';color:#fff;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700">' + fb.category + '</span>' +
+              (fb.where ? ' <span style="font-size:11px;color:#666">' + _escDiff(fb.where) + '</span>' : '') +
+            '</div>' +
+            '<div style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;color:#888">' + dateStr + '</span>' +
+              '<button onclick="_deleteDevFeedback_(' + realIdx + ')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:14px" title="削除">🗑</button>' +
+            '</div>' +
+          '</div>' +
+          '<div style="font-size:12px;color:#1a1a1a;white-space:pre-wrap;line-height:1.5">' + _escDiff(fb.text) + '</div>' +
+          '<div style="font-size:10px;color:#888;margin-top:4px">— ' + (fb.by || '匿名') + (fb.company ? ' (' + fb.company + ')' : '') + '</div>' +
+        '</div>';
+      }).join('');
+
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:680px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#f59e0b;color:#fff;display:flex;justify-content:space-between;align-items:center">' +
+        '<div><strong style="font-size:14px">🛠 開発依頼一覧 (' + arr.length + '件)</strong>' +
+        '<div style="font-size:11px;opacity:0.85;margin-top:2px">「全コピー」で開発者に渡すテキストをクリップボードにコピーできます</div></div>' +
+        '<button onclick="this.closest(\'.proof-modal\').remove()" style="font-size:24px;border:none;background:none;color:#fff;cursor:pointer;line-height:1;padding:0 8px">×</button>' +
+      '</div>' +
+      '<div style="padding:14px 20px;border-bottom:1px solid #e5e7eb;background:#f9fafb;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+          '<button class="btn" style="background:#16a34a;color:#fff;border-color:#16a34a;font-size:12px" onclick="copyDevFeedbackToClipboard()">📋 全部コピー (開発者へ送信用)</button>' +
+          '<button class="btn" style="font-size:12px" onclick="promptDevFeedback()">＋ 新規追加</button>' +
+        '</div>' +
+        (arr.length ? '<button class="btn" style="background:#fee;color:#b91c1c;border-color:#fca5a5;font-size:12px" onclick="if(confirm(\'すべての開発依頼を削除しますか?\')){_clearDevFeedback_()}">🗑 全削除</button>' : '') +
+      '</div>' +
+      '<div style="overflow-y:auto;flex:1;padding:14px 20px">' + listHtml + '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+function _deleteDevFeedback_(idx){
+  if(!confirm('この開発依頼を削除しますか?')) return;
+  var arr = _loadDevFeedback_();
+  arr.splice(idx, 1);
+  _saveDevFeedback_(arr);
+  _updateDevFeedbackCount_();
+  document.querySelector('.proof-modal')?.remove();
+  showDevFeedbackList();
+}
+
+function _clearDevFeedback_(){
+  _saveDevFeedback_([]);
+  _updateDevFeedbackCount_();
+  document.querySelector('.proof-modal')?.remove();
+  alert('全件削除しました');
+}
+
+function copyDevFeedbackToClipboard(){
+  var arr = _loadDevFeedback_();
+  if(!arr.length){ alert('開発依頼がありません'); return; }
+
+  var text = '# 🛠 TOKIWA-HUB 開発依頼一覧 (' + arr.length + '件)\n';
+  text += '# エクスポート: ' + new Date().toLocaleString('ja-JP') + '\n';
+  text += '# 報告者: ' + (currentAuth?.userName || '匿名') + (currentAuth?.companyName ? ' (' + currentAuth.companyName + ')' : '') + '\n\n';
+  text += '---\n\n';
+  arr.forEach(function(fb, i){
+    text += '## ' + (i + 1) + '. [' + fb.category + ']' + (fb.where ? ' / ' + fb.where : '') + '\n';
+    text += fb.text + '\n';
+    text += '*— ' + (fb.by || '匿名') + (fb.company ? ' (' + fb.company + ')' : '') + ' / ' + new Date(fb.at).toLocaleString('ja-JP') + '*\n\n';
+  });
+
+  // クリップボードにコピー
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){
+      alert('✅ ' + arr.length + '件の開発依頼をクリップボードにコピーしました!\n\n開発担当に Slack や メール、AI チャットなどに貼り付けて送ってください。');
+    }).catch(function(err){
+      _fallbackCopy_(text);
+    });
+  } else {
+    _fallbackCopy_(text);
+  }
+}
+
+function _fallbackCopy_(text){
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); alert('✅ クリップボードにコピーしました'); }
+  catch(e){ alert('コピーに失敗しました。手動で選択してください:\n\n' + text.substring(0, 500)); }
+  ta.remove();
+}
+
+// ページロード時に件数バッジ更新
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(_updateDevFeedbackCount_, 300); });
+} else {
+  setTimeout(_updateDevFeedbackCount_, 300);
+}
 
 // ── Chatbot Tool Use 定義 ──────────────────────────────
 // Claude にこれらのツールを使わせ、フロントの DB を直接操作させる
