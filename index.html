@@ -514,7 +514,6 @@ window.addEventListener('load', function(){
     <button class="tb-btn" data-page="calendar" onclick="swPage('calendar',this)" draggable="true" title="📅 納品 — 案件の納期カレンダー。月次ビューで納品予定を一覧">📅 納品</button>
     <button class="tb-btn" data-page="history" onclick="swPage('history',this)" draggable="true" title="📜 実績一覧 — 過去に保存した見積実績の検索と流用。明細スナップショット付きで完全コピー可能">📜 実績一覧</button>
     <button class="tb-btn" data-page="delivery" onclick="swPage('delivery',this)" draggable="true" title="🚚 配送 — 配送予定とドライバー管理。タスクタイプ別 (納品/校正出し/サンプル/集荷)。Google Calendar 連携">🚚 配送</button>
-    <button class="tb-btn" data-page="interco" onclick="swPage('interco',this)" draggable="true" title="🔄 社間依頼 — グループ7社間の見積依頼・発注管理。送信側と受信側で履歴を双方向追跡">🔄 社間依頼</button>
     <button class="tb-btn" data-page="finance" onclick="swPage('finance',this)" draggable="true" title="📊 決算・文書 — 各社の決算書(P/L・B/S)分析、グループ7社比較、金融機関提出用文書の保管庫">📊 決算・文書</button>
     <button class="tb-btn" data-page="wiki" onclick="swPage('wiki',this)" draggable="true" title="📖 Wiki — 社内ナレッジベース。マニュアル・手順書・FAQ などを管理">📖 Wiki</button>
     <button class="tb-btn" data-page="companies" onclick="swPage('companies',this)" draggable="true" title="🏢 会社管理 — グループ7社の管理 (トキワ・村山・北上・アートエス・津島・中尾)、ユーザー登録、権限管理">🏢 会社管理</button>
@@ -1330,15 +1329,17 @@ window.addEventListener('load', function(){
           <span id="inq-count" style="font-size:11px;color:#888"></span>
           <button class="btn btn-p" onclick="addInquiryManual()">＋ 社外問合せ</button>
           <button class="btn" style="background:#fef9c3;border-color:#fde047" onclick="openInternalMessageModal()">🏢 社内連絡</button>
+          <button class="btn" style="background:#cffafe;border-color:#67e8f9;color:#0e7490" onclick="createIntercoRequest()">🔄 社間依頼</button>
           <button class="btn" style="background:#fce7f3;border-color:#f9a8d4" onclick="openVoiceMemoModal()">🎤 音声メモ</button>
           <button class="btn" onclick="showInquiryFormPreview()">📋 公開フォーム</button>
         </div>
       </div>
       <!-- 社外/社内 切替タブ -->
-      <div style="display:flex;gap:0;margin-bottom:.5rem;border-bottom:2px solid #e5e7eb">
+      <div style="display:flex;gap:0;margin-bottom:.5rem;border-bottom:2px solid #e5e7eb;flex-wrap:wrap">
         <button id="inq-scope-all" class="inq-scope-tab active" data-scope="all" onclick="setInqScope('all')">📨 すべて</button>
         <button id="inq-scope-external" class="inq-scope-tab" data-scope="external" onclick="setInqScope('external')">🌐 社外</button>
         <button id="inq-scope-internal" class="inq-scope-tab" data-scope="internal" onclick="setInqScope('internal')">🏢 社内連絡</button>
+        <button id="inq-scope-interco" class="inq-scope-tab" data-scope="interco" onclick="setInqScope('interco')">🔄 社間依頼</button>
         <button id="inq-scope-voice" class="inq-scope-tab" data-scope="voice" onclick="setInqScope('voice')">🎤 音声メモ</button>
       </div>
       <!-- フィルタ -->
@@ -1378,6 +1379,7 @@ window.addEventListener('load', function(){
           <option value="fax">📠 FAX</option>
           <option value="phone">📞 電話</option>
           <option value="internal_msg">🏢 社内連絡</option>
+          <option value="interco">🔄 社間依頼</option>
           <option value="voice_memo">🎤 音声メモ</option>
         </select>
         <select id="inq-kind-f" style="font-size:12px;padding:4px 8px" onchange="renderInquiryList()">
@@ -3558,7 +3560,7 @@ function cloudSync(){
 // ═══════════════════ タブ並び替え (Drag & Drop) ════════════════
 
 const TAB_ORDER_KEY = 'tokiwa_hub_tab_order';
-const TAB_ORDER_VERSION = 'v4-2026-04-30-renamed'; // デフォルト並び順バージョン (変更時は localStorage の旧データを破棄)
+const TAB_ORDER_VERSION = 'v5-2026-04-30-interco-merged'; // デフォルト並び順バージョン (変更時は localStorage の旧データを破棄)
 const TAB_ORDER_VERSION_KEY = 'tokiwa_hub_tab_order_version';
 
 // バージョンが古ければ localStorage の保存順序を破棄して HTML 順序を採用
@@ -3741,6 +3743,15 @@ function swPage(id,btn){
   if(id==='inbox'){
     var inqBtn = document.querySelector('.tb-btn[data-page="inquiry"]');
     if(inqBtn){ swPage('inquiry', inqBtn); return; }
+  }
+  // 'interco' は 連絡管理 (inquiry) に統合済 → 社間依頼 scope を自動選択
+  if(id==='interco'){
+    var inqBtn2 = document.querySelector('.tb-btn[data-page="inquiry"]');
+    if(inqBtn2){
+      swPage('inquiry', inqBtn2);
+      setTimeout(function(){ if(typeof setInqScope === 'function') setInqScope('interco'); }, 100);
+      return;
+    }
   }
   if(id==='finance')renderFinancePage();
   if(id==='realtime')renderRealtimeView();
@@ -16144,12 +16155,49 @@ function saveIntercoRequest(status){
   if(!DB.intercoRequests) DB.intercoRequests = [];
   DB.intercoRequests.push(req);
   saveDB();
-  
+
+  // 連絡管理 (DB.inquiries) にも社間依頼として追加
+  if(status === 'sent'){
+    try {
+      var newInq = {
+        id: 'IC-' + req.id,
+        source_type: 'interco',
+        source_id: req.id,
+        channel_company: getCompanyName(req.fromCompanyId) || '',
+        from_name: currentAuth.userName || '',
+        from_company: getCompanyName(req.fromCompanyId) || '',
+        from_email: '',
+        subject: '【社間見積依頼】' + req.item + ' (' + req.qty + req.unit + ')',
+        body: '依頼先: ' + getCompanyName(req.toCompanyId) + '\n品名: ' + req.item + '\n数量: ' + req.qty + req.unit +
+              (req.dueDate ? '\n納期: ' + req.dueDate : '') +
+              (req.budget ? '\n予算: ¥' + req.budget.toLocaleString() : '') +
+              (req.spec ? '\n\n仕様:\n' + req.spec : '') +
+              (req.note ? '\n\n備考:\n' + req.note : ''),
+        kind: 'quote_req',
+        priority: 'normal',
+        status: 'progress',
+        summary: '',
+        received_at: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        timeline: [{ type:'note', date:new Date().toISOString(), text:'社間依頼として送信', by: currentAuth.userName||'' }],
+        tags: ['社間依頼', '送信'],
+        _interco_meta: { fromCompanyId: req.fromCompanyId, toCompanyId: req.toCompanyId, requestId: req.id }
+      };
+      if(!DB.inquiries) DB.inquiries = [];
+      DB.inquiries.unshift(newInq);
+      if(typeof saveDB === 'function') saveDB();
+      if(typeof callCloudAPI === 'function'){
+        try { callCloudAPI('addCommunication', {}, newInq); } catch(e){}
+      }
+    } catch(e){ console.warn('Interco → inquiries sync failed:', e); }
+  }
+
   document.getElementById('icr-create-modal')?.remove();
   renderIntercoSent();
-  
+  if(typeof renderInquiryList === 'function') try { renderInquiryList(); } catch(e){}
+
   if(status === 'sent'){
-    alert(`見積依頼を ${getCompanyName(toCompanyId)} に送信しました`);
+    alert('見積依頼を ' + getCompanyName(toCompanyId) + ' に送信しました');
   }
 }
 
@@ -17431,6 +17479,7 @@ const SOURCE_TYPE_META = {
   phone:        { label: '電話',        icon: '📞', color: '#0891b2', bg: '#cffafe' },
   manual:       { label: '手動',        icon: '✏️', color: '#6b7280', bg: '#f3f4f6' },
   internal_msg: { label: '社内連絡',     icon: '🏢', color: '#92400e', bg: '#fef3c7' },
+  interco:      { label: '社間依頼',     icon: '🔄', color: '#0e7490', bg: '#cffafe' },
   voice_memo:   { label: '音声メモ',    icon: '🎤', color: '#be185d', bg: '#fce7f3' }
 };
 const KIND_LABELS = {
@@ -17463,10 +17512,11 @@ function renderInquiryList() {
   const sourceF = document.getElementById('inq-source-f')?.value||'';
   const kindF = document.getElementById('inq-kind-f')?.value||'';
 
-  // スコープ (社外/社内/音声) のフィルタ
+  // スコープ (社外/社内/社間/音声) のフィルタ
   const scope = window._inqScope_ || 'all';
   const externalSources = ['gmail','linesvc','webform','manual','fax','phone',''];
   const internalSources = ['internal_msg'];
+  const intercoSources = ['interco'];
   const voiceSources = ['voice_memo'];
 
   let items = (DB.inquiries||[]).filter(inq => {
@@ -17474,6 +17524,7 @@ function renderInquiryList() {
     var src = inq.source_type || '';
     if(scope === 'external' && externalSources.indexOf(src) < 0) return false;
     if(scope === 'internal' && internalSources.indexOf(src) < 0) return false;
+    if(scope === 'interco' && intercoSources.indexOf(src) < 0) return false;
     if(scope === 'voice' && voiceSources.indexOf(src) < 0) return false;
 
     if(statusF && inq.status !== statusF) return false;
