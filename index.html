@@ -12409,6 +12409,106 @@ function repeatProject(src, idx){
 }
 
 // ─────────────────────────────────────────────────────
+// 📋 案件 → 見積詳細を見る (スナップショット復元 or 履歴検索)
+// ─────────────────────────────────────────────────────
+function showProjectEstimateView(projectId){
+  var p = (DB.projects || []).find(function(x){ return x.id === projectId; });
+  if(!p){ alert('案件が見つかりません'); return; }
+
+  // 1. 案件にスナップショットがあれば、見積作成タブで完全復元
+  if(p._estSnapshot){
+    if(!confirm('「' + (p.cust||'') + ' / ' + (p.item||'') + '」の見積書を 📝 見積作成 タブに復元します。\n(編集可能。元の案件は変わりません)')) return;
+    // 見積作成タブに切り替え
+    var btn = document.querySelector('.tb-btn[data-page="est"]');
+    if(btn && typeof swPage === 'function') swPage('est', btn);
+    setTimeout(function(){
+      // 新規タブを追加
+      if(typeof addTab === 'function') addTab();
+      setTimeout(function(){
+        var activeTabId = document.querySelector('.tab-btn.act')?.dataset?.tab;
+        if(!activeTabId){ alert('見積タブの作成に失敗しました'); return; }
+        // applyHistData で復元
+        if(typeof applyHistData === 'function'){
+          try {
+            applyHistData(activeTabId, p._estSnapshot, true);
+            alert('✅ 見積書を 📝 見積作成 タブに復元しました');
+          } catch(e){
+            console.error('applyHistData error:', e);
+            _showEstimateSummaryModal_(p);
+          }
+        } else {
+          _showEstimateSummaryModal_(p);
+        }
+      }, 200);
+    }, 200);
+    return;
+  }
+
+  // 2. スナップショットなし → DB.history から類似品を検索
+  var similar = (DB.history || []).filter(function(h){
+    return h.cust === p.cust && (h.item === p.item || (h.item && p.item && h.item.indexOf(p.item.substring(0,4)) >= 0));
+  });
+  if(similar.length){
+    var latest = similar[0];
+    if(confirm('この案件は受注確定時のスナップショットがありませんが、過去の見積書から類似品が ' + similar.length + '件 見つかりました。\n\n最新: ' + (latest.date||'') + ' / ' + (latest.item||'') + ' / ¥' + (latest.exTax||0).toLocaleString() + '\n\n📝 見積作成タブで開きますか?')){
+      var btn2 = document.querySelector('.tb-btn[data-page="est"]');
+      if(btn2 && typeof swPage === 'function') swPage('est', btn2);
+      setTimeout(function(){
+        if(typeof addTab === 'function') addTab();
+        setTimeout(function(){
+          var activeTabId = document.querySelector('.tab-btn.act')?.dataset?.tab;
+          if(activeTabId && typeof applyHistData === 'function'){
+            applyHistData(activeTabId, latest, true);
+          }
+        }, 200);
+      }, 200);
+      return;
+    }
+  }
+
+  // 3. それも無ければ、案件情報のサマリだけ表示
+  _showEstimateSummaryModal_(p);
+}
+
+function _showEstimateSummaryModal_(p){
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  var ratio = (p.exTax && p.grand) ? ((p.grand / p.exTax) * 100).toFixed(1) : '-';
+  var unitp = (p.qty && p.exTax) ? Math.round(p.exTax / p.qty * 10) / 10 : 0;
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:680px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#1e40af;color:#fff;display:flex;justify-content:space-between;align-items:center">' +
+        '<div><strong style="font-size:14px">📋 ' + p.id + ' 見積情報</strong>' +
+        '<div style="font-size:11px;opacity:0.85;margin-top:2px">受注確定時のスナップショットがありません。基本情報のみ表示</div></div>' +
+        '<button onclick="this.closest(\'.proof-modal\').remove()" style="font-size:24px;border:none;background:none;color:#fff;cursor:pointer;padding:0 8px">×</button>' +
+      '</div>' +
+      '<div style="overflow-y:auto;padding:20px;flex:1">' +
+        '<table style="width:100%;font-size:13px;border-collapse:collapse">' +
+          '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700;width:140px">案件番号</td><td style="padding:8px 12px;font-family:monospace">' + (p.id||'') + '</td></tr>' +
+          '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700">受注日</td><td style="padding:8px 12px">' + (p.orderDate||'-') + '</td></tr>' +
+          '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700">納期</td><td style="padding:8px 12px">' + (p.dueDate||'-') + '</td></tr>' +
+          '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700">得意先</td><td style="padding:8px 12px;font-weight:700">' + _escDiff(p.cust||'') + '</td></tr>' +
+          '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700">品名</td><td style="padding:8px 12px;font-weight:700">' + _escDiff(p.item||'') + '</td></tr>' +
+          '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700">仕様</td><td style="padding:8px 12px;white-space:pre-wrap">' + _escDiff(p.spec||'-') + '</td></tr>' +
+          '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700">数量</td><td style="padding:8px 12px">' + (p.qty||0).toLocaleString() + ' ' + (p.unit||'部') + '</td></tr>' +
+          '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700">単価</td><td style="padding:8px 12px;font-family:monospace">¥' + unitp.toLocaleString() + ' / ' + (p.unit||'部') + '</td></tr>' +
+          '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700">税抜金額</td><td style="padding:8px 12px;font-family:monospace;font-size:16px;font-weight:700">¥' + (p.exTax||0).toLocaleString() + '</td></tr>' +
+          (p.grand ? '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700">原価合計</td><td style="padding:8px 12px;font-family:monospace">¥' + p.grand.toLocaleString() + '</td></tr>' : '') +
+          '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700">原価率</td><td style="padding:8px 12px">' + ratio + '%</td></tr>' +
+          '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700">担当者</td><td style="padding:8px 12px">' + (p.assignee||'-') + '</td></tr>' +
+          '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700">ステータス</td><td style="padding:8px 12px">' + (p.status||'-') + '</td></tr>' +
+          (p.memo ? '<tr><td style="padding:8px 12px;background:#f9fafb;font-weight:700;vertical-align:top">備考</td><td style="padding:8px 12px;white-space:pre-wrap">' + _escDiff(p.memo) + '</td></tr>' : '') +
+        '</table>' +
+        '<div style="margin-top:14px;padding:10px;background:#fef3c7;border:1px solid #fde047;border-radius:6px;font-size:11px;color:#78350f">' +
+          '💡 詳細な見積明細 (用紙・印刷・製版・製本の単価) を見るには、見積作成時に「実績保存」しておくか、受注確定時に最新版で再登録してください。' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+// ─────────────────────────────────────────────────────
 // 📜 案件タイムライン (時系列イベントビュー)
 // ─────────────────────────────────────────────────────
 function showProjectTimeline(projectId){
@@ -16377,10 +16477,34 @@ function confirmOrder(tabId){
   if(!cust||!item){alert('得意先と品名を入力してください');return;}
   if(!confirm(`「${item}」を受注確定して案件リストに登録しますか？`))return;
 
+  // 🆕 見積書スナップショットを取得 (案件管理から「見積を見る」で復元するため)
+  let estSnapshot = null;
+  try {
+    const formSnap = (typeof collectFormSnapshot === 'function') ? collectFormSnapshot(tabId) : null;
+    const tabState = JSON.parse(JSON.stringify(s));
+    const domVals = {};
+    ['cust','prod','date','spec','memo','estno','unit','valid','erate','trate',
+     'finish-sel','finish-w','finish-h','expand-sel','expand-w','expand-h',
+     'job-type','spec-change','plate-change','delivery-note'].forEach(f=>{
+      const el=document.getElementById(`${f}-${tabId}`);
+      if(el) domVals[f]=el.value;
+    });
+    estSnapshot = {
+      cust, item, spec, qty, unit, unitp: adopted,
+      exTax, grand, tr2, jobType: domVals['job-type'] || 'new',
+      _formSnap: formSnap,
+      _tabState: tabState,
+      _domVals: domVals,
+      capturedAt: new Date().toISOString()
+    };
+  } catch(e){
+    console.warn('Estimate snapshot capture failed:', e);
+  }
+
   const proj={
     id: nextProjNo(),
-    companyId: currentAuth.companyId || 'COMP001',  // 会社IDを付与
-    companyCode: getCurrentCompanyCode(),           // 会社コードも保存
+    companyId: currentAuth.companyId || 'COMP001',
+    companyCode: getCurrentCompanyCode(),
     orderDate: date||new Date().toISOString().slice(0,10),
     dueDate: '',
     cust, item, spec, qty, unit,
@@ -16392,6 +16516,7 @@ function confirmOrder(tabId){
     stepDates:{},
     createdAt: new Date().toISOString(),
     estTabId: tabId,
+    _estSnapshot: estSnapshot  // 🆕 見積書スナップショット
   };
   if(!DB.projects) DB.projects=[];
   DB.projects.push(proj);
@@ -16399,7 +16524,7 @@ function confirmOrder(tabId){
   // 案件管理タブに切り替え
   const btn=document.querySelector('.tb-btn[onclick*="project"]');
   swPage('project',btn);
-  alert(`案件番号 ${proj.id} で登録しました`);
+  alert(`案件番号 ${proj.id} で登録しました\n💡 見積詳細は 案件管理 の 「📋 見積を見る」 で確認できます`);
 }
 
 // ═══════════════════ 外注管理 ════════════════════
@@ -17168,6 +17293,7 @@ function renderProjects(){
       : `<button class="use-btn" style="white-space:nowrap" onclick="createProofingFromProjectId('${r.id}')">📐 校正セッション作成</button>`;
     const workBtn = `<button class="use-btn" style="background:#1e293b;color:#fff;border-color:#1e293b;white-space:nowrap" onclick="showWorkInstructionView('${r.id}')">🔧 作業指示</button>`;
     const timelineBtn = `<button class="use-btn" style="background:#7c3aed;color:#fff;border-color:#7c3aed;white-space:nowrap" onclick="showProjectTimeline('${r.id}')">📜 タイムライン</button>`;
+    const estimateBtn = `<button class="use-btn" style="background:#1e40af;color:#fff;border-color:#1e40af;white-space:nowrap" onclick="showProjectEstimateView('${r.id}')">📋 見積を見る</button>`;
     // 紐付く配送タスク
     const linkedDeliveries = (DB.deliveryItems||[]).filter(d => d.projectId === r.id);
     const deliveryBtn = linkedDeliveries.length > 0
@@ -17182,6 +17308,7 @@ function renderProjects(){
             ${r.qty?`<div style="margin-top:6px;font-size:11px;color:#888">数量: <strong>${r.qty.toLocaleString()}${r.unit||''}</strong>　原価合計: <strong>${r.grand?fmt(r.grand):''}</strong></div>`:''}
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+            ${estimateBtn}
             ${workBtn}
             ${timelineBtn}
             ${proofBadge}
