@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>御見積書作成ツール — 村山印刷</title>
+<title>Tokiwa Hub — トキワ印刷グループ統合基幹</title>
 <script>
 // ═══════════════════════════════════════════════════════════════
 // クラウド連携設定（ここを変更してください）
@@ -286,15 +286,12 @@ textarea{resize:vertical;font-size:12px;line-height:1.5}
 .hist-full{background:#eff6ff;border-color:#93c5fd}
 .hist-full:hover{border-color:#3b82f6}
 </style>
-<!-- Excel出力用ライブラリ (SheetJS) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- PDF出力用ライブラリ (jsPDF + html2canvas) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<!-- 校正BOX 差分検出用 (jsdiff) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/5.1.0/diff.min.js"></script>
-<!-- ダッシュボード用 (Chart.js) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<!-- ライブラリ群 (defer で遅延読込し初期表示を高速化) -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/5.1.0/diff.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <!-- Google Maps API（配送経路最適化） -->
 <script>
 // Google Maps API設定 - APIキーを設定してください
@@ -319,6 +316,21 @@ function loadGoogleMapsAPI() {
 </script>
 </head>
 <body>
+<!-- 起動時ローディング (DOM 構築完了後に消える) -->
+<div id="boot-loader" style="position:fixed;inset:0;background:#fff;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif">
+  <div style="font-size:32px;margin-bottom:12px;animation:bootspin 1s linear infinite">⏳</div>
+  <div style="font-size:18px;font-weight:700;color:#1e293b">Tokiwa Hub</div>
+  <div style="font-size:12px;color:#888;margin-top:6px">読み込み中…</div>
+  <style>@keyframes bootspin{from{transform:rotate(0)}to{transform:rotate(360deg)}}</style>
+</div>
+<script>
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    var b = document.getElementById('boot-loader');
+    if(b){ b.style.transition='opacity 0.3s'; b.style.opacity='0'; setTimeout(function(){ b.remove(); }, 300); }
+  }, 100);
+});
+</script>
 <!-- DIC番号サジェスト -->
 <datalist id="dic-suggestions">
   <option value="DIC156">赤</option>
