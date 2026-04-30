@@ -293,6 +293,8 @@ textarea{resize:vertical;font-size:12px;line-height:1.5}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <!-- 校正BOX 差分検出用 (jsdiff) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/5.1.0/diff.min.js"></script>
+<!-- ダッシュボード用 (Chart.js) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <!-- Google Maps API（配送経路最適化） -->
 <script>
 // Google Maps API設定 - APIキーを設定してください
@@ -385,6 +387,7 @@ function loadGoogleMapsAPI() {
 <div class="topbar no-print">
   <span class="topbar-title" id="app-title">御見積書システム</span>
   <button class="tb-btn act" data-page="est" onclick="swPage('est',this)">見積作成</button>
+  <button class="tb-btn" data-page="dashboard" onclick="swPage('dashboard',this)">📈 ダッシュボード</button>
   <button class="tb-btn" data-page="project" onclick="swPage('project',this)">案件管理</button>
   <button class="tb-btn" data-page="master" onclick="swPage('master',this)">マスター管理</button>
   <button class="tb-btn" data-page="history" onclick="swPage('history',this)">実績一覧</button>
@@ -423,6 +426,64 @@ function loadGoogleMapsAPI() {
 </div>
 <div class="main">
 <div class="page act" id="page-est"><div id="tab-panels"></div></div>
+
+<!-- ダッシュボードページ -->
+<div class="page" id="page-dashboard">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <h2 style="margin:0;font-size:18px">📈 売上ダッシュボード</h2>
+      <span id="dash-period-display" style="font-size:11px;color:#888"></span>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <select id="dash-period" onchange="renderDashboard()" style="font-size:12px;padding:4px 8px">
+        <option value="3">直近3ヶ月</option>
+        <option value="6">直近6ヶ月</option>
+        <option value="12" selected>直近12ヶ月</option>
+        <option value="24">直近24ヶ月</option>
+      </select>
+      <button class="btn" onclick="renderDashboard()">🔄 更新</button>
+    </div>
+  </div>
+
+  <!-- KPI カード -->
+  <div id="dash-kpi" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:1rem"></div>
+
+  <!-- 上段: 月次売上 + ステータス -->
+  <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1rem" id="dash-row-1">
+    <div class="sec">
+      <div class="st">📊 月次売上推移</div>
+      <div style="height:280px;position:relative"><canvas id="dash-chart-monthly"></canvas></div>
+    </div>
+    <div class="sec">
+      <div class="st">🎯 案件ステータス</div>
+      <div style="height:280px;position:relative"><canvas id="dash-chart-status"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 下段: 得意先 TOP10 + カテゴリ比率 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem" id="dash-row-2">
+    <div class="sec">
+      <div class="st">🏆 得意先 売上 TOP10</div>
+      <div style="height:280px;position:relative"><canvas id="dash-chart-cust"></canvas></div>
+    </div>
+    <div class="sec">
+      <div class="st">🥧 品目カテゴリ別売上</div>
+      <div style="height:280px;position:relative"><canvas id="dash-chart-category"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 下段: 粗利率推移 + 未対応一覧 -->
+  <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1rem" id="dash-row-3">
+    <div class="sec">
+      <div class="st">💹 月次粗利率推移</div>
+      <div style="height:240px;position:relative"><canvas id="dash-chart-margin"></canvas></div>
+    </div>
+    <div class="sec">
+      <div class="st">⚠️ 未対応・要注意</div>
+      <div id="dash-attention" style="font-size:12px;line-height:1.6;max-height:240px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
 <!-- 案件管理ページ -->
 <div class="page" id="page-project">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
@@ -2921,6 +2982,7 @@ function swPage(id,btn){
   if(id==='master')renderMaster(curMaster);
   if(id==='history')renderHistory();
   if(id==='project')renderProjects();
+  if(id==='dashboard')renderDashboard();
   if(id==='settings')initConfPage();
   if(id==='calendar')renderCalendar();
   if(id==='companies'){ renderCompanies(); renderSystemUsers(); }
@@ -8516,6 +8578,312 @@ function runTextDiff(){
 
 function _escDiff(str){
   return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── 売上ダッシュボード ───────────────────────────────────────
+
+var _dashCharts = {};
+
+function renderDashboard(){
+  if(typeof Chart === 'undefined'){
+    document.getElementById('dash-kpi').innerHTML = '<div style="color:#888;text-align:center;padding:2rem">Chart.js を読み込み中...</div>';
+    setTimeout(renderDashboard, 500);
+    return;
+  }
+
+  var months = parseInt(document.getElementById('dash-period')?.value || '12', 10);
+  var now = new Date();
+  var startDate = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
+
+  var projects = (DB.projects || []).filter(function(p){
+    var d = p.orderDate || p.createdAt;
+    return d && new Date(d) >= startDate;
+  });
+
+  var allProjects = DB.projects || [];
+
+  // 期間表示
+  var pdEl = document.getElementById('dash-period-display');
+  if(pdEl) pdEl.textContent = '(' + startDate.toISOString().slice(0,7) + ' 〜 ' + now.toISOString().slice(0,7) + ')';
+
+  _renderDashKpi_(projects, allProjects);
+  _renderDashMonthly_(projects, months);
+  _renderDashStatus_(projects);
+  _renderDashCust_(projects);
+  _renderDashCategory_(projects);
+  _renderDashMargin_(projects, months);
+  _renderDashAttention_();
+}
+
+function _renderDashKpi_(periodProjects, allProjects){
+  var thisMonth = new Date().toISOString().slice(0,7);
+  var thisMonthProjects = (allProjects || []).filter(function(p){
+    return (p.orderDate || '').startsWith(thisMonth);
+  });
+  var thisMonthSales = thisMonthProjects.reduce(function(s, p){ return s + (parseInt(p.exTax) || 0); }, 0);
+  var periodSales = periodProjects.reduce(function(s, p){ return s + (parseInt(p.exTax) || 0); }, 0);
+  var avgPerProject = periodProjects.length ? Math.round(periodSales / periodProjects.length) : 0;
+  var inProgress = (allProjects || []).filter(function(p){
+    return p.status && p.status !== '完了' && p.status !== '納品済';
+  }).length;
+  var pendingInquiries = (DB.inquiries || []).filter(function(i){ return i.status === 'new'; }).length;
+
+  var totalGross = periodProjects.reduce(function(s, p){
+    return s + ((parseInt(p.exTax) || 0) - (parseInt(p.outsourceTotal) || 0));
+  }, 0);
+  var grossRate = periodSales > 0 ? Math.round((totalGross / periodSales) * 1000) / 10 : 0;
+
+  document.getElementById('dash-kpi').innerHTML =
+    _kpiCard('今月売上', '¥' + thisMonthSales.toLocaleString(), thisMonthProjects.length + '件', '#1e40af', '#dbeafe') +
+    _kpiCard('期間売上合計', '¥' + periodSales.toLocaleString(), periodProjects.length + '件', '#065f46', '#dcfce7') +
+    _kpiCard('平均単価', '¥' + avgPerProject.toLocaleString(), '/案件', '#7c3aed', '#ede9fe') +
+    _kpiCard('粗利率', grossRate + '%', '¥' + totalGross.toLocaleString(), '#dc2626', '#fee2e2') +
+    _kpiCard('進行中案件', inProgress + '件', '対応必要', '#ea580c', '#fed7aa') +
+    _kpiCard('未対応問い合わせ', pendingInquiries + '件', 'new', '#be185d', '#fce7f3');
+}
+
+function _kpiCard(label, value, sub, color, bg){
+  return '<div style="background:' + bg + ';border-left:4px solid ' + color + ';padding:14px 16px;border-radius:8px">' +
+    '<div style="font-size:11px;color:#666;margin-bottom:4px">' + label + '</div>' +
+    '<div style="font-size:22px;font-weight:700;color:' + color + ';line-height:1.1">' + value + '</div>' +
+    '<div style="font-size:10px;color:#888;margin-top:4px">' + sub + '</div>' +
+    '</div>';
+}
+
+function _destroyChart_(key){
+  if(_dashCharts[key]){
+    try { _dashCharts[key].destroy(); } catch(e){}
+    _dashCharts[key] = null;
+  }
+}
+
+function _monthLabels_(months){
+  var labels = [];
+  var now = new Date();
+  for(var i = months - 1; i >= 0; i--){
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    labels.push(d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0'));
+  }
+  return labels;
+}
+
+function _renderDashMonthly_(projects, months){
+  _destroyChart_('monthly');
+  var ctx = document.getElementById('dash-chart-monthly');
+  if(!ctx) return;
+  var labels = _monthLabels_(months);
+  var sales = labels.map(function(l){
+    return projects.filter(function(p){
+      return (p.orderDate || '').startsWith(l.replace('/', '-'));
+    }).reduce(function(s, p){ return s + (parseInt(p.exTax) || 0); }, 0);
+  });
+
+  _dashCharts.monthly = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: '売上 (税抜)',
+        data: sales,
+        backgroundColor: '#1e40af',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { callback: function(v){ return '¥' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v); } } }
+      }
+    }
+  });
+}
+
+function _renderDashStatus_(projects){
+  _destroyChart_('status');
+  var ctx = document.getElementById('dash-chart-status');
+  if(!ctx) return;
+  var statuses = ['制作中','校了待ち','印刷中','加工中','納品済','完了'];
+  var counts = statuses.map(function(s){
+    return projects.filter(function(p){ return p.status === s; }).length;
+  });
+  var colors = ['#1e40af', '#78350f', '#065f46', '#5b21b6', '#374151', '#aaa'];
+
+  _dashCharts.status = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: statuses,
+      datasets: [{ data: counts, backgroundColor: colors }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { font: { size: 11 } } } }
+    }
+  });
+}
+
+function _renderDashCust_(projects){
+  _destroyChart_('cust');
+  var ctx = document.getElementById('dash-chart-cust');
+  if(!ctx) return;
+  var custMap = {};
+  projects.forEach(function(p){
+    if(!p.cust) return;
+    custMap[p.cust] = (custMap[p.cust] || 0) + (parseInt(p.exTax) || 0);
+  });
+  var sorted = Object.keys(custMap).map(function(k){ return [k, custMap[k]]; })
+    .sort(function(a, b){ return b[1] - a[1]; }).slice(0, 10);
+
+  _dashCharts.cust = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(function(s){ return s[0].length > 15 ? s[0].substring(0,15) + '…' : s[0]; }),
+      datasets: [{
+        label: '売上',
+        data: sorted.map(function(s){ return s[1]; }),
+        backgroundColor: '#065f46',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { callback: function(v){ return '¥' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v); } } }
+      }
+    }
+  });
+}
+
+function _renderDashCategory_(projects){
+  _destroyChart_('category');
+  var ctx = document.getElementById('dash-chart-category');
+  if(!ctx) return;
+  // item の最初のキーワードでカテゴリを推定
+  var catMap = {};
+  projects.forEach(function(p){
+    var cat = _guessCategory_(p.item || '');
+    catMap[cat] = (catMap[cat] || 0) + (parseInt(p.exTax) || 0);
+  });
+  var entries = Object.keys(catMap).map(function(k){ return [k, catMap[k]]; })
+    .sort(function(a, b){ return b[1] - a[1]; });
+
+  _dashCharts.category = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: entries.map(function(e){ return e[0]; }),
+      datasets: [{
+        data: entries.map(function(e){ return e[1]; }),
+        backgroundColor: ['#1e40af', '#065f46', '#7c3aed', '#dc2626', '#ea580c', '#0891b2', '#be185d', '#374151']
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { font: { size: 10 } } } }
+    }
+  });
+}
+
+function _guessCategory_(itemName){
+  if(/封筒/.test(itemName)) return '封筒';
+  if(/伝票|複写|帳票|受診/.test(itemName)) return '帳票・伝票';
+  if(/名刺|カード/.test(itemName)) return '名刺・カード';
+  if(/シール|ラベル/.test(itemName)) return 'シール・ラベル';
+  if(/冊子|パンフ|カタログ|ブックレット|本|書|誌/.test(itemName)) return '冊子・パンフ';
+  if(/チラシ|ビラ|フライヤー|リーフ/.test(itemName)) return 'チラシ・リーフ';
+  if(/卒業|証書|賞状/.test(itemName)) return '証書類';
+  return 'その他';
+}
+
+function _renderDashMargin_(projects, months){
+  _destroyChart_('margin');
+  var ctx = document.getElementById('dash-chart-margin');
+  if(!ctx) return;
+  var labels = _monthLabels_(months);
+  var rates = labels.map(function(l){
+    var month = l.replace('/', '-');
+    var ps = projects.filter(function(p){ return (p.orderDate || '').startsWith(month); });
+    var sales = ps.reduce(function(s, p){ return s + (parseInt(p.exTax) || 0); }, 0);
+    var costs = ps.reduce(function(s, p){ return s + (parseInt(p.outsourceTotal) || 0); }, 0);
+    if(sales <= 0) return 0;
+    return Math.round(((sales - costs) / sales) * 1000) / 10;
+  });
+
+  _dashCharts.margin = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: '粗利率 (%)',
+        data: rates,
+        borderColor: '#dc2626',
+        backgroundColor: 'rgba(220,38,38,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { suggestedMin: 0, suggestedMax: 100, ticks: { callback: function(v){ return v + '%'; } } } }
+    }
+  });
+}
+
+function _renderDashAttention_(){
+  var div = document.getElementById('dash-attention');
+  if(!div) return;
+  var html = '';
+
+  // 未対応の問い合わせ
+  var newInq = (DB.inquiries || []).filter(function(i){ return i.status === 'new'; }).slice(0, 5);
+  if(newInq.length){
+    html += '<div style="margin-bottom:10px"><strong style="color:#be185d;font-size:11px">📬 未対応問い合わせ ' + newInq.length + '件</strong>';
+    newInq.forEach(function(i){
+      html += '<div style="padding:4px 8px;background:#fce7f3;border-radius:4px;margin-top:3px;font-size:11px;cursor:pointer" onclick="openInquiryDetail(\'' + i.id + '\')">' +
+        (i.subject || '無題').substring(0, 30) + '<br><span style="color:#888;font-size:10px">' + (i.from_name || i.custName || '') + '</span></div>';
+    });
+    html += '</div>';
+  }
+
+  // 納期が近い案件 (7日以内)
+  var soon = new Date(); soon.setDate(soon.getDate() + 7);
+  var soonProjects = (DB.projects || []).filter(function(p){
+    if(!p.dueDate) return false;
+    if(p.status === '完了' || p.status === '納品済') return false;
+    var d = new Date(p.dueDate);
+    return d <= soon && d >= new Date();
+  }).slice(0, 5);
+  if(soonProjects.length){
+    html += '<div style="margin-bottom:10px"><strong style="color:#dc2626;font-size:11px">⏰ 納期1週間以内 ' + soonProjects.length + '件</strong>';
+    soonProjects.forEach(function(p){
+      html += '<div style="padding:4px 8px;background:#fee2e2;border-radius:4px;margin-top:3px;font-size:11px;cursor:pointer" onclick="jumpToProject(\'' + p.id + '\')">' +
+        '<strong>' + p.dueDate + '</strong> ' + (p.cust || '') + '<br>' + (p.item || '').substring(0, 30) + '</div>';
+    });
+    html += '</div>';
+  }
+
+  // 進行中案件で工程未着手のもの
+  var stuck = (DB.projects || []).filter(function(p){
+    if(p.status === '完了' || p.status === '納品済') return false;
+    var allUnstart = ['版下','校了','印刷','加工','納品'].every(function(s){
+      return !p.steps || p.steps[s] === '─' || !p.steps[s];
+    });
+    return allUnstart;
+  }).slice(0, 5);
+  if(stuck.length){
+    html += '<div style="margin-bottom:10px"><strong style="color:#78350f;font-size:11px">🐢 工程未着手 ' + stuck.length + '件</strong>';
+    stuck.forEach(function(p){
+      html += '<div style="padding:4px 8px;background:#fef3c7;border-radius:4px;margin-top:3px;font-size:11px;cursor:pointer" onclick="jumpToProject(\'' + p.id + '\')">' +
+        (p.id || '') + ' / ' + (p.cust || '') + '<br><span style="color:#888;font-size:10px">' + (p.item || '').substring(0, 30) + '</span></div>';
+    });
+    html += '</div>';
+  }
+
+  if(!html) html = '<div style="color:#888;text-align:center;padding:1rem">特に対応必要なものはありません ✅</div>';
+  div.innerHTML = html;
 }
 
 // ── AI 取込 (Claude API) ───────────────────────────────────
