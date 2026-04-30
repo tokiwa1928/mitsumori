@@ -409,6 +409,7 @@ window.addEventListener('load', function(){
   <span class="topbar-title" id="app-title">Tokiwa Hub</span>
   <div class="tb-scroll" id="tb-scroll">
     <button class="tb-btn act" data-page="est" onclick="swPage('est',this)" draggable="true">📝 見積作成</button>
+    <button class="tb-btn" data-page="realtime" onclick="swPage('realtime',this)" draggable="true">🎯 リアルタイム</button>
     <button class="tb-btn" data-page="dashboard" onclick="swPage('dashboard',this)" draggable="true">📈 ダッシュボード</button>
     <button class="tb-btn" data-page="finance" onclick="swPage('finance',this)" draggable="true">📊 決算・文書</button>
     <button class="tb-btn" data-page="project" onclick="swPage('project',this)" draggable="true">📁 案件管理</button>
@@ -450,6 +451,26 @@ window.addEventListener('load', function(){
 </div>
 <div class="main">
 <div class="page act" id="page-est"><div id="tab-panels"></div></div>
+
+<!-- リアルタイム全体ビュー (カスタマイズ可能ダッシュボード) -->
+<div class="page" id="page-realtime">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h2 style="margin:0;font-size:18px">🎯 リアルタイム全体ビュー</h2>
+      <span id="rt-last-update" style="font-size:11px;color:#888"></span>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <label style="font-size:11px;color:#666;display:flex;align-items:center;gap:4px">
+        <input type="checkbox" id="rt-auto-refresh" checked> 自動更新 (30秒)
+      </label>
+      <button class="btn" onclick="renderRealtimeView()">🔄 今すぐ更新</button>
+      <button class="btn btn-p" style="background:#7c3aed;border-color:#7c3aed" onclick="showWidgetSelector()">⚙ ウィジェット選択</button>
+    </div>
+  </div>
+
+  <!-- ウィジェットグリッド -->
+  <div id="rt-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-items:start"></div>
+</div>
 
 <!-- 決算・財務分析 + 文書保管庫ページ -->
 <div class="page" id="page-finance">
@@ -3208,6 +3229,7 @@ function swPage(id,btn){
   if(id==='project')renderProjects();
   if(id==='dashboard')renderDashboard();
   if(id==='finance')renderFinancePage();
+  if(id==='realtime')renderRealtimeView();
   if(id==='settings')initConfPage();
   if(id==='calendar')renderCalendar();
   if(id==='companies'){ renderCompanies(); renderSystemUsers(); }
@@ -9400,6 +9422,374 @@ function applyFinancialAIIngest(extracted){
   document.querySelector('.proof-modal')?.remove();
   renderFinancePage();
   if(typeof _toastMsg === 'function') _toastMsg('✅ AI 取込で決算データを登録しました');
+}
+
+// ── リアルタイム全体ビュー (カスタマイズ可能) ──────────────
+
+var WIDGET_CATALOG = {
+  // KPI 系 (小)
+  kpi_today_sales:    { label: '今日の売上', category: 'KPI', size: 'small' },
+  kpi_month_sales:    { label: '今月の売上', category: 'KPI', size: 'small' },
+  kpi_active_projects:{ label: '進行中案件', category: 'KPI', size: 'small' },
+  kpi_pending_inq:    { label: '未対応問い合わせ', category: 'KPI', size: 'small' },
+  kpi_today_delivery: { label: '今日の配送', category: 'KPI', size: 'small' },
+  kpi_proofing_active:{ label: '校正進行中', category: 'KPI', size: 'small' },
+  kpi_due_soon:       { label: '納期1週間以内', category: 'KPI', size: 'small' },
+  kpi_unread_emails:  { label: '未読メール', category: 'KPI', size: 'small' },
+  // グラフ系 (中)
+  chart_monthly_sales:{ label: '月次売上 (棒)', category: 'チャート', size: 'medium' },
+  chart_status:       { label: '案件ステータス分布', category: 'チャート', size: 'medium' },
+  chart_inq_source:   { label: 'チャネル別問い合わせ', category: 'チャート', size: 'medium' },
+  // リスト系 (中)
+  list_recent_inquiries: { label: '直近の問い合わせ', category: 'リスト', size: 'medium' },
+  list_due_soon:        { label: '納期間近の案件', category: 'リスト', size: 'medium' },
+  list_today_delivery:  { label: '今日の配送タスク', category: 'リスト', size: 'medium' },
+  list_proofing_active: { label: '校正進行中', category: 'リスト', size: 'medium' },
+  list_top_customers:   { label: '今月 得意先 TOP5', category: 'リスト', size: 'medium' }
+};
+
+var DEFAULT_WIDGETS = [
+  'kpi_month_sales', 'kpi_active_projects', 'kpi_pending_inq', 'kpi_today_delivery',
+  'list_recent_inquiries', 'list_due_soon', 'chart_monthly_sales', 'chart_status'
+];
+
+var _rtCharts = {};
+var _rtRefreshTimer = null;
+
+function _getEnabledWidgets_(){
+  try {
+    var saved = JSON.parse(localStorage.getItem('rt_widgets') || 'null');
+    if(saved && Array.isArray(saved)) return saved;
+  } catch(e){}
+  return DEFAULT_WIDGETS.slice();
+}
+
+function _saveEnabledWidgets_(list){
+  try { localStorage.setItem('rt_widgets', JSON.stringify(list)); } catch(e){}
+}
+
+function renderRealtimeView(){
+  var enabled = _getEnabledWidgets_();
+  var grid = document.getElementById('rt-grid');
+  if(!grid) return;
+
+  // 既存チャートを破棄
+  Object.keys(_rtCharts).forEach(function(k){
+    try { _rtCharts[k]?.destroy(); } catch(e){}
+    _rtCharts[k] = null;
+  });
+
+  if(!enabled.length){
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:#888"><div style="font-size:32px;margin-bottom:8px">🎯</div><div>「⚙ ウィジェット選択」から表示する内容を選んでください</div></div>';
+    return;
+  }
+
+  var html = enabled.map(function(wId){
+    var w = WIDGET_CATALOG[wId];
+    if(!w) return '';
+    var span = w.size === 'small' ? '' : 'grid-column:span 2';
+    return '<div class="rt-widget" data-widget="' + wId + '" style="background:#fff;border:1px solid #e0ddd6;border-radius:8px;padding:12px;' + span + '">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+        '<div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.05em">' + w.label + '</div>' +
+        '<button onclick="removeWidget(\'' + wId + '\')" style="font-size:11px;border:none;background:none;color:#aaa;cursor:pointer" title="削除">×</button>' +
+      '</div>' +
+      '<div id="rt-widget-content-' + wId + '" style="' + (w.category === 'チャート' ? 'height:180px;position:relative' : '') + '"></div>' +
+    '</div>';
+  }).join('');
+
+  grid.innerHTML = html;
+
+  // 各ウィジェットの内容を描画
+  enabled.forEach(function(wId){ _renderWidget_(wId); });
+
+  // 最終更新時刻
+  var ts = document.getElementById('rt-last-update');
+  if(ts) ts.textContent = '最終更新: ' + new Date().toLocaleTimeString('ja-JP');
+
+  // 自動更新
+  _setupAutoRefresh_();
+}
+
+function _setupAutoRefresh_(){
+  if(_rtRefreshTimer){ clearInterval(_rtRefreshTimer); }
+  var auto = document.getElementById('rt-auto-refresh');
+  if(auto?.checked){
+    _rtRefreshTimer = setInterval(function(){
+      // ページが realtime でなければ停止
+      if(!document.getElementById('page-realtime')?.classList?.contains('act')){
+        clearInterval(_rtRefreshTimer); _rtRefreshTimer = null; return;
+      }
+      renderRealtimeView();
+    }, 30000);
+  }
+}
+
+function _renderWidget_(wId){
+  var contentEl = document.getElementById('rt-widget-content-' + wId);
+  if(!contentEl) return;
+
+  // KPI 系
+  if(wId === 'kpi_today_sales')    return _renderKpiTodaySales_(contentEl);
+  if(wId === 'kpi_month_sales')    return _renderKpiMonthSales_(contentEl);
+  if(wId === 'kpi_active_projects')return _renderKpiActiveProjects_(contentEl);
+  if(wId === 'kpi_pending_inq')    return _renderKpiPendingInq_(contentEl);
+  if(wId === 'kpi_today_delivery') return _renderKpiTodayDelivery_(contentEl);
+  if(wId === 'kpi_proofing_active')return _renderKpiProofingActive_(contentEl);
+  if(wId === 'kpi_due_soon')       return _renderKpiDueSoon_(contentEl);
+  if(wId === 'kpi_unread_emails')  return _renderKpiUnreadEmails_(contentEl);
+  // チャート系
+  if(wId === 'chart_monthly_sales')return _renderChartMonthlySales_(contentEl);
+  if(wId === 'chart_status')       return _renderChartStatus_(contentEl);
+  if(wId === 'chart_inq_source')   return _renderChartInqSource_(contentEl);
+  // リスト系
+  if(wId === 'list_recent_inquiries') return _renderListRecentInquiries_(contentEl);
+  if(wId === 'list_due_soon')         return _renderListDueSoon_(contentEl);
+  if(wId === 'list_today_delivery')   return _renderListTodayDelivery_(contentEl);
+  if(wId === 'list_proofing_active')  return _renderListProofingActive_(contentEl);
+  if(wId === 'list_top_customers')    return _renderListTopCustomers_(contentEl);
+}
+
+// 共通: 大きい数字表示
+function _bigNumber_(value, sub, color){
+  return '<div style="font-size:30px;font-weight:700;color:' + (color||'#1e293b') + ';line-height:1">' + value + '</div>' +
+    '<div style="font-size:11px;color:#888;margin-top:4px">' + (sub||'') + '</div>';
+}
+
+// KPI 実装
+function _renderKpiTodaySales_(el){
+  var today = new Date().toISOString().slice(0,10);
+  var sum = (DB.projects||[]).filter(function(p){ return p.orderDate === today; })
+    .reduce(function(s, p){ return s + (parseInt(p.exTax)||0); }, 0);
+  el.innerHTML = _bigNumber_('¥' + sum.toLocaleString(), today, '#1e40af');
+}
+function _renderKpiMonthSales_(el){
+  var m = new Date().toISOString().slice(0,7);
+  var ps = (DB.projects||[]).filter(function(p){ return (p.orderDate||'').startsWith(m); });
+  var sum = ps.reduce(function(s, p){ return s + (parseInt(p.exTax)||0); }, 0);
+  el.innerHTML = _bigNumber_('¥' + sum.toLocaleString(), m + ' (' + ps.length + '件)', '#065f46');
+}
+function _renderKpiActiveProjects_(el){
+  var n = (DB.projects||[]).filter(function(p){ return p.status && p.status !== '完了' && p.status !== '納品済'; }).length;
+  el.innerHTML = _bigNumber_(n + ' 件', '進行中', '#1e40af');
+}
+function _renderKpiPendingInq_(el){
+  var n = (DB.inquiries||[]).filter(function(i){ return i.status === 'new'; }).length;
+  el.innerHTML = _bigNumber_(n + ' 件', '未対応', n > 0 ? '#dc2626' : '#065f46');
+}
+function _renderKpiTodayDelivery_(el){
+  var today = new Date().toISOString().slice(0,10);
+  var n = (DB.deliveryItems||[]).filter(function(d){ return d.date === today && d.status !== 'done'; }).length;
+  el.innerHTML = _bigNumber_(n + ' 件', '今日のタスク', n > 0 ? '#ea580c' : '#065f46');
+}
+function _renderKpiProofingActive_(el){
+  var n = (DB.proofings||[]).filter(function(p){ return p.status !== 'approved'; }).length;
+  el.innerHTML = _bigNumber_(n + ' 件', '校正対応中', '#7c3aed');
+}
+function _renderKpiDueSoon_(el){
+  var soon = new Date(); soon.setDate(soon.getDate() + 7);
+  var todayD = new Date(); todayD.setHours(0,0,0,0);
+  var n = (DB.projects||[]).filter(function(p){
+    if(!p.dueDate || p.status === '完了' || p.status === '納品済') return false;
+    var d = new Date(p.dueDate);
+    return d >= todayD && d <= soon;
+  }).length;
+  el.innerHTML = _bigNumber_(n + ' 件', '納期7日以内', n > 0 ? '#dc2626' : '#065f46');
+}
+function _renderKpiUnreadEmails_(el){
+  var n = (DB.inquiries||[]).filter(function(i){ return i.source_type === 'gmail' && i.status === 'new'; }).length;
+  el.innerHTML = _bigNumber_(n + ' 件', '未対応 Gmail', '#be185d');
+}
+
+// チャート系
+function _renderChartMonthlySales_(el){
+  if(typeof Chart === 'undefined'){ el.innerHTML = '<div style="color:#888;text-align:center">Chart.js 読込中…</div>'; return; }
+  var labels = [];
+  var now = new Date();
+  for(var i = 5; i >= 0; i--){
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    labels.push(d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2,'0'));
+  }
+  var data = labels.map(function(l){
+    var key = l.replace('/', '-');
+    return (DB.projects||[]).filter(function(p){ return (p.orderDate||'').startsWith(key); })
+      .reduce(function(s, p){ return s + (parseInt(p.exTax)||0); }, 0);
+  });
+  var canvas = document.createElement('canvas');
+  el.innerHTML = ''; el.appendChild(canvas);
+  _rtCharts.monthlySales = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: '#1e40af', borderRadius: 3 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: function(v){ return '¥' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v); }, font: { size: 9 } } }, x: { ticks: { font: { size: 9 } } } } }
+  });
+}
+function _renderChartStatus_(el){
+  if(typeof Chart === 'undefined'){ el.innerHTML = '<div style="color:#888;text-align:center">Chart.js 読込中…</div>'; return; }
+  var statuses = ['制作中','校了待ち','印刷中','加工中','納品済','完了'];
+  var counts = statuses.map(function(s){ return (DB.projects||[]).filter(function(p){ return p.status === s; }).length; });
+  var canvas = document.createElement('canvas');
+  el.innerHTML = ''; el.appendChild(canvas);
+  _rtCharts.status = new Chart(canvas, {
+    type: 'doughnut',
+    data: { labels: statuses, datasets: [{ data: counts, backgroundColor: ['#1e40af','#78350f','#065f46','#5b21b6','#374151','#aaa'] }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 10 } } } } }
+  });
+}
+function _renderChartInqSource_(el){
+  if(typeof Chart === 'undefined'){ el.innerHTML = '<div style="color:#888;text-align:center">Chart.js 読込中…</div>'; return; }
+  var counts = {};
+  (DB.inquiries||[]).forEach(function(i){
+    var k = i.source_type || 'manual';
+    counts[k] = (counts[k]||0) + 1;
+  });
+  var keys = Object.keys(counts);
+  var labelMap = { gmail:'Gmail', linesvc:'LINE WORKS', webform:'Web', fax:'FAX', phone:'電話', manual:'手動' };
+  var canvas = document.createElement('canvas');
+  el.innerHTML = ''; el.appendChild(canvas);
+  _rtCharts.inqSource = new Chart(canvas, {
+    type: 'pie',
+    data: { labels: keys.map(function(k){ return labelMap[k] || k; }), datasets: [{ data: keys.map(function(k){ return counts[k]; }), backgroundColor: ['#dc2626','#10b981','#3b82f6','#7c3aed','#0891b2','#6b7280'] }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 10 } } } } }
+  });
+}
+
+// リスト系
+function _renderListRecentInquiries_(el){
+  var list = (DB.inquiries||[]).slice().sort(function(a, b){
+    return new Date(b.received_at || b.createdAt || 0) - new Date(a.received_at || a.createdAt || 0);
+  }).slice(0, 5);
+  if(!list.length){ el.innerHTML = '<div style="color:#888;text-align:center;padding:1rem;font-size:12px">問い合わせなし</div>'; return; }
+  el.innerHTML = list.map(function(i){
+    var src = (typeof SOURCE_TYPE_META !== 'undefined' && SOURCE_TYPE_META[i.source_type]) ? SOURCE_TYPE_META[i.source_type] : { icon:'📋', color:'#888' };
+    return '<div style="padding:6px 8px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:12px" onclick="openInquiryDetail(\'' + i.id + '\')">' +
+      '<div style="display:flex;gap:6px;align-items:center"><span style="color:' + src.color + '">' + src.icon + '</span><strong>' + (i.subject || '無題').substring(0,30) + '</strong></div>' +
+      '<div style="font-size:10px;color:#888;margin-left:18px">' + (i.from_name||i.custName||'') + '</div>' +
+    '</div>';
+  }).join('');
+}
+function _renderListDueSoon_(el){
+  var soon = new Date(); soon.setDate(soon.getDate() + 14);
+  var todayD = new Date(); todayD.setHours(0,0,0,0);
+  var list = (DB.projects||[]).filter(function(p){
+    if(!p.dueDate || p.status === '完了' || p.status === '納品済') return false;
+    var d = new Date(p.dueDate); return d >= todayD && d <= soon;
+  }).sort(function(a, b){ return new Date(a.dueDate) - new Date(b.dueDate); }).slice(0, 5);
+  if(!list.length){ el.innerHTML = '<div style="color:#888;text-align:center;padding:1rem;font-size:12px">該当案件なし</div>'; return; }
+  el.innerHTML = list.map(function(p){
+    return '<div style="padding:6px 8px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:12px" onclick="jumpToProject(\'' + p.id + '\')">' +
+      '<div style="display:flex;justify-content:space-between"><strong>' + (p.cust||'') + '</strong><span style="color:#dc2626">' + p.dueDate + '</span></div>' +
+      '<div style="font-size:11px;color:#666;margin-top:2px">' + (p.item||'').substring(0,40) + '</div>' +
+    '</div>';
+  }).join('');
+}
+function _renderListTodayDelivery_(el){
+  var today = new Date().toISOString().slice(0,10);
+  var list = (DB.deliveryItems||[]).filter(function(d){ return d.date === today; })
+    .sort(function(a, b){ return (a.order||0) - (b.order||0); });
+  if(!list.length){ el.innerHTML = '<div style="color:#888;text-align:center;padding:1rem;font-size:12px">今日の配送なし</div>'; return; }
+  el.innerHTML = list.map(function(d){
+    var t = (typeof TASK_TYPES !== 'undefined' && TASK_TYPES[d.taskType]) ? TASK_TYPES[d.taskType] : { icon:'📍', color:'#888' };
+    var done = d.status === 'done';
+    return '<div style="padding:6px 8px;border-bottom:1px solid #f0f0f0;font-size:12px;' + (done ? 'opacity:.5;text-decoration:line-through' : '') + '">' +
+      '<div style="display:flex;gap:6px;align-items:center"><span style="color:' + t.color + '">' + t.icon + '</span><strong>' + (d.custName||'') + '</strong>' + (d.time ? '<span style="margin-left:auto;color:#1e40af;font-size:11px">' + d.time + '</span>' : '') + '</div>' +
+      '<div style="font-size:11px;color:#666;margin-left:18px">' + (d.address||'').substring(0,40) + '</div>' +
+    '</div>';
+  }).join('');
+}
+function _renderListProofingActive_(el){
+  var list = (DB.proofings||[]).filter(function(p){ return p.status !== 'approved'; }).slice(0, 5);
+  if(!list.length){ el.innerHTML = '<div style="color:#888;text-align:center;padding:1rem;font-size:12px">校正中なし</div>'; return; }
+  el.innerHTML = list.map(function(p){
+    var statusLabels = { waiting:'⏳回答待ち', feedback:'✏️修正依頼' };
+    return '<div style="padding:6px 8px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:12px" onclick="jumpToProofing(\'' + p.id + '\')">' +
+      '<div style="display:flex;justify-content:space-between"><strong>' + (p.custName||'') + '</strong><span style="font-size:10px;color:#666">' + (statusLabels[p.status]||p.status) + '</span></div>' +
+      '<div style="font-size:11px;color:#666;margin-top:2px">' + (p.prodName||'') + ' (第' + ((p.versions||[]).length) + '校)</div>' +
+    '</div>';
+  }).join('');
+}
+function _renderListTopCustomers_(el){
+  var m = new Date().toISOString().slice(0,7);
+  var ps = (DB.projects||[]).filter(function(p){ return (p.orderDate||'').startsWith(m); });
+  var byCust = {};
+  ps.forEach(function(p){ if(p.cust){ byCust[p.cust] = (byCust[p.cust]||0) + (parseInt(p.exTax)||0); } });
+  var list = Object.keys(byCust).map(function(k){ return [k, byCust[k]]; })
+    .sort(function(a, b){ return b[1] - a[1]; }).slice(0, 5);
+  if(!list.length){ el.innerHTML = '<div style="color:#888;text-align:center;padding:1rem;font-size:12px">今月の売上なし</div>'; return; }
+  el.innerHTML = list.map(function(c, i){
+    return '<div style="padding:6px 8px;border-bottom:1px solid #f0f0f0;font-size:12px;display:flex;justify-content:space-between">' +
+      '<div><strong style="color:#888">' + (i+1) + '位</strong> ' + c[0] + '</div>' +
+      '<div style="font-weight:700">¥' + c[1].toLocaleString() + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ウィジェット選択モーダル
+function showWidgetSelector(){
+  var enabled = _getEnabledWidgets_();
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+
+  var byCategory = { 'KPI': [], 'チャート': [], 'リスト': [] };
+  Object.keys(WIDGET_CATALOG).forEach(function(k){
+    var c = WIDGET_CATALOG[k].category;
+    if(byCategory[c]) byCategory[c].push(k);
+  });
+
+  var sectionsHtml = Object.keys(byCategory).map(function(cat){
+    return '<div style="margin-bottom:14px">' +
+      '<div style="font-size:11px;font-weight:700;color:#666;letter-spacing:.05em;margin-bottom:6px">' + cat + '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px">' +
+      byCategory[cat].map(function(wId){
+        var w = WIDGET_CATALOG[wId];
+        var checked = enabled.indexOf(wId) >= 0;
+        return '<label style="display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid ' + (checked ? '#7c3aed' : '#e0ddd6') + ';border-radius:6px;cursor:pointer;font-size:12px;background:' + (checked ? '#ede9fe' : '#fff') + '">' +
+          '<input type="checkbox" data-widget="' + wId + '"' + (checked ? ' checked' : '') + '> ' + w.label +
+        '</label>';
+      }).join('') +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:680px;max-height:90vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#7c3aed;color:#fff;display:flex;justify-content:space-between;align-items:center">' +
+        '<strong>⚙ 表示するウィジェットを選択</strong>' +
+        '<button onclick="this.closest(\'.proof-modal\').remove()" style="font-size:24px;border:none;background:none;color:#fff;cursor:pointer">×</button>' +
+      '</div>' +
+      '<div style="overflow-y:auto;padding:18px 20px;flex:1">' +
+        sectionsHtml +
+      '</div>' +
+      '<div style="padding:12px 20px;border-top:1px solid #e0ddd6;display:flex;gap:8px;justify-content:flex-end">' +
+        '<button class="btn" onclick="resetDefaultWidgets()">規定値に戻す</button>' +
+        '<button class="btn btn-p" style="background:#7c3aed;border-color:#7c3aed" onclick="applyWidgetSelection()">適用</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+}
+
+function applyWidgetSelection(){
+  var checkboxes = document.querySelectorAll('.proof-modal input[type=checkbox][data-widget]');
+  var enabled = [];
+  checkboxes.forEach(function(cb){ if(cb.checked) enabled.push(cb.dataset.widget); });
+  _saveEnabledWidgets_(enabled);
+  document.querySelector('.proof-modal')?.remove();
+  renderRealtimeView();
+  if(typeof _toastMsg === 'function') _toastMsg('✅ ウィジェットを更新しました (' + enabled.length + '個)');
+}
+
+function resetDefaultWidgets(){
+  if(!confirm('既定のウィジェット構成に戻しますか?')) return;
+  _saveEnabledWidgets_(DEFAULT_WIDGETS);
+  document.querySelector('.proof-modal')?.remove();
+  renderRealtimeView();
+}
+
+function removeWidget(wId){
+  var enabled = _getEnabledWidgets_();
+  enabled = enabled.filter(function(w){ return w !== wId; });
+  _saveEnabledWidgets_(enabled);
+  renderRealtimeView();
 }
 
 // ── 売上ダッシュボード ───────────────────────────────────────
