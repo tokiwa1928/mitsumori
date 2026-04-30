@@ -524,14 +524,14 @@ window.addEventListener('load', function(){
     <button class="tb-btn" data-page="calendar" onclick="swPage('calendar',this)" draggable="true" title="📅 納品 — 案件の納期カレンダー。月次ビューで納品予定を一覧">📅 納品</button>
     <button class="tb-btn" data-page="history" onclick="swPage('history',this)" draggable="true" title="📜 過去の見積書 — 見積作成タブで作って保存した正式見積書の一覧。明細・原価付きで完全コピー可能 (流用)">📜 過去の見積書</button>
     <button class="tb-btn" data-page="delivery" onclick="swPage('delivery',this)" draggable="true" title="🚚 配送 — 配送予定とドライバー管理。タスクタイプ別 (納品/校正出し/サンプル/集荷)。Google Calendar 連携">🚚 配送</button>
+    <button class="tb-btn" data-page="finance" onclick="swPage('finance',this)" draggable="true" title="📊 決算・文書 — 各社の決算書(P/L・B/S)分析、グループ7社比較、金融機関提出用文書の保管庫">📊 決算・文書</button>
+    <button class="tb-btn" data-page="wiki" onclick="swPage('wiki',this)" draggable="true" title="📖 Wiki — 社内ナレッジベース。マニュアル・手順書・FAQ などを管理">📖 Wiki</button>
     <!-- カテゴリ区切り (業務フロー / 管理) -->
     <span class="tb-divider"></span>
     <!-- ⚙ 管理 ドロップダウン (決算・Wiki・会社・マスター・設定 を統合) -->
     <div class="tb-dropdown-wrap">
       <button class="tb-btn" id="tb-admin-btn" onclick="toggleAdminMenu(event)" draggable="true" title="⚙ 管理 — 決算・Wiki・会社管理・マスター・設定の管理機能。クリックでメニューを表示">⚙ 管理 ▼</button>
       <div class="tb-dropdown" id="tb-admin-menu" style="display:none">
-        <a class="tb-dropdown-item" onclick="_navAdmin_('finance')" title="📊 決算・文書 — 各社の決算書(P/L・B/S)分析、グループ7社比較、金融機関提出用文書の保管庫">📊 決算・文書</a>
-        <a class="tb-dropdown-item" onclick="_navAdmin_('wiki')" title="📖 Wiki — 社内ナレッジベース。マニュアル・手順書・FAQ などを管理">📖 Wiki</a>
         <a class="tb-dropdown-item" onclick="_navAdmin_('companies')" title="🏢 会社管理 — グループ7社の管理、ユーザー登録、権限管理">🏢 会社管理</a>
         <a class="tb-dropdown-item" onclick="_navAdmin_('master')" title="📚 マスター — 得意先・仕入先・印刷条件・用紙・加工等のマスタデータ">📚 マスター</a>
         <a class="tb-dropdown-item" onclick="_navAdmin_('settings')" title="⚙ 設定 — システム設定・税率・標準歩留り・自社情報・ロゴ等">⚙ 設定</a>
@@ -3647,7 +3647,7 @@ function cloudSync(){
 // ═══════════════════ タブ並び替え (Drag & Drop) ════════════════
 
 const TAB_ORDER_KEY = 'tokiwa_hub_tab_order';
-const TAB_ORDER_VERSION = 'v6-2026-04-30-admin-dropdown'; // デフォルト並び順バージョン (変更時は localStorage の旧データを破棄)
+const TAB_ORDER_VERSION = 'v7-2026-04-30-finance-wiki-toplevel'; // デフォルト並び順バージョン (変更時は localStorage の旧データを破棄)
 const TAB_ORDER_VERSION_KEY = 'tokiwa_hub_tab_order_version';
 
 // バージョンが古ければ localStorage の保存順序を破棄して HTML 順序を採用
