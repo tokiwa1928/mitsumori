@@ -514,7 +514,7 @@ window.addEventListener('load', function(){
   <span class="topbar-title" id="app-title">TOKIWA-HUB</span>
   <button class="tb-arrow" id="tb-arrow-left" onclick="scrollTabs(-1)" title="左にスクロール">‹</button>
   <div class="tb-scroll" id="tb-scroll">
-    <button class="tb-btn act" data-page="realtime" onclick="swPage('realtime',this)" draggable="true" title="🎯 リアルタイム — 業務全体のリアルタイム見える化。KPI・売上グラフ・案件一覧などをウィジェット形式でカスタマイズ表示 (30秒自動更新)">🎯 リアルタイム</button>
+    <button class="tb-btn act" data-page="realtime" onclick="swPage('realtime',this)" draggable="true" title="🏠 ホーム — 業務フロー図 + KPI・売上グラフ・案件一覧などをウィジェット形式でカスタマイズ表示 (30秒自動更新)">🏠 ホーム</button>
     <button class="tb-btn" data-page="inquiry" onclick="swPage('inquiry',this)" draggable="true" title="📨 連絡管理 — 社外 (Gmail / LINE WORKS / Web フォーム / 顧客問い合わせ) と 社内 (社内連絡 / 音声メモ) の統合受信トレイ。AI 返信下書き・自動見積抽出">📨 連絡管理</button>
     <button class="tb-btn" data-page="est" onclick="swPage('est',this)" draggable="true" title="📝 見積作成 — 新規見積をタブ式で複数並行作成。用紙・印刷・製版・データ・製本の原価を積算して見積書を作成">📝 見積作成</button>
     <button class="tb-btn" data-page="estimates" onclick="swPage('estimates',this)" draggable="true" title="📋 見積依頼 — お客様からの見積依頼を簡易記録。AI 自動抽出・チャットボット作成・手動入力。詳細計算は『見積作成』タブで行う">📋 見積依頼</button>
@@ -524,6 +524,24 @@ window.addEventListener('load', function(){
     <button class="tb-btn" data-page="calendar" onclick="swPage('calendar',this)" draggable="true" title="📅 納品 — 案件の納期カレンダー。月次ビューで納品予定を一覧">📅 納品</button>
     <button class="tb-btn" data-page="history" onclick="swPage('history',this)" draggable="true" title="📜 過去の見積書 — 見積作成タブで作って保存した正式見積書の一覧。明細・原価付きで完全コピー可能 (流用)">📜 過去の見積書</button>
     <button class="tb-btn" data-page="delivery" onclick="swPage('delivery',this)" draggable="true" title="🚚 配送 — 配送予定とドライバー管理。タスクタイプ別 (納品/校正出し/サンプル/集荷)。Google Calendar 連携">🚚 配送</button>
+    <!-- 💴 売上 ドロップダウン -->
+    <div class="tb-dropdown-wrap">
+      <button class="tb-btn" id="tb-sales-btn" onclick="toggleSalesMenu(event)" draggable="true" title="💴 売上 — 請求書 / 領収書 / 入金管理">💴 売上 ▼</button>
+      <div class="tb-dropdown" id="tb-sales-menu" style="display:none">
+        <a class="tb-dropdown-item" onclick="_navAdmin_('invoices')" title="請求書 (都度/締め両対応)">📄 請求書</a>
+        <a class="tb-dropdown-item" onclick="_navAdmin_('receipts')" title="領収書一覧・発行履歴">🧾 領収書</a>
+        <a class="tb-dropdown-item" onclick="_navAdmin_('payments')" title="入金消込・支払方法管理">💰 入金管理</a>
+      </div>
+    </div>
+    <!-- 🔧 仕入 ドロップダウン -->
+    <div class="tb-dropdown-wrap">
+      <button class="tb-btn" id="tb-purchase-btn" onclick="togglePurchaseMenu(event)" draggable="true" title="🔧 仕入 — 仕入発注 / 外注発注 / 支払管理">🔧 仕入 ▼</button>
+      <div class="tb-dropdown" id="tb-purchase-menu" style="display:none">
+        <a class="tb-dropdown-item" onclick="_navAdmin_('purchases')" title="仕入先への発注">📦 仕入発注</a>
+        <a class="tb-dropdown-item" onclick="_navAdmin_('outsource')" title="外注先への発注">🤝 外注発注</a>
+        <a class="tb-dropdown-item" onclick="_navAdmin_('payouts')" title="支払予定・支払履歴">💸 支払管理</a>
+      </div>
+    </div>
     <button class="tb-btn" data-page="finance" onclick="swPage('finance',this)" draggable="true" title="📊 決算・文書 — 各社の決算書(P/L・B/S)分析、グループ7社比較、金融機関提出用文書の保管庫">📊 決算・文書</button>
     <button class="tb-btn" data-page="wiki" onclick="swPage('wiki',this)" draggable="true" title="📖 Wiki — 社内ナレッジベース。マニュアル・手順書・FAQ などを管理">📖 Wiki</button>
     <!-- カテゴリ区切り (業務フロー / 管理) -->
@@ -571,7 +589,7 @@ window.addEventListener('load', function(){
 <div class="page" id="page-realtime">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
     <div style="display:flex;align-items:center;gap:10px">
-      <h2 style="margin:0;font-size:18px">🎯 リアルタイム全体ビュー</h2>
+      <h2 style="margin:0;font-size:18px">🏠 ホーム</h2>
       <span id="rt-last-update" style="font-size:11px;color:#888"></span>
     </div>
     <div style="display:flex;gap:6px;align-items:center">
@@ -611,8 +629,146 @@ window.addEventListener('load', function(){
     </div>
   </div>
 
+  <!-- 📊 業務フロー (案件の進行状況を可視化) -->
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <span style="font-size:13px;font-weight:700;color:#1a1a1a">📊 業務フロー (現在の進行状況)</span>
+      <span style="font-size:10px;color:#888">クリックで該当タブへ</span>
+    </div>
+    <div id="workflow-diagram" style="overflow-x:auto;padding:6px 0"></div>
+  </div>
+
   <!-- ウィジェットグリッド -->
   <div id="rt-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-items:start"></div>
+</div>
+
+<!-- 💴 売上系: 請求書 -->
+<div class="page" id="page-invoices">
+  <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#7f1d1d;line-height:1.6">
+    <strong>📄 請求書とは:</strong> お客様への請求書を発行・管理する場所です。<br>
+    <strong>2つのモード:</strong>
+    <span style="background:#fff;padding:2px 8px;border-radius:4px;margin-left:4px"><strong>都度請求</strong>: 案件ごとに即発行</span>
+    <span style="background:#fff;padding:2px 8px;border-radius:4px;margin-left:4px"><strong>締め請求</strong>: 月末などの締め日にまとめて自動発行</span>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+    <button class="inq-scope-tab active" id="inv-mode-all" data-mode="all" onclick="setInvoiceMode('all')">📄 すべて</button>
+    <button class="inq-scope-tab" id="inv-mode-tsuujou" data-mode="onetime" onclick="setInvoiceMode('onetime')">⚡ 都度請求</button>
+    <button class="inq-scope-tab" id="inv-mode-shime" data-mode="shime" onclick="setInvoiceMode('shime')">📅 締め請求</button>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+    <input id="inv-search" placeholder="得意先で検索…" style="width:200px;font-size:12px;padding:4px 8px" oninput="renderInvoices()">
+    <select id="inv-status-f" style="font-size:12px;padding:4px 8px" onchange="renderInvoices()">
+      <option value="">すべてのステータス</option>
+      <option value="draft">下書き</option>
+      <option value="sent">送付済</option>
+      <option value="paid">入金済</option>
+      <option value="overdue">期限超過</option>
+    </select>
+    <button class="btn btn-p" onclick="showCreateInvoiceModal('onetime')">＋ 都度請求書を作る</button>
+    <button class="btn" style="background:#fef3c7;border-color:#fcd34d" onclick="showShimeBatchModal()">📅 締め請求 一括生成</button>
+  </div>
+  <div id="invoices-list" style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden"></div>
+</div>
+
+<!-- 💴 売上系: 領収書 -->
+<div class="page" id="page-receipts">
+  <div style="background:#fce7f3;border:1px solid #f9a8d4;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#831843;line-height:1.6">
+    <strong>🧾 領収書一覧:</strong> 配送BOX や請求書から発行した領収書の履歴です。
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+    <input id="rcpt-search" placeholder="得意先で検索…" style="width:200px;font-size:12px;padding:4px 8px" oninput="renderReceipts()">
+    <button class="btn btn-p" onclick="showCreateReceiptModal()">＋ 領収書を発行</button>
+  </div>
+  <div id="receipts-list" style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden"></div>
+</div>
+
+<!-- 💴 売上系: 入金管理 (消込) -->
+<div class="page" id="page-payments">
+  <div style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#14532d;line-height:1.6">
+    <strong>💰 入金管理 (消込):</strong> 銀行振込・現金・手形などの入金記録と、未消込請求書との突き合わせを行う場所です。<br>
+    <strong>使い方:</strong> ① ＋入金登録 で入金を記録 → ② 請求書と紐付け (消込) → ③ 請求書ステータスが「入金済」に
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+    <input id="pay-search" placeholder="得意先・摘要で検索…" style="width:200px;font-size:12px;padding:4px 8px" oninput="renderPayments()">
+    <select id="pay-status-f" style="font-size:12px;padding:4px 8px" onchange="renderPayments()">
+      <option value="">すべて</option>
+      <option value="unmatched">未消込</option>
+      <option value="matched">消込済</option>
+    </select>
+    <select id="pay-method-f" style="font-size:12px;padding:4px 8px" onchange="renderPayments()">
+      <option value="">支払方法すべて</option>
+      <option value="銀行振込">銀行振込</option>
+      <option value="現金">現金</option>
+      <option value="手形">手形</option>
+      <option value="クレカ">クレジットカード</option>
+      <option value="ファクタリング">ファクタリング</option>
+    </select>
+    <button class="btn btn-p" onclick="showAddPaymentModal()">＋ 入金登録</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div class="sec">
+      <div class="st">💰 入金記録</div>
+      <div id="payments-list"></div>
+    </div>
+    <div class="sec">
+      <div class="st">📄 未消込請求書</div>
+      <div id="unmatched-invoices"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 🔧 仕入系: 仕入発注 -->
+<div class="page" id="page-purchases">
+  <div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#1e3a8a;line-height:1.6">
+    <strong>📦 仕入発注:</strong> 用紙・インキ・資材などの仕入先への発注を管理する場所です。
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+    <input id="pur-search" placeholder="仕入先・品名で検索…" style="width:220px;font-size:12px;padding:4px 8px" oninput="renderPurchases()">
+    <select id="pur-status-f" style="font-size:12px;padding:4px 8px" onchange="renderPurchases()">
+      <option value="">すべて</option>
+      <option value="draft">下書き</option>
+      <option value="ordered">発注済</option>
+      <option value="received">入荷済</option>
+    </select>
+    <button class="btn btn-p" onclick="showAddPurchaseModal()">＋ 仕入発注</button>
+  </div>
+  <div id="purchases-list" style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden"></div>
+</div>
+
+<!-- 🔧 仕入系: 外注発注 (既存 outsource を表示) -->
+<div class="page" id="page-outsource">
+  <div style="background:#ede9fe;border:1px solid #c4b5fd;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#5b21b6;line-height:1.6">
+    <strong>🤝 外注発注:</strong> 製本・特殊加工・配送など外注先への発注を管理する場所です。
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+    <input id="out-search" placeholder="外注先・品名で検索…" style="width:220px;font-size:12px;padding:4px 8px" oninput="renderOutsource()">
+    <select id="out-status-f" style="font-size:12px;padding:4px 8px" onchange="renderOutsource()">
+      <option value="">すべて</option>
+      <option value="draft">下書き</option>
+      <option value="sent">発注済</option>
+      <option value="completed">完了</option>
+    </select>
+    <button class="btn btn-p" onclick="showAddOutsourceModal()">＋ 外注発注</button>
+  </div>
+  <div id="outsource-list" style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden"></div>
+</div>
+
+<!-- 🔧 仕入系: 支払管理 -->
+<div class="page" id="page-payouts">
+  <div style="background:#fef3c7;border:1px solid #fde047;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#78350f;line-height:1.6">
+    <strong>💸 支払管理:</strong> 仕入先・外注先への支払予定と支払履歴を管理する場所です。
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+    <input id="po-search" placeholder="支払先で検索…" style="width:200px;font-size:12px;padding:4px 8px" oninput="renderPayouts()">
+    <select id="po-status-f" style="font-size:12px;padding:4px 8px" onchange="renderPayouts()">
+      <option value="">すべて</option>
+      <option value="pending">支払予定</option>
+      <option value="paid">支払済</option>
+      <option value="overdue">期限超過</option>
+    </select>
+    <button class="btn btn-p" onclick="showAddPayoutModal()">＋ 支払予定登録</button>
+  </div>
+  <div id="payouts-list" style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden"></div>
 </div>
 
 <!-- 決算・財務分析 + 文書保管庫ページ -->
@@ -1260,11 +1416,30 @@ window.addEventListener('load', function(){
 
 <!-- 配送管理ページ -->
 <div class="page" id="page-delivery">
+  <!-- 使い方ガイド -->
+  <div style="background:#cffafe;border:1px solid #67e8f9;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#0e7490;line-height:1.6">
+    <strong>🚚 配送BOX とは:</strong> 配送予定の管理 + 納品書・領収書の発行を行う場所です。<br>
+    <strong>使い方:</strong> ① 日付を選ぶ → ② 同じ得意先の案件が自動グループ化 → ③ 「📄 納品書発行」「🧾 領収書発行」で同時発行 → ④ 配送が終わったら 「✅ 配送完了」 で配送完了日が記録される
+  </div>
+
+  <!-- 🆕 得意先別グループ表示 + 納品書/領収書発行 -->
+  <div class="sec" style="margin-bottom:1rem;background:#f0fdfa;border:1px solid #5eead4">
+    <div class="st" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <span>🏢 得意先別 配送グループ (納品書まとめて発行)</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label style="font-size:11px;color:#666">対象日:</label>
+        <input type="date" id="delivery-group-date" onchange="renderDeliveryGroups()" style="font-size:12px;padding:4px 8px">
+        <button class="btn" onclick="renderDeliveryGroups()">🔄 更新</button>
+      </div>
+    </div>
+    <div id="delivery-groups-list" style="margin-top:.5rem"></div>
+  </div>
+
   <div style="display:flex;gap:1rem;flex-wrap:wrap">
     <!-- 配送予定表 -->
     <div class="sec" style="flex:2;min-width:500px">
       <div class="st" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <span>🚚 配送予定表</span>
+        <span>🚚 配送予定表 (個別)</span>
         <div style="display:flex;gap:8px;align-items:center">
           <input type="date" id="delivery-date" onchange="renderDeliverySchedule()" style="font-size:12px;padding:4px 8px">
           <button class="btn btn-p" onclick="addDeliveryItem()">＋ 配送追加</button>
@@ -3647,7 +3822,7 @@ function cloudSync(){
 // ═══════════════════ タブ並び替え (Drag & Drop) ════════════════
 
 const TAB_ORDER_KEY = 'tokiwa_hub_tab_order';
-const TAB_ORDER_VERSION = 'v7-2026-04-30-finance-wiki-toplevel'; // デフォルト並び順バージョン (変更時は localStorage の旧データを破棄)
+const TAB_ORDER_VERSION = 'v8-2026-04-30-sales-purchase-dropdowns'; // デフォルト並び順バージョン (変更時は localStorage の旧データを破棄)
 const TAB_ORDER_VERSION_KEY = 'tokiwa_hub_tab_order_version';
 
 // バージョンが古ければ localStorage の保存順序を破棄して HTML 順序を採用
@@ -3800,14 +3975,24 @@ function _migrateTabTitlesToDataTip_(){
 }
 
 // 管理メニュー トグル
-function toggleAdminMenu(e){
+function toggleAdminMenu(e){ _toggleDropdownMenu_('tb-admin-menu', e); }
+function toggleSalesMenu(e){ _toggleDropdownMenu_('tb-sales-menu', e); }
+function togglePurchaseMenu(e){ _toggleDropdownMenu_('tb-purchase-menu', e); }
+
+function _toggleDropdownMenu_(menuId, e){
   if(e) e.stopPropagation();
-  var menu = document.getElementById('tb-admin-menu');
+  // 他のメニューを閉じる
+  ['tb-admin-menu','tb-sales-menu','tb-purchase-menu'].forEach(function(id){
+    if(id !== menuId){
+      var m = document.getElementById(id);
+      if(m) m.style.display = 'none';
+    }
+  });
+  var menu = document.getElementById(menuId);
   if(!menu) return;
   var visible = menu.style.display === 'block';
   menu.style.display = visible ? 'none' : 'block';
   if(!visible){
-    // 外部クリックで閉じる
     setTimeout(function(){
       var hide = function(ev){
         if(!ev.target.closest('.tb-dropdown-wrap')){
@@ -3853,6 +4038,12 @@ function swPage(id,btn){
   if(id==='history')renderHistory();
   if(id==='project')renderProjects();
   if(id==='estimates')renderEstimates();
+  if(id==='invoices')renderInvoices();
+  if(id==='receipts')renderReceipts();
+  if(id==='payments')renderPayments();
+  if(id==='purchases')renderPurchases();
+  if(id==='outsource')renderOutsource();
+  if(id==='payouts')renderPayouts();
   // 'dashboard' は realtime に統合済
   if(id==='dashboard'){
     var rtBtn = document.querySelector('.tb-btn[data-page="realtime"]');
@@ -10873,6 +11064,906 @@ function clearTestData(){
 }
 
 // ─────────────────────────────────────────────────────
+// 💴 売上系: 請求書 / 領収書 / 入金管理
+// ─────────────────────────────────────────────────────
+window._invoiceMode_ = 'all';
+function setInvoiceMode(m){
+  window._invoiceMode_ = m;
+  document.querySelectorAll('#page-invoices .inq-scope-tab').forEach(function(t){ t.classList.toggle('active', t.dataset.mode === m); });
+  renderInvoices();
+}
+
+function renderInvoices(){
+  var el = document.getElementById('invoices-list');
+  if(!el) return;
+  if(!Array.isArray(DB.invoices)) DB.invoices = [];
+  var q = (document.getElementById('inv-search')?.value || '').toLowerCase();
+  var sf = document.getElementById('inv-status-f')?.value || '';
+  var mode = window._invoiceMode_ || 'all';
+
+  var rows = DB.invoices.filter(function(v){
+    if(mode === 'onetime' && v.type !== 'onetime') return false;
+    if(mode === 'shime' && v.type !== 'shime') return false;
+    if(sf && v.status !== sf) return false;
+    if(q && (v.cust || '').toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  }).sort(function(a,b){ return new Date(b.issuedAt||0) - new Date(a.issuedAt||0); });
+
+  if(!rows.length){
+    el.innerHTML = '<div style="text-align:center;color:#888;padding:40px"><div style="font-size:36px;margin-bottom:8px">📄</div>請求書はありません<br><span style="font-size:11px">「＋都度請求書」または「📅締め請求 一括生成」から作成</span></div>';
+    return;
+  }
+
+  var html = '<table style="width:100%;font-size:13px;border-collapse:collapse">' +
+    '<thead><tr style="background:#f3f4f6;text-align:left">' +
+    '<th style="padding:8px 10px">請求番号</th><th style="padding:8px 10px">発行日</th><th style="padding:8px 10px">得意先</th>' +
+    '<th style="padding:8px 10px">種別</th><th style="padding:8px 10px;text-align:right">税抜</th>' +
+    '<th style="padding:8px 10px;text-align:right">税込</th><th style="padding:8px 10px">支払期限</th>' +
+    '<th style="padding:8px 10px">ステータス</th><th style="padding:8px 10px;text-align:center">操作</th>' +
+    '</tr></thead><tbody>';
+  rows.forEach(function(v){
+    var statusBadge = { draft:'下書き', sent:'送付済', paid:'入金済', overdue:'期限超過' }[v.status] || v.status || '';
+    var statusColor = v.status === 'paid' ? '#16a34a' : v.status === 'overdue' ? '#dc2626' : '#6b7280';
+    var typeBadge = v.type === 'shime' ? '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:2px 6px;border-radius:4px">📅 締め</span>' : '<span style="background:#dbeafe;color:#1e40af;font-size:10px;padding:2px 6px;border-radius:4px">⚡ 都度</span>';
+    html += '<tr style="border-bottom:1px solid #f3f4f6">' +
+      '<td style="padding:8px 10px;font-family:monospace;font-size:12px;color:#666">' + (v.id||'') + '</td>' +
+      '<td style="padding:8px 10px;font-size:12px">' + (v.issuedAt ? new Date(v.issuedAt).toLocaleDateString('ja-JP') : '-') + '</td>' +
+      '<td style="padding:8px 10px;font-weight:600">' + _escDiff(v.cust||'') + '</td>' +
+      '<td style="padding:8px 10px">' + typeBadge + '</td>' +
+      '<td style="padding:8px 10px;text-align:right;font-family:monospace">¥' + (v.subtotal||0).toLocaleString() + '</td>' +
+      '<td style="padding:8px 10px;text-align:right;font-family:monospace;font-weight:700">¥' + (v.total||0).toLocaleString() + '</td>' +
+      '<td style="padding:8px 10px;font-size:12px">' + (v.dueDate || '-') + '</td>' +
+      '<td style="padding:8px 10px"><span style="color:' + statusColor + ';font-weight:600">' + statusBadge + '</span></td>' +
+      '<td style="padding:8px 10px;text-align:center;white-space:nowrap">' +
+        '<button class="btn" style="padding:4px 8px;font-size:11px" onclick="printInvoice(\'' + v.id + '\')">🖨 印刷</button> ' +
+        '<button class="btn" style="padding:4px 8px;font-size:11px;background:#16a34a;color:#fff" onclick="markInvoicePaid(\'' + v.id + '\')">✅ 入金済</button> ' +
+        '<button class="btn" style="padding:4px 8px;font-size:11px;background:#fee;color:#dc2626" onclick="deleteInvoice(\'' + v.id + '\')">🗑</button>' +
+      '</td></tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function showCreateInvoiceModal(type){
+  type = type || 'onetime';
+  var custOpts = '';
+  try {
+    var custs = (DB.master?.cust || []).map(function(c){ return typeof c === 'string' ? c : c.org; }).filter(Boolean);
+    custOpts = '<datalist id="inv-cust-list">' + Array.from(new Set(custs)).map(function(c){ return '<option value="' + _escDiff(c) + '">'; }).join('') + '</datalist>';
+  } catch(e){}
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:560px;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#dc2626;color:#fff;display:flex;justify-content:space-between;align-items:center">' +
+        '<strong style="font-size:14px">📄 都度請求書を作成</strong>' +
+        '<button onclick="this.closest(\'.proof-modal\').remove()" style="font-size:24px;border:none;background:none;color:#fff;cursor:pointer;padding:0 8px">×</button>' +
+      '</div>' +
+      '<div style="overflow-y:auto;padding:18px 20px;flex:1">' +
+        custOpts +
+        '<div style="display:grid;grid-template-columns:120px 1fr;gap:10px 12px;font-size:13px">' +
+          '<label style="font-weight:700;align-self:center">得意先 *</label>' +
+          '<input id="inv-cust" list="inv-cust-list" placeholder="得意先名" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
+          '<label style="font-weight:700;align-self:center">品名 *</label>' +
+          '<input id="inv-item" placeholder="例: チラシ印刷" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
+          '<label style="font-weight:700;align-self:center">税抜金額 *</label>' +
+          '<input id="inv-subtotal" type="number" placeholder="100000" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
+          '<label style="font-weight:700;align-self:center">支払期限</label>' +
+          '<input id="inv-due" type="date" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
+          '<label style="font-weight:700;align-self:start">備考</label>' +
+          '<textarea id="inv-memo" rows="2" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-family:inherit"></textarea>' +
+        '</div>' +
+        '<div style="margin-top:18px;display:flex;justify-content:flex-end;gap:8px">' +
+          '<button class="btn" onclick="this.closest(\'.proof-modal\').remove()">キャンセル</button>' +
+          '<button class="btn btn-p" onclick="submitInvoice(\'' + type + '\')">📄 発行</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+function submitInvoice(type){
+  var cust = document.getElementById('inv-cust')?.value?.trim() || '';
+  var item = document.getElementById('inv-item')?.value?.trim() || '';
+  var subtotal = parseInt(document.getElementById('inv-subtotal')?.value) || 0;
+  if(!cust || !item || !subtotal){ alert('得意先・品名・税抜金額は必須です'); return; }
+  var tax = Math.round(subtotal * 0.1);
+  var inv = {
+    id: 'INV-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(Math.random()*1000),
+    type: type || 'onetime',
+    cust: cust,
+    items: [{ item: item, subtotal: subtotal }],
+    subtotal: subtotal,
+    tax: tax,
+    total: subtotal + tax,
+    dueDate: document.getElementById('inv-due')?.value || '',
+    memo: document.getElementById('inv-memo')?.value || '',
+    status: 'sent',
+    issuedAt: new Date().toISOString()
+  };
+  if(!DB.invoices) DB.invoices = [];
+  DB.invoices.push(inv);
+  if(typeof saveDB === 'function') saveDB();
+  if(typeof saveToCloud === 'function') try { saveToCloud(); } catch(e){}
+  document.querySelector('.proof-modal')?.remove();
+  renderInvoices();
+  alert('✅ 請求書 ' + inv.id + ' を発行しました');
+}
+
+function showShimeBatchModal(){
+  // 締め請求一括生成: 案件管理から納品済の案件を得意先別に集計
+  var doneProjects = (DB.projects || []).filter(function(p){
+    if(p.status !== '納品済' && p.status !== '完了') return false;
+    if(p._invoicedShime) return false;
+    return true;
+  });
+  if(!doneProjects.length){ alert('締め請求対象の納品済案件がありません\n(既に締め請求済の案件は除外されます)'); return; }
+
+  var groups = {};
+  doneProjects.forEach(function(p){
+    var k = p.cust || '不明';
+    if(!groups[k]) groups[k] = [];
+    groups[k].push(p);
+  });
+
+  var preview = Object.keys(groups).map(function(c){
+    var sum = groups[c].reduce(function(s, p){ return s + (p.exTax || 0); }, 0);
+    return '・' + c + ': ' + groups[c].length + '件 / ¥' + sum.toLocaleString() + '(税抜)';
+  }).join('\n');
+
+  if(!confirm('📅 締め請求 一括生成\n\n以下の得意先別にまとめて請求書を発行します:\n\n' + preview + '\n\n対象案件は「締め請求済」マークが付き、次回からは除外されます。続行?')) return;
+
+  var created = 0;
+  Object.keys(groups).forEach(function(c){
+    var ps = groups[c];
+    var subtotal = ps.reduce(function(s, p){ return s + (p.exTax || 0); }, 0);
+    var tax = Math.round(subtotal * 0.1);
+    var inv = {
+      id: 'INV-S-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(Math.random()*1000),
+      type: 'shime',
+      cust: c,
+      items: ps.map(function(p){ return { item: p.item, qty: p.qty, unit: p.unit, subtotal: p.exTax, projectId: p.id }; }),
+      subtotal: subtotal,
+      tax: tax,
+      total: subtotal + tax,
+      dueDate: '',
+      memo: '締め請求 (対象案件 ' + ps.length + '件)',
+      status: 'sent',
+      issuedAt: new Date().toISOString()
+    };
+    if(!DB.invoices) DB.invoices = [];
+    DB.invoices.push(inv);
+    ps.forEach(function(p){ p._invoicedShime = inv.id; });
+    created++;
+  });
+  if(typeof saveDB === 'function') saveDB();
+  if(typeof saveToCloud === 'function') try { saveToCloud(); } catch(e){}
+  renderInvoices();
+  alert('✅ 締め請求 ' + created + '社分 を発行しました');
+}
+
+function printInvoice(invId){
+  var inv = (DB.invoices || []).find(function(v){ return v.id === invId; });
+  if(!inv) return;
+  // 既存の _printDocument_ を流用 (entries 形式に変換)
+  var entries = (inv.items || []).map(function(it){
+    return { delivery: { taskType: it.item }, project: { item: it.item, qty: it.qty || 1, unit: it.unit || '式', exTax: it.subtotal, spec: '' } };
+  });
+  _printDocument_('請求書', inv.cust, inv.issuedAt.slice(0,10), entries);
+}
+
+function markInvoicePaid(invId){
+  var inv = (DB.invoices || []).find(function(v){ return v.id === invId; });
+  if(!inv) return;
+  if(!confirm('この請求書を「入金済」にしますか?')) return;
+  inv.status = 'paid';
+  inv.paidAt = new Date().toISOString();
+  if(typeof saveDB === 'function') saveDB();
+  if(typeof saveToCloud === 'function') try { saveToCloud(); } catch(e){}
+  renderInvoices();
+}
+
+function deleteInvoice(invId){
+  if(!confirm('請求書を削除しますか?')) return;
+  DB.invoices = (DB.invoices || []).filter(function(v){ return v.id !== invId; });
+  if(typeof saveDB === 'function') saveDB();
+  if(typeof saveToCloud === 'function') try { saveToCloud(); } catch(e){}
+  renderInvoices();
+}
+
+// 領収書一覧
+function renderReceipts(){
+  var el = document.getElementById('receipts-list');
+  if(!el) return;
+  if(!Array.isArray(DB.receipts)) DB.receipts = [];
+  var q = (document.getElementById('rcpt-search')?.value || '').toLowerCase();
+  var rows = DB.receipts.filter(function(r){
+    if(q && (r.cust || '').toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  }).sort(function(a,b){ return new Date(b.issuedAt||0) - new Date(a.issuedAt||0); });
+
+  if(!rows.length){
+    el.innerHTML = '<div style="text-align:center;color:#888;padding:40px"><div style="font-size:36px">🧾</div>領収書はありません<br><span style="font-size:11px">配送BOX や 「＋領収書を発行」 から作成</span></div>';
+    return;
+  }
+  var html = '<table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="background:#f3f4f6;text-align:left">' +
+    '<th style="padding:8px 10px">領収書番号</th><th style="padding:8px 10px">発行日</th><th style="padding:8px 10px">得意先</th>' +
+    '<th style="padding:8px 10px;text-align:right">金額(税込)</th><th style="padding:8px 10px;text-align:center">操作</th>' +
+    '</tr></thead><tbody>';
+  rows.forEach(function(r){
+    html += '<tr style="border-bottom:1px solid #f3f4f6">' +
+      '<td style="padding:8px 10px;font-family:monospace;font-size:12px">' + (r.id||'') + '</td>' +
+      '<td style="padding:8px 10px;font-size:12px">' + (r.issuedAt ? new Date(r.issuedAt).toLocaleDateString('ja-JP') : '-') + '</td>' +
+      '<td style="padding:8px 10px;font-weight:600">' + _escDiff(r.cust||'') + '</td>' +
+      '<td style="padding:8px 10px;text-align:right;font-family:monospace;font-weight:700">¥' + (r.total||0).toLocaleString() + '</td>' +
+      '<td style="padding:8px 10px;text-align:center"><button class="btn" style="padding:4px 8px;font-size:11px;background:#fee;color:#dc2626" onclick="deleteReceipt(\'' + r.id + '\')">🗑</button></td>' +
+      '</tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function showCreateReceiptModal(){
+  var amount = prompt('領収金額 (税込):', '');
+  if(!amount) return;
+  var cust = prompt('得意先:', '');
+  if(!cust) return;
+  var rcpt = {
+    id: 'R-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(Math.random()*1000),
+    cust: cust,
+    total: parseInt(amount) || 0,
+    issuedAt: new Date().toISOString()
+  };
+  if(!DB.receipts) DB.receipts = [];
+  DB.receipts.push(rcpt);
+  if(typeof saveDB === 'function') saveDB();
+  renderReceipts();
+  alert('✅ 領収書 ' + rcpt.id + ' を発行しました');
+}
+
+function deleteReceipt(rcptId){
+  if(!confirm('領収書を削除しますか?')) return;
+  DB.receipts = (DB.receipts || []).filter(function(r){ return r.id !== rcptId; });
+  if(typeof saveDB === 'function') saveDB();
+  renderReceipts();
+}
+
+// 入金管理 (消込)
+function renderPayments(){
+  var el = document.getElementById('payments-list');
+  var unEl = document.getElementById('unmatched-invoices');
+  if(!el) return;
+  if(!Array.isArray(DB.payments)) DB.payments = [];
+
+  var q = (document.getElementById('pay-search')?.value || '').toLowerCase();
+  var sf = document.getElementById('pay-status-f')?.value || '';
+  var mf = document.getElementById('pay-method-f')?.value || '';
+
+  var rows = DB.payments.filter(function(p){
+    if(sf === 'matched' && !p.matchedInvoiceId) return false;
+    if(sf === 'unmatched' && p.matchedInvoiceId) return false;
+    if(mf && p.method !== mf) return false;
+    if(q && ((p.cust || '') + ' ' + (p.memo || '')).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  }).sort(function(a,b){ return new Date(b.receivedAt||0) - new Date(a.receivedAt||0); });
+
+  if(!rows.length){
+    el.innerHTML = '<div style="text-align:center;color:#888;padding:30px;font-size:12px">入金記録はありません</div>';
+  } else {
+    el.innerHTML = rows.map(function(p){
+      var matched = p.matchedInvoiceId;
+      return '<div style="padding:8px 10px;border-bottom:1px solid #f0f0f0;font-size:12px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<strong>' + _escDiff(p.cust||'') + '</strong>' +
+          '<span style="font-family:monospace;font-weight:700">¥' + (p.amount||0).toLocaleString() + '</span>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:11px;color:#666;margin-top:2px">' +
+          '<span>' + (p.receivedAt ? new Date(p.receivedAt).toLocaleDateString('ja-JP') : '') + ' · ' + (p.method||'') + '</span>' +
+          (matched ? '<span style="color:#16a34a">✅ 消込済 (' + matched + ')</span>' : '<button class="btn" style="font-size:10px;padding:2px 6px" onclick="matchPaymentToInvoice(\'' + p.id + '\')">→ 消込</button>') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  if(unEl){
+    var unmatched = (DB.invoices || []).filter(function(v){ return v.status !== 'paid'; });
+    if(!unmatched.length){
+      unEl.innerHTML = '<div style="text-align:center;color:#888;padding:30px;font-size:12px">未入金の請求書はありません ✅</div>';
+    } else {
+      unEl.innerHTML = unmatched.map(function(v){
+        return '<div style="padding:8px 10px;border-bottom:1px solid #f0f0f0;font-size:12px">' +
+          '<div style="display:flex;justify-content:space-between"><strong>' + _escDiff(v.cust||'') + '</strong><span style="font-family:monospace;font-weight:700;color:#dc2626">¥' + (v.total||0).toLocaleString() + '</span></div>' +
+          '<div style="font-size:11px;color:#666">' + (v.id||'') + ' · 期限: ' + (v.dueDate || '未設定') + '</div>' +
+        '</div>';
+      }).join('');
+    }
+  }
+}
+
+function showAddPaymentModal(){
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:480px;border-radius:10px;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#16a34a;color:#fff;display:flex;justify-content:space-between"><strong>💰 入金登録</strong>' +
+        '<button onclick="this.closest(\'.proof-modal\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button></div>' +
+      '<div style="padding:18px 20px;display:grid;grid-template-columns:100px 1fr;gap:10px 12px;font-size:13px">' +
+        '<label>得意先 *</label><input id="pay-cust" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
+        '<label>金額 *</label><input id="pay-amount" type="number" placeholder="100000" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
+        '<label>入金日 *</label><input id="pay-date" type="date" value="' + new Date().toISOString().slice(0,10) + '" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
+        '<label>支払方法</label><select id="pay-method" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px"><option>銀行振込</option><option>現金</option><option>手形</option><option>クレカ</option><option>ファクタリング</option></select>' +
+        '<label>摘要</label><input id="pay-memo" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
+      '</div>' +
+      '<div style="padding:10px 20px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #e5e7eb">' +
+        '<button class="btn" onclick="this.closest(\'.proof-modal\').remove()">キャンセル</button>' +
+        '<button class="btn btn-p" style="background:#16a34a;border-color:#16a34a" onclick="submitPayment()">💰 登録</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+function submitPayment(){
+  var cust = document.getElementById('pay-cust')?.value?.trim();
+  var amount = parseInt(document.getElementById('pay-amount')?.value) || 0;
+  if(!cust || !amount){ alert('得意先と金額は必須です'); return; }
+  var pay = {
+    id: 'PAY-' + Date.now() + '-' + Math.floor(Math.random()*1000),
+    cust: cust,
+    amount: amount,
+    receivedAt: document.getElementById('pay-date')?.value || new Date().toISOString().slice(0,10),
+    method: document.getElementById('pay-method')?.value || '銀行振込',
+    memo: document.getElementById('pay-memo')?.value || '',
+    matchedInvoiceId: null
+  };
+  if(!DB.payments) DB.payments = [];
+  DB.payments.push(pay);
+  if(typeof saveDB === 'function') saveDB();
+  document.querySelector('.proof-modal')?.remove();
+  renderPayments();
+}
+
+function matchPaymentToInvoice(payId){
+  var pay = (DB.payments || []).find(function(p){ return p.id === payId; });
+  if(!pay) return;
+  // 同じ得意先・同じ金額の未入金請求書を探す
+  var candidates = (DB.invoices || []).filter(function(v){
+    return v.cust === pay.cust && v.status !== 'paid';
+  });
+  if(!candidates.length){ alert('該当する未入金請求書がありません'); return; }
+  var promptText = '消込先の請求書を選んでください:\n\n' + candidates.map(function(v, i){
+    return (i+1) + ') ' + v.id + ' ¥' + v.total.toLocaleString() + ' (期限: ' + (v.dueDate||'未設定') + ')';
+  }).join('\n');
+  var idx = parseInt(prompt(promptText, '1')) - 1;
+  if(isNaN(idx) || !candidates[idx]) return;
+  var inv = candidates[idx];
+  pay.matchedInvoiceId = inv.id;
+  pay.matchedAt = new Date().toISOString();
+  inv.status = 'paid';
+  inv.paidAt = new Date().toISOString();
+  inv.matchedPaymentId = pay.id;
+  if(typeof saveDB === 'function') saveDB();
+  renderPayments();
+  alert('✅ 消込完了: ' + inv.id);
+}
+
+// 仕入発注
+function renderPurchases(){
+  var el = document.getElementById('purchases-list');
+  if(!el) return;
+  if(!Array.isArray(DB.purchaseOrders)) DB.purchaseOrders = [];
+  var q = (document.getElementById('pur-search')?.value || '').toLowerCase();
+  var sf = document.getElementById('pur-status-f')?.value || '';
+  var rows = DB.purchaseOrders.filter(function(o){
+    if(sf && o.status !== sf) return false;
+    if(q && ((o.vendor||'') + ' ' + (o.item||'')).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  }).sort(function(a,b){ return new Date(b.createdAt||0) - new Date(a.createdAt||0); });
+
+  if(!rows.length){
+    el.innerHTML = '<div style="text-align:center;color:#888;padding:40px"><div style="font-size:36px">📦</div>仕入発注はありません</div>';
+    return;
+  }
+  el.innerHTML = '<table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="background:#f3f4f6;text-align:left">' +
+    '<th style="padding:8px 10px">発注ID</th><th style="padding:8px 10px">仕入先</th><th style="padding:8px 10px">品名</th>' +
+    '<th style="padding:8px 10px;text-align:right">数量</th><th style="padding:8px 10px;text-align:right">金額</th>' +
+    '<th style="padding:8px 10px">納期</th><th style="padding:8px 10px">ステータス</th><th style="padding:8px 10px">操作</th></tr></thead><tbody>' +
+    rows.map(function(o){
+      return '<tr style="border-bottom:1px solid #f3f4f6">' +
+        '<td style="padding:8px 10px;font-family:monospace;font-size:12px">' + (o.id||'') + '</td>' +
+        '<td style="padding:8px 10px;font-weight:600">' + _escDiff(o.vendor||'') + '</td>' +
+        '<td style="padding:8px 10px">' + _escDiff(o.item||'') + '</td>' +
+        '<td style="padding:8px 10px;text-align:right">' + (o.qty||0) + (o.unit||'') + '</td>' +
+        '<td style="padding:8px 10px;text-align:right;font-family:monospace">¥' + (o.amount||0).toLocaleString() + '</td>' +
+        '<td style="padding:8px 10px;font-size:12px">' + (o.dueDate||'-') + '</td>' +
+        '<td style="padding:8px 10px"><span style="background:#dbeafe;color:#1e40af;font-size:10px;padding:2px 6px;border-radius:4px">' + (o.status||'-') + '</span></td>' +
+        '<td style="padding:8px 10px"><button class="btn" style="padding:4px 8px;font-size:11px;background:#fee;color:#dc2626" onclick="deletePurchase(\'' + o.id + '\')">🗑</button></td>' +
+      '</tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function showAddPurchaseModal(){
+  _showSimpleAddModal_('仕入発注', '#1e40af', [
+    { key:'vendor', label:'仕入先 *', type:'text' },
+    { key:'item', label:'品名 *', type:'text' },
+    { key:'qty', label:'数量', type:'number' },
+    { key:'unit', label:'単位', type:'text', default:'式' },
+    { key:'amount', label:'金額', type:'number' },
+    { key:'dueDate', label:'納期', type:'date' },
+    { key:'memo', label:'備考', type:'textarea' }
+  ], function(data){
+    var o = Object.assign({
+      id: 'PUR-' + Date.now() + '-' + Math.floor(Math.random()*1000),
+      status: 'ordered',
+      createdAt: new Date().toISOString()
+    }, data);
+    o.qty = parseInt(o.qty) || 0;
+    o.amount = parseInt(o.amount) || 0;
+    if(!DB.purchaseOrders) DB.purchaseOrders = [];
+    DB.purchaseOrders.push(o);
+    if(typeof saveDB === 'function') saveDB();
+    renderPurchases();
+  });
+}
+function deletePurchase(id){
+  if(!confirm('削除しますか?')) return;
+  DB.purchaseOrders = (DB.purchaseOrders || []).filter(function(o){ return o.id !== id; });
+  if(typeof saveDB === 'function') saveDB();
+  renderPurchases();
+}
+
+// 外注発注 (page-outsource - simplified version, 既存 DB.outsourceOrders を使用)
+function renderOutsource(){
+  var el = document.getElementById('outsource-list');
+  if(!el) return;
+  if(!Array.isArray(DB.outsourceOrders)) DB.outsourceOrders = [];
+  var q = (document.getElementById('out-search')?.value || '').toLowerCase();
+  var sf = document.getElementById('out-status-f')?.value || '';
+  var rows = DB.outsourceOrders.filter(function(o){
+    if(sf && o.status !== sf) return false;
+    if(q && ((o.vendor||'') + ' ' + (o.item||'')).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  }).sort(function(a,b){ return new Date(b.createdAt||0) - new Date(a.createdAt||0); });
+
+  if(!rows.length){
+    el.innerHTML = '<div style="text-align:center;color:#888;padding:40px"><div style="font-size:36px">🤝</div>外注発注はありません</div>';
+    return;
+  }
+  el.innerHTML = '<table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="background:#f3f4f6;text-align:left">' +
+    '<th style="padding:8px 10px">発注ID</th><th style="padding:8px 10px">外注先</th><th style="padding:8px 10px">内容</th>' +
+    '<th style="padding:8px 10px;text-align:right">金額</th><th style="padding:8px 10px">納期</th>' +
+    '<th style="padding:8px 10px">ステータス</th><th style="padding:8px 10px">操作</th></tr></thead><tbody>' +
+    rows.map(function(o){
+      return '<tr style="border-bottom:1px solid #f3f4f6">' +
+        '<td style="padding:8px 10px;font-family:monospace;font-size:12px">' + (o.id||'') + '</td>' +
+        '<td style="padding:8px 10px;font-weight:600">' + _escDiff(o.vendor||o.vendorName||'') + '</td>' +
+        '<td style="padding:8px 10px">' + _escDiff(o.item||o.workName||'') + '</td>' +
+        '<td style="padding:8px 10px;text-align:right;font-family:monospace">¥' + (o.amount||o.totalCost||0).toLocaleString() + '</td>' +
+        '<td style="padding:8px 10px;font-size:12px">' + (o.dueDate||o.deliveryDate||'-') + '</td>' +
+        '<td style="padding:8px 10px"><span style="background:#ede9fe;color:#5b21b6;font-size:10px;padding:2px 6px;border-radius:4px">' + (o.status||'-') + '</span></td>' +
+        '<td style="padding:8px 10px"><button class="btn" style="padding:4px 8px;font-size:11px;background:#fee;color:#dc2626" onclick="deleteOutsource(\'' + o.id + '\')">🗑</button></td>' +
+      '</tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function showAddOutsourceModal(){
+  _showSimpleAddModal_('外注発注', '#7c3aed', [
+    { key:'vendor', label:'外注先 *', type:'text' },
+    { key:'item', label:'内容 *', type:'text' },
+    { key:'amount', label:'金額', type:'number' },
+    { key:'dueDate', label:'納期', type:'date' },
+    { key:'memo', label:'備考', type:'textarea' }
+  ], function(data){
+    var o = Object.assign({
+      id: 'OUT-' + Date.now() + '-' + Math.floor(Math.random()*1000),
+      status: 'sent',
+      createdAt: new Date().toISOString()
+    }, data);
+    o.amount = parseInt(o.amount) || 0;
+    if(!DB.outsourceOrders) DB.outsourceOrders = [];
+    DB.outsourceOrders.push(o);
+    if(typeof saveDB === 'function') saveDB();
+    renderOutsource();
+  });
+}
+function deleteOutsource(id){
+  if(!confirm('削除しますか?')) return;
+  DB.outsourceOrders = (DB.outsourceOrders || []).filter(function(o){ return o.id !== id; });
+  if(typeof saveDB === 'function') saveDB();
+  renderOutsource();
+}
+
+// 支払管理
+function renderPayouts(){
+  var el = document.getElementById('payouts-list');
+  if(!el) return;
+  if(!Array.isArray(DB.payouts)) DB.payouts = [];
+  var q = (document.getElementById('po-search')?.value || '').toLowerCase();
+  var sf = document.getElementById('po-status-f')?.value || '';
+  var rows = DB.payouts.filter(function(p){
+    if(sf && p.status !== sf) return false;
+    if(q && (p.vendor||'').toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  }).sort(function(a,b){ return new Date(b.dueDate||0) - new Date(a.dueDate||0); });
+
+  if(!rows.length){
+    el.innerHTML = '<div style="text-align:center;color:#888;padding:40px"><div style="font-size:36px">💸</div>支払予定はありません</div>';
+    return;
+  }
+  el.innerHTML = '<table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="background:#f3f4f6;text-align:left">' +
+    '<th style="padding:8px 10px">支払先</th><th style="padding:8px 10px;text-align:right">金額</th>' +
+    '<th style="padding:8px 10px">支払予定日</th><th style="padding:8px 10px">支払方法</th>' +
+    '<th style="padding:8px 10px">ステータス</th><th style="padding:8px 10px">操作</th></tr></thead><tbody>' +
+    rows.map(function(p){
+      var statusColor = p.status === 'paid' ? '#16a34a' : p.status === 'overdue' ? '#dc2626' : '#f59e0b';
+      return '<tr style="border-bottom:1px solid #f3f4f6">' +
+        '<td style="padding:8px 10px;font-weight:600">' + _escDiff(p.vendor||'') + '</td>' +
+        '<td style="padding:8px 10px;text-align:right;font-family:monospace;font-weight:700">¥' + (p.amount||0).toLocaleString() + '</td>' +
+        '<td style="padding:8px 10px;font-size:12px">' + (p.dueDate||'-') + '</td>' +
+        '<td style="padding:8px 10px;font-size:12px">' + (p.method||'-') + '</td>' +
+        '<td style="padding:8px 10px"><span style="color:' + statusColor + ';font-weight:600">' + (p.status||'pending') + '</span></td>' +
+        '<td style="padding:8px 10px;white-space:nowrap">' +
+          (p.status !== 'paid' ? '<button class="btn" style="padding:4px 8px;font-size:11px;background:#16a34a;color:#fff" onclick="markPayoutPaid(\'' + p.id + '\')">✅ 支払済</button> ' : '') +
+          '<button class="btn" style="padding:4px 8px;font-size:11px;background:#fee;color:#dc2626" onclick="deletePayout(\'' + p.id + '\')">🗑</button>' +
+        '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function showAddPayoutModal(){
+  _showSimpleAddModal_('支払予定', '#f59e0b', [
+    { key:'vendor', label:'支払先 *', type:'text' },
+    { key:'amount', label:'金額 *', type:'number' },
+    { key:'dueDate', label:'支払予定日 *', type:'date' },
+    { key:'method', label:'支払方法', type:'select', options:['銀行振込','現金','手形','クレカ'] },
+    { key:'memo', label:'摘要', type:'textarea' }
+  ], function(data){
+    var po = Object.assign({
+      id: 'POUT-' + Date.now() + '-' + Math.floor(Math.random()*1000),
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    }, data);
+    po.amount = parseInt(po.amount) || 0;
+    if(!DB.payouts) DB.payouts = [];
+    DB.payouts.push(po);
+    if(typeof saveDB === 'function') saveDB();
+    renderPayouts();
+  });
+}
+function markPayoutPaid(id){
+  var p = (DB.payouts || []).find(function(x){ return x.id === id; });
+  if(!p) return;
+  p.status = 'paid';
+  p.paidAt = new Date().toISOString();
+  if(typeof saveDB === 'function') saveDB();
+  renderPayouts();
+}
+function deletePayout(id){
+  if(!confirm('削除しますか?')) return;
+  DB.payouts = (DB.payouts || []).filter(function(p){ return p.id !== id; });
+  if(typeof saveDB === 'function') saveDB();
+  renderPayouts();
+}
+
+// 共通: シンプルな追加モーダル
+function _showSimpleAddModal_(title, color, fields, onSubmit){
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  var fieldsHtml = fields.map(function(f, i){
+    var input;
+    if(f.type === 'textarea') input = '<textarea id="_sm_f_' + i + '" rows="2" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-family:inherit"></textarea>';
+    else if(f.type === 'select') input = '<select id="_sm_f_' + i + '" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">' + f.options.map(function(o){ return '<option>'+o+'</option>'; }).join('') + '</select>';
+    else input = '<input id="_sm_f_' + i + '" type="' + (f.type||'text') + '" value="' + (f.default || '') + '" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">';
+    return '<label style="font-weight:700;align-self:center">' + f.label + '</label>' + input;
+  }).join('');
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:520px;border-radius:10px;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:' + color + ';color:#fff;display:flex;justify-content:space-between"><strong>＋ ' + title + '</strong>' +
+        '<button onclick="this.closest(\'.proof-modal\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button></div>' +
+      '<div style="padding:18px 20px"><div style="display:grid;grid-template-columns:120px 1fr;gap:10px 12px;font-size:13px">' + fieldsHtml + '</div>' +
+        '<div style="margin-top:18px;display:flex;justify-content:flex-end;gap:8px">' +
+          '<button class="btn" onclick="this.closest(\'.proof-modal\').remove()">キャンセル</button>' +
+          '<button class="btn btn-p" id="_sm_submit_btn" style="background:' + color + ';border-color:' + color + '">登録</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  document.getElementById('_sm_submit_btn').onclick = function(){
+    var data = {};
+    var hasRequired = true;
+    fields.forEach(function(f, i){
+      var v = document.getElementById('_sm_f_' + i)?.value?.trim() || '';
+      if(f.label.indexOf('*') >= 0 && !v){ hasRequired = false; }
+      data[f.key] = v;
+    });
+    if(!hasRequired){ alert('必須項目 (*) を入力してください'); return; }
+    onSubmit(data);
+    modal.remove();
+  };
+}
+
+// ─────────────────────────────────────────────────────
+// 🚚 配送グループ (得意先別 + 納品書/領収書 まとめ発行)
+// ─────────────────────────────────────────────────────
+function renderDeliveryGroups(){
+  var el = document.getElementById('delivery-groups-list');
+  if(!el) return;
+
+  var dateInput = document.getElementById('delivery-group-date');
+  var targetDate = dateInput?.value || new Date().toISOString().slice(0,10);
+  if(!dateInput?.value && dateInput) dateInput.value = targetDate;
+
+  // 対象日の配送タスクを取得 (配送予定日 == 対象日)
+  var items = (DB.deliveryItems || []).filter(function(d){
+    var dd = d.scheduledDate || d.date || '';
+    return dd.slice(0,10) === targetDate;
+  });
+
+  if(!items.length){
+    el.innerHTML = '<div style="text-align:center;color:#888;padding:30px">' + targetDate + ' の配送予定はありません</div>';
+    return;
+  }
+
+  // 得意先別グループ化
+  var groups = {};
+  items.forEach(function(d){
+    var custKey = d.recipient || d.cust || '(得意先不明)';
+    if(!groups[custKey]) groups[custKey] = [];
+    // 関連案件情報を取得
+    var proj = d.projectId ? (DB.projects || []).find(function(p){ return p.id === d.projectId; }) : null;
+    groups[custKey].push({ delivery: d, project: proj });
+  });
+
+  var html = '';
+  Object.keys(groups).forEach(function(cust){
+    var entries = groups[cust];
+    var totalAmount = entries.reduce(function(s, e){ return s + (e.project?.exTax || 0); }, 0);
+    var allCompleted = entries.every(function(e){ return e.delivery.status === '配送完了' || e.delivery.completedDate; });
+
+    html += '<div style="border:1px solid #d1d5db;border-radius:8px;margin-bottom:10px;background:#fff;overflow:hidden">' +
+      '<div style="padding:10px 14px;background:' + (allCompleted ? '#dcfce7' : '#fef9c3') + ';display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid #e5e7eb">' +
+        '<div>' +
+          '<strong style="font-size:13px">🏢 ' + _escDiff(cust) + '</strong>' +
+          '<span style="font-size:11px;color:#666;margin-left:8px">(' + entries.length + '案件 / 合計 ¥' + totalAmount.toLocaleString() + ')</span>' +
+          (allCompleted ? '<span style="background:#16a34a;color:#fff;font-size:10px;padding:2px 8px;border-radius:4px;margin-left:8px;font-weight:700">✅ 配送完了済</span>' : '') +
+        '</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+          '<button class="btn" style="font-size:11px;background:#1e40af;color:#fff;border-color:#1e40af" onclick="issueDeliveryNoteForGroup(\'' + cust.replace(/'/g, "\\'") + '\',\'' + targetDate + '\')">📄 納品書発行</button>' +
+          '<button class="btn" style="font-size:11px;background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="issueReceiptForGroup(\'' + cust.replace(/'/g, "\\'") + '\',\'' + targetDate + '\')">🧾 領収書発行</button>' +
+          (!allCompleted ? '<button class="btn" style="font-size:11px;background:#16a34a;color:#fff;border-color:#16a34a" onclick="markGroupAsDelivered(\'' + cust.replace(/'/g, "\\'") + '\',\'' + targetDate + '\')">✅ 配送完了にする</button>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div style="padding:6px 14px">' +
+        entries.map(function(e){
+          var d = e.delivery;
+          var p = e.project;
+          var statusBadge = d.status === '配送完了' || d.completedDate ?
+            '<span style="background:#dcfce7;color:#166534;font-size:10px;padding:1px 6px;border-radius:3px">✅ 完了</span>' :
+            '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:3px">⏳ 予定</span>';
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed #f0f0f0;font-size:12px">' +
+            '<div>' +
+              statusBadge + ' ' +
+              '<span style="font-weight:600">' + _escDiff(p?.item || d.taskType || '') + '</span>' +
+              (p ? ' <span style="color:#888">(' + p.qty + (p.unit||'部') + ')</span>' : '') +
+              (d.completedDate ? ' <span style="font-size:10px;color:#16a34a">完了日: ' + d.completedDate.slice(0,10) + '</span>' : '') +
+            '</div>' +
+            '<div style="display:flex;gap:4px">' +
+              (p ? '<button onclick="jumpToProject(\'' + p.id + '\')" style="font-size:10px;background:none;border:none;color:#1e40af;cursor:pointer">' + p.id + ' →</button>' : '') +
+              '<span style="font-size:11px;color:#666;font-family:monospace">' + (p?.exTax ? '¥' + p.exTax.toLocaleString() : '') + '</span>' +
+            '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</div>';
+  });
+
+  el.innerHTML = html;
+}
+
+// 配送グループを配送完了にする (配送完了日を記録)
+function markGroupAsDelivered(cust, targetDate){
+  if(!confirm(cust + ' の ' + targetDate + ' 分を配送完了にしますか?')) return;
+  var now = new Date().toISOString();
+  var count = 0;
+  (DB.deliveryItems || []).forEach(function(d){
+    var dd = d.scheduledDate || d.date || '';
+    if(dd.slice(0,10) !== targetDate) return;
+    if((d.recipient || d.cust) !== cust) return;
+    d.status = '配送完了';
+    d.completedDate = now;
+    count++;
+  });
+  if(typeof saveDB === 'function') saveDB();
+  if(typeof saveToCloud === 'function') try { saveToCloud(); } catch(e){}
+  renderDeliveryGroups();
+  alert('✅ ' + count + '件を配送完了にしました');
+}
+
+// 納品書をグループまとめて発行 (HTML プレビュー → 印刷)
+function issueDeliveryNoteForGroup(cust, targetDate){
+  var entries = [];
+  (DB.deliveryItems || []).forEach(function(d){
+    var dd = d.scheduledDate || d.date || '';
+    if(dd.slice(0,10) !== targetDate) return;
+    if((d.recipient || d.cust) !== cust) return;
+    var p = d.projectId ? (DB.projects || []).find(function(x){ return x.id === d.projectId; }) : null;
+    entries.push({ delivery: d, project: p });
+  });
+  if(!entries.length){ alert('該当する配送がありません'); return; }
+  _printDocument_('納品書', cust, targetDate, entries);
+}
+
+function issueReceiptForGroup(cust, targetDate){
+  var entries = [];
+  (DB.deliveryItems || []).forEach(function(d){
+    var dd = d.scheduledDate || d.date || '';
+    if(dd.slice(0,10) !== targetDate) return;
+    if((d.recipient || d.cust) !== cust) return;
+    var p = d.projectId ? (DB.projects || []).find(function(x){ return x.id === d.projectId; }) : null;
+    entries.push({ delivery: d, project: p });
+  });
+  if(!entries.length){ alert('該当する配送がありません'); return; }
+  _printDocument_('領収書', cust, targetDate, entries);
+}
+
+// 帳票印刷用の HTML を生成して新規ウィンドウで開く
+function _printDocument_(docType, cust, dateStr, entries){
+  var subtotal = entries.reduce(function(s, e){ return s + (e.project?.exTax || 0); }, 0);
+  var tax = Math.round(subtotal * 0.1);
+  var total = subtotal + tax;
+  var docNo = docType.charAt(0) + '-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(Math.random()*1000);
+  var conf = DB.conf || {};
+  var companyName = currentAuth?.companyName || conf.name || 'トキワ印刷株式会社';
+
+  var w = window.open('', '_blank', 'width=900,height=1000');
+  if(!w){ alert('ポップアップがブロックされました。許可してから再試行してください。'); return; }
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + docType + ' - ' + cust + '</title>' +
+    '<style>' +
+    'body{font-family:"Yu Gothic","Hiragino Kaku Gothic ProN",sans-serif;padding:30px;color:#1a1a1a;font-size:13px}' +
+    '.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px}' +
+    '.title{font-size:32px;font-weight:700;letter-spacing:.3em;text-align:center;margin:20px 0;border-top:3px double #1a1a1a;border-bottom:3px double #1a1a1a;padding:8px}' +
+    '.cust{font-size:18px;border-bottom:1px solid #1a1a1a;padding-bottom:6px;width:60%}' +
+    '.sender{font-size:11px;text-align:right;line-height:1.6}' +
+    'table{width:100%;border-collapse:collapse;margin:20px 0;font-size:12px}' +
+    'th,td{border:1px solid #888;padding:8px 10px;text-align:left}' +
+    'th{background:#f4f3f0;font-weight:700}' +
+    'td.r{text-align:right;font-family:monospace}' +
+    '.total-row{background:#f9f9f7;font-weight:700;font-size:14px}' +
+    '.note{margin-top:30px;font-size:11px;color:#666;border-top:1px solid #ccc;padding-top:10px}' +
+    '@media print{body{padding:15mm}}' +
+    '@page{size:A4 portrait;margin:15mm}' +
+    '</style></head><body>' +
+    '<div class="header">' +
+      '<div><div style="font-size:11px;color:#666">No. ' + docNo + '</div><div style="font-size:11px;color:#666">発行日: ' + new Date().toLocaleDateString('ja-JP') + '</div></div>' +
+      '<div class="sender">' +
+        '<div style="font-size:14px;font-weight:700">' + _escDiff(companyName) + '</div>' +
+        (conf.addr ? '<div>' + _escDiff(conf.addr) + '</div>' : '') +
+        (conf.tel ? '<div>' + _escDiff(conf.tel) + '</div>' : '') +
+        (conf.rep ? '<div>代表: ' + _escDiff(conf.rep) + '</div>' : '') +
+      '</div>' +
+    '</div>' +
+    '<div class="cust"><strong>' + _escDiff(cust) + '</strong> 御中</div>' +
+    '<div class="title">' + docType + '</div>';
+
+  if(docType === '領収書'){
+    html += '<div style="font-size:14px;text-align:center;margin:20px 0">下記金額を領収いたしました</div>' +
+      '<div style="text-align:center;font-size:28px;font-weight:700;padding:14px;border:2px solid #1a1a1a;margin:20px auto;max-width:400px">¥' + total.toLocaleString() + ' -</div>' +
+      '<div style="text-align:center;font-size:13px;margin:10px 0">(税込)</div>' +
+      '<div style="margin:20px 0;font-size:12px"><strong>但し:</strong> ' + entries.map(function(e){ return e.project?.item || ''; }).filter(Boolean).join('、') + ' 代として</div>';
+  }
+
+  html += '<table>' +
+    '<thead><tr><th>品名</th><th>仕様</th><th class="r">数量</th><th class="r">単価</th><th class="r">金額</th></tr></thead>' +
+    '<tbody>';
+  entries.forEach(function(e){
+    var p = e.project;
+    var d = e.delivery;
+    var item = p?.item || d.taskType || '';
+    var spec = p?.spec || '';
+    var qty = p?.qty || 0;
+    var unit = p?.unit || '部';
+    var amt = p?.exTax || 0;
+    var unitp = qty > 0 ? Math.round(amt / qty) : 0;
+    html += '<tr><td>' + _escDiff(item) + '</td><td style="font-size:10px;color:#666">' + _escDiff(spec) + '</td><td class="r">' + qty.toLocaleString() + ' ' + unit + '</td><td class="r">¥' + unitp.toLocaleString() + '</td><td class="r">¥' + amt.toLocaleString() + '</td></tr>';
+  });
+  html += '</tbody></table>' +
+    '<table style="width:50%;margin-left:auto">' +
+      '<tr><td>小計</td><td class="r">¥' + subtotal.toLocaleString() + '</td></tr>' +
+      '<tr><td>消費税 (10%)</td><td class="r">¥' + tax.toLocaleString() + '</td></tr>' +
+      '<tr class="total-row"><td>合計</td><td class="r">¥' + total.toLocaleString() + '</td></tr>' +
+    '</table>' +
+    '<div class="note">配送予定日: ' + dateStr + ' / ' + entries.length + '件まとめ発行</div>' +
+    '<div style="margin-top:30px;text-align:center"><button onclick="window.print()" style="padding:10px 30px;font-size:14px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨 印刷</button></div>' +
+  '</body></html>';
+
+  w.document.write(html);
+  w.document.close();
+
+  // 帳票履歴に記録
+  if(docType === '納品書'){
+    if(!DB.deliveryNotes) DB.deliveryNotes = [];
+    DB.deliveryNotes.push({ id: docNo, cust: cust, date: dateStr, total: total, entries: entries.length, issuedAt: new Date().toISOString() });
+  } else if(docType === '領収書'){
+    if(!DB.receipts) DB.receipts = [];
+    DB.receipts.push({ id: docNo, cust: cust, date: dateStr, total: total, issuedAt: new Date().toISOString() });
+  }
+  if(typeof saveDB === 'function') saveDB();
+}
+
+// initDeliveryPage が呼ばれる際に group 表示も初期化
+var _origInitDeliveryPage = typeof initDeliveryPage === 'function' ? initDeliveryPage : null;
+if(_origInitDeliveryPage){
+  initDeliveryPage = function(){
+    _origInitDeliveryPage.apply(this, arguments);
+    // 配送グループも初期化
+    var dateInput = document.getElementById('delivery-group-date');
+    if(dateInput && !dateInput.value){
+      dateInput.value = new Date().toISOString().slice(0,10);
+    }
+    if(typeof renderDeliveryGroups === 'function') renderDeliveryGroups();
+  };
+}
+
+// ─────────────────────────────────────────────────────
+// 📊 業務フロー図 (進行状況の見える化)
+// ─────────────────────────────────────────────────────
+function renderWorkflowDiagram(){
+  var el = document.getElementById('workflow-diagram');
+  if(!el) return;
+
+  // 各ステップの件数を集計
+  var inqNew = (DB.inquiries || []).filter(function(i){ return i.status === 'new'; }).length;
+  var estimates = (DB.estimates || []).filter(function(e){ return !e.linkedProjectId; }).length;
+  var projectsActive = (DB.projects || []).filter(function(p){ return p.status && p.status !== '完了' && p.status !== '納品済'; }).length;
+  var proofingActive = (DB.proofings || []).filter(function(p){ return p.status !== 'approved'; }).length;
+  var deliveryUpcoming = (DB.deliveryItems || []).filter(function(d){ return d.status !== '完了' && d.status !== '配送完了'; }).length;
+  var invoicesPending = (DB.invoices || []).filter(function(v){ return v.status !== 'paid' && v.status !== '入金済'; }).length;
+  var paymentsPending = (DB.payments || []).filter(function(p){ return p.status !== 'matched' && p.status !== '消込済'; }).length;
+
+  var steps = [
+    { icon:'📨', label:'連絡',      count: inqNew,           sub:'新着',    color:'#7c3aed', tab:'inquiry' },
+    { icon:'📋', label:'見積依頼',  count: estimates,        sub:'未受注',  color:'#1e40af', tab:'estimates' },
+    { icon:'📁', label:'案件',      count: projectsActive,   sub:'進行中',  color:'#16a34a', tab:'project' },
+    { icon:'📸', label:'校正',      count: proofingActive,   sub:'進行中',  color:'#0ea5e9', tab:'proofing' },
+    { icon:'🚚', label:'配送',      count: deliveryUpcoming, sub:'未完了',  color:'#0891b2', tab:'delivery' },
+    { icon:'📄', label:'請求書',    count: invoicesPending,  sub:'未入金',  color:'#dc2626', tab:'invoices' },
+    { icon:'💰', label:'入金',      count: paymentsPending,  sub:'未消込',  color:'#b91c1c', tab:'payments' }
+  ];
+
+  var html = '<div style="display:flex;align-items:center;gap:0;min-width:900px">';
+  steps.forEach(function(s, i){
+    var isHot = s.count > 0;
+    html += '<div onclick="_navToWorkflowStep_(\'' + s.tab + '\')" style="flex:1;cursor:pointer;text-align:center;padding:10px 6px;border-radius:8px;background:' + (isHot ? 'linear-gradient(135deg,' + s.color + ',' + s.color + 'dd)' : '#f3f4f6') + ';color:' + (isHot ? '#fff' : '#9ca3af') + ';transition:transform .15s" onmouseover="this.style.transform=\'scale(1.05)\'" onmouseout="this.style.transform=\'scale(1)\'">' +
+      '<div style="font-size:22px;line-height:1">' + s.icon + '</div>' +
+      '<div style="font-size:11px;font-weight:700;margin-top:4px">' + s.label + '</div>' +
+      '<div style="font-size:18px;font-weight:700;margin-top:4px">' + s.count + '</div>' +
+      '<div style="font-size:9px;opacity:0.85">' + s.sub + '</div>' +
+      '</div>';
+    if(i < steps.length - 1){
+      html += '<div style="font-size:18px;color:#cbd5e1;padding:0 4px">→</div>';
+    }
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function _navToWorkflowStep_(tab){
+  var btn = document.querySelector('.tb-btn[data-page="' + tab + '"]');
+  if(btn && typeof swPage === 'function'){
+    swPage(tab, btn);
+    return;
+  }
+  // ドロップダウン経由 (請求書/入金管理など)
+  if(tab === 'invoices' || tab === 'receipts' || tab === 'payments'){
+    var salesBtn = document.querySelector('.tb-btn[data-page="sales-menu"]');
+    if(salesBtn) toggleSalesMenu({ stopPropagation: function(){}, target: salesBtn });
+    return;
+  }
+}
+
+// ─────────────────────────────────────────────────────
 // 🚀 クイックアクション (ホームから主要機能へショートカット)
 // ─────────────────────────────────────────────────────
 function _quickAction_(action){
@@ -11997,6 +13088,9 @@ function renderRealtimeView(){
   }).join('');
 
   grid.innerHTML = html;
+
+  // 業務フロー図も更新
+  if(typeof renderWorkflowDiagram === 'function') renderWorkflowDiagram();
 
   // 各ウィジェットの内容を描画
   enabled.forEach(function(wId){ _renderWidget_(wId); });
