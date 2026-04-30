@@ -9577,7 +9577,8 @@ async function sendChatMessage(presetText){
   var contextSummary = _buildContextSummary_();
 
   try {
-    var result = await callCloudAPI('claudeChat', {
+    // POST + JSON body で送る (messages 配列を URL クエリで送ると文字列化されるため)
+    var result = await callCloudAPI('claudeChat', {}, {
       messages: _chatbotHistory,
       contextSummary: contextSummary
     });
