@@ -28,10 +28,14 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;font-size:13px;
 .layout{display:flex;height:100vh;flex-direction:column}
 .topbar{background:#1a1a1a;color:#fff;display:flex;align-items:center;padding:0 .75rem;height:50px;flex-shrink:0;gap:0}
 .topbar-title{font-size:14px;font-weight:700;margin-right:14px;white-space:nowrap;letter-spacing:.02em;flex-shrink:0}
-.tb-scroll{display:flex;align-items:stretch;flex:1;overflow-x:auto;overflow-y:hidden;gap:2px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.3) transparent;min-width:0;-webkit-overflow-scrolling:touch}
-.tb-scroll::-webkit-scrollbar{height:4px}
-.tb-scroll::-webkit-scrollbar-track{background:transparent}
-.tb-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:2px}
+.tb-scroll{display:flex;align-items:stretch;flex:1;overflow-x:auto;overflow-y:hidden;gap:2px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.3) transparent;min-width:0;-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
+.tb-scroll::-webkit-scrollbar{height:6px}
+.tb-scroll::-webkit-scrollbar-track{background:rgba(255,255,255,.05)}
+.tb-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.35);border-radius:3px}
+.tb-scroll::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.55)}
+.tb-arrow{flex-shrink:0;width:28px;height:50px;background:rgba(0,0,0,.4);color:#fff;border:none;cursor:pointer;font-size:14px;font-family:inherit;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.tb-arrow:hover{background:rgba(96,165,250,.3)}
+.tb-arrow:disabled{opacity:0.3;cursor:not-allowed}
 .tb-btn{padding:0 12px;height:50px;background:transparent;border:none;color:rgba(255,255,255,.7);font-size:12.5px;cursor:pointer;font-family:inherit;border-bottom:3px solid transparent;transition:all .15s;white-space:nowrap;border-radius:6px 6px 0 0;display:inline-flex;align-items:center;letter-spacing:.01em}
 .tb-btn:hover{color:#fff;background:rgba(255,255,255,.08)}
 .tb-btn.act{color:#fff;border-bottom-color:#60a5fa;background:rgba(96,165,250,.12);font-weight:600}
@@ -461,6 +465,7 @@ window.addEventListener('load', function(){
 <div class="layout" id="main-layout" style="display:none">
 <div class="topbar no-print">
   <span class="topbar-title" id="app-title">TOKIWA-HUB</span>
+  <button class="tb-arrow" id="tb-arrow-left" onclick="scrollTabs(-1)" title="左にスクロール">‹</button>
   <div class="tb-scroll" id="tb-scroll">
     <button class="tb-btn act" data-page="est" onclick="swPage('est',this)" draggable="true">📝 見積作成</button>
     <button class="tb-btn" data-page="realtime" onclick="swPage('realtime',this)" draggable="true">🎯 リアルタイム</button>
@@ -481,6 +486,7 @@ window.addEventListener('load', function(){
     <button class="tb-btn" data-page="companies" onclick="swPage('companies',this)" draggable="true">🏢 会社管理</button>
     <button class="tb-btn" data-page="settings" onclick="swPage('settings',this)" draggable="true">⚙ 設定</button>
   </div>
+  <button class="tb-arrow" id="tb-arrow-right" onclick="scrollTabs(1)" title="右にスクロール">›</button>
   <div class="tb-right">
     <!-- クラウド同期ステータス -->
     <span id="cloud-sync-indicator" style="font-size:11px;margin-right:10px"></span>
@@ -3338,17 +3344,41 @@ function initTabReorder(){
 
   // 保存済みの順序を復元
   try {
+    const htmlOrder = Array.from(scroll.querySelectorAll('.tb-btn')).map(t => t.dataset.page);
+    const tabMap = {};
+    Array.from(scroll.querySelectorAll('.tb-btn')).forEach(t => { tabMap[t.dataset.page] = t; });
+
     const savedOrder = JSON.parse(localStorage.getItem(TAB_ORDER_KEY) || '[]');
     if(savedOrder.length){
-      const tabs = Array.from(scroll.querySelectorAll('.tb-btn'));
-      const tabMap = {};
-      tabs.forEach(t => { tabMap[t.dataset.page] = t; });
-      // 保存順に並べる
+      // 1. 保存順にあるタブを順番に追加 (現在も HTML に存在するもののみ)
       savedOrder.forEach(page => {
-        if(tabMap[page]){ scroll.appendChild(tabMap[page]); delete tabMap[page]; }
+        if(tabMap[page]) scroll.appendChild(tabMap[page]);
       });
-      // 新規追加されたタブ (savedOrder に無いもの) を末尾に追加
-      Object.values(tabMap).forEach(t => scroll.appendChild(t));
+
+      // 2. 新規追加されたタブ (savedOrder に無いもの) を HTML 順序に基づいて適切な位置に挿入
+      htmlOrder.forEach((page, htmlIdx) => {
+        if(savedOrder.indexOf(page) >= 0) return; // 既に savedOrder で配置済
+        const tab = tabMap[page];
+        if(!tab) return;
+
+        // HTML 上で page の直後にあって savedOrder にも存在するタブの直前に挿入
+        let nextSavedTab = null;
+        for(let i = htmlIdx + 1; i < htmlOrder.length; i++){
+          if(savedOrder.indexOf(htmlOrder[i]) >= 0 && tabMap[htmlOrder[i]]){
+            nextSavedTab = tabMap[htmlOrder[i]];
+            break;
+          }
+        }
+        if(nextSavedTab){
+          scroll.insertBefore(tab, nextSavedTab);
+        } else {
+          scroll.appendChild(tab);
+        }
+      });
+
+      // 3. 新規タブを含む最終順序を保存
+      const finalOrder = Array.from(scroll.querySelectorAll('.tb-btn')).map(t => t.dataset.page);
+      try { localStorage.setItem(TAB_ORDER_KEY, JSON.stringify(finalOrder)); } catch(e){}
     }
   } catch(e){ console.warn('Tab order restore failed:', e); }
 
@@ -3410,11 +3440,38 @@ function saveTabOrder(){
   try { localStorage.setItem(TAB_ORDER_KEY, JSON.stringify(order)); } catch(e){}
 }
 
+// タブバーを左右にスクロール
+function scrollTabs(dir){
+  const scroll = document.getElementById('tb-scroll');
+  if(!scroll) return;
+  scroll.scrollBy({ left: dir * 240, behavior: 'smooth' });
+  setTimeout(updateTabArrows, 350);
+}
+
+// 左右矢印の disabled 状態を更新
+function updateTabArrows(){
+  const scroll = document.getElementById('tb-scroll');
+  const left = document.getElementById('tb-arrow-left');
+  const right = document.getElementById('tb-arrow-right');
+  if(!scroll || !left || !right) return;
+  left.disabled = scroll.scrollLeft <= 2;
+  right.disabled = scroll.scrollLeft + scroll.clientWidth >= scroll.scrollWidth - 2;
+}
+
 // 起動時に並び替え機能を初期化
+function _initTopbarArrows_(){
+  const scroll = document.getElementById('tb-scroll');
+  if(scroll){
+    scroll.addEventListener('scroll', updateTabArrows, { passive: true });
+    window.addEventListener('resize', updateTabArrows);
+    setTimeout(updateTabArrows, 200);
+  }
+}
 if(document.readyState === 'loading'){
-  document.addEventListener('DOMContentLoaded', () => setTimeout(initTabReorder, 100));
+  document.addEventListener('DOMContentLoaded', () => { setTimeout(initTabReorder, 100); setTimeout(_initTopbarArrows_, 150); });
 } else {
   setTimeout(initTabReorder, 100);
+  setTimeout(_initTopbarArrows_, 150);
 }
 
 // ═══════════════════ ページ切替 ════════════════
