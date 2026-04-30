@@ -30,7 +30,46 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;font-size:13px;
 .topbar-title{font-size:14px;font-weight:700;margin-right:14px;white-space:nowrap;letter-spacing:.02em;flex-shrink:0;align-self:center}
 .tb-scroll{display:flex;align-items:stretch;flex:1;flex-wrap:wrap;gap:2px;min-width:0;align-content:flex-start;padding:2px 0}
 .tb-arrow{display:none}
-.tb-btn{padding:0 11px;height:34px;background:rgba(255,255,255,.04);border:none;color:rgba(255,255,255,.75);font-size:12.5px;cursor:pointer;font-family:inherit;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;border-radius:6px;display:inline-flex;align-items:center;letter-spacing:.01em;line-height:34px}
+.tb-btn{padding:0 11px;height:34px;background:rgba(255,255,255,.04);border:none;color:rgba(255,255,255,.75);font-size:12.5px;cursor:pointer;font-family:inherit;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;border-radius:6px;display:inline-flex;align-items:center;letter-spacing:.01em;line-height:34px;position:relative}
+/* カスタムツールチップ (data-tip 属性を使用) */
+.tb-btn[data-tip]:hover::after{
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15,23,42,0.96);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: normal;
+  width: max-content;
+  max-width: 320px;
+  z-index: 9999;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  pointer-events: none;
+  opacity: 0;
+  animation: tbTooltipIn .12s ease .25s forwards;
+  letter-spacing: 0;
+  font-weight: 400;
+  text-align: left;
+}
+.tb-btn[data-tip]:hover::before{
+  content: '';
+  position: absolute;
+  top: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-bottom-color: rgba(15,23,42,0.96);
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0;
+  animation: tbTooltipIn .12s ease .25s forwards;
+}
+@keyframes tbTooltipIn { to { opacity: 1; } }
 .tb-btn:hover{color:#fff;background:rgba(255,255,255,.08)}
 .tb-btn.act{color:#fff;border-bottom-color:#60a5fa;background:rgba(96,165,250,.18);font-weight:600}
 .tb-btn.dragging{opacity:.4;cursor:grabbing}
@@ -461,23 +500,23 @@ window.addEventListener('load', function(){
   <span class="topbar-title" id="app-title">TOKIWA-HUB</span>
   <button class="tb-arrow" id="tb-arrow-left" onclick="scrollTabs(-1)" title="左にスクロール">‹</button>
   <div class="tb-scroll" id="tb-scroll">
-    <button class="tb-btn act" data-page="est" onclick="swPage('est',this)" draggable="true">📝 見積作成</button>
-    <button class="tb-btn" data-page="realtime" onclick="swPage('realtime',this)" draggable="true">🎯 リアルタイム</button>
-    <button class="tb-btn" data-page="finance" onclick="swPage('finance',this)" draggable="true">📊 決算・文書</button>
-    <button class="tb-btn" data-page="estimates" onclick="swPage('estimates',this)" draggable="true">📋 見積管理</button>
-    <button class="tb-btn" data-page="project" onclick="swPage('project',this)" draggable="true">📁 案件管理</button>
-    <button class="tb-btn" data-page="master" onclick="swPage('master',this)" draggable="true">📚 マスター</button>
-    <button class="tb-btn" data-page="history" onclick="swPage('history',this)" draggable="true">📜 実績一覧</button>
-    <button class="tb-btn" data-page="calendar" onclick="swPage('calendar',this)" draggable="true">📅 納品</button>
-    <button class="tb-btn" data-page="schedule" onclick="swPage('schedule',this)" draggable="true">📋 スケジュール</button>
-    <button class="tb-btn" data-page="proofing" onclick="swPage('proofing',this)" draggable="true">📸 校正BOX</button>
-    <button class="tb-btn" data-page="delivery" onclick="swPage('delivery',this)" draggable="true">🚚 配送</button>
-    <button class="tb-btn" data-page="inbox" onclick="swPage('inbox',this)" draggable="true">📥 受信BOX</button>
-    <button class="tb-btn" data-page="interco" onclick="swPage('interco',this)" draggable="true">🔄 社間依頼</button>
-    <button class="tb-btn" data-page="inquiry" onclick="swPage('inquiry',this)" draggable="true">💬 問い合わせ</button>
-    <button class="tb-btn" data-page="wiki" onclick="swPage('wiki',this)" draggable="true">📖 Wiki</button>
-    <button class="tb-btn" data-page="companies" onclick="swPage('companies',this)" draggable="true">🏢 会社管理</button>
-    <button class="tb-btn" data-page="settings" onclick="swPage('settings',this)" draggable="true">⚙ 設定</button>
+    <button class="tb-btn act" data-page="est" onclick="swPage('est',this)" draggable="true" title="📝 見積作成 — 新規見積をタブ式で複数並行作成。用紙・印刷・製版・データ・製本の原価を積算して見積書を作成">📝 見積作成</button>
+    <button class="tb-btn" data-page="realtime" onclick="swPage('realtime',this)" draggable="true" title="🎯 リアルタイム — 業務全体のリアルタイム見える化。KPI・売上グラフ・案件一覧などをウィジェット形式でカスタマイズ表示 (30秒自動更新)">🎯 リアルタイム</button>
+    <button class="tb-btn" data-page="finance" onclick="swPage('finance',this)" draggable="true" title="📊 決算・文書 — 各社の決算書(P/L・B/S)分析、グループ7社比較、金融機関提出用文書の保管庫">📊 決算・文書</button>
+    <button class="tb-btn" data-page="estimates" onclick="swPage('estimates',this)" draggable="true" title="📋 見積管理 — 受注前の見積一覧。AI 自動抽出・チャットボット作成・手動の見積から、編集・受注確定・削除を管理">📋 見積管理</button>
+    <button class="tb-btn" data-page="project" onclick="swPage('project',this)" draggable="true" title="📁 案件管理 — 受注確定後の案件管理。ステータス・納期・担当者・作業ステップ・タイムライン・校正・配送の一元管理">📁 案件管理</button>
+    <button class="tb-btn" data-page="master" onclick="swPage('master',this)" draggable="true" title="📚 マスター — 得意先・仕入先・印刷条件・用紙・加工等のマスタデータ。担当者やメール・電話番号の登録">📚 マスター</button>
+    <button class="tb-btn" data-page="history" onclick="swPage('history',this)" draggable="true" title="📜 実績一覧 — 過去に保存した見積実績の検索と流用。明細スナップショット付きで完全コピー可能">📜 実績一覧</button>
+    <button class="tb-btn" data-page="calendar" onclick="swPage('calendar',this)" draggable="true" title="📅 納品 — 案件の納期カレンダー。月次ビューで納品予定を一覧">📅 納品</button>
+    <button class="tb-btn" data-page="schedule" onclick="swPage('schedule',this)" draggable="true" title="📋 スケジュール — 制作・加工・印刷の社内スケジュール表">📋 スケジュール</button>
+    <button class="tb-btn" data-page="proofing" onclick="swPage('proofing',this)" draggable="true" title="📸 校正BOX — PDF 校正管理。新旧並列表示・自動差分検出・OCR テキスト抽出。Google Drive と連携">📸 校正BOX</button>
+    <button class="tb-btn" data-page="delivery" onclick="swPage('delivery',this)" draggable="true" title="🚚 配送 — 配送予定とドライバー管理。タスクタイプ別 (納品/校正出し/サンプル/集荷)。Google Calendar 連携">🚚 配送</button>
+    <button class="tb-btn" data-page="inbox" onclick="swPage('inbox',this)" draggable="true" title="📥 受信BOX — Gmail と連携した社内メール受信トレイ。AI 重要度判定・案件化・OCR 添付処理">📥 受信BOX</button>
+    <button class="tb-btn" data-page="interco" onclick="swPage('interco',this)" draggable="true" title="🔄 社間依頼 — グループ7社間の見積依頼・発注管理。送信側と受信側で履歴を双方向追跡">🔄 社間依頼</button>
+    <button class="tb-btn" data-page="inquiry" onclick="swPage('inquiry',this)" draggable="true" title="💬 問い合わせ — Gmail / LINE WORKS / Web フォーム / 手動入力の統合問い合わせビュー。AI 返信下書き・自動見積抽出">💬 問い合わせ</button>
+    <button class="tb-btn" data-page="wiki" onclick="swPage('wiki',this)" draggable="true" title="📖 Wiki — 社内ナレッジベース。マニュアル・手順書・FAQ などを管理">📖 Wiki</button>
+    <button class="tb-btn" data-page="companies" onclick="swPage('companies',this)" draggable="true" title="🏢 会社管理 — グループ7社の管理 (トキワ・村山・北上・アートエス・津島・中尾)、ユーザー登録、権限管理">🏢 会社管理</button>
+    <button class="tb-btn" data-page="settings" onclick="swPage('settings',this)" draggable="true" title="⚙ 設定 — システム設定・税率・標準歩留り・自社情報・ロゴ等">⚙ 設定</button>
   </div>
   <button class="tb-arrow" id="tb-arrow-right" onclick="scrollTabs(1)" title="右にスクロール">›</button>
   <div class="tb-right">
@@ -3605,15 +3644,25 @@ function _initTopbarArrows_(){
     setTimeout(updateTabArrows, 200);
   }
 }
+
+// title 属性を data-tip に移動 (カスタムツールチップ用、標準ツールチップを抑制)
+function _migrateTabTitlesToDataTip_(){
+  document.querySelectorAll('.tb-btn[title]').forEach(function(btn){
+    if(!btn.dataset.tip) btn.dataset.tip = btn.getAttribute('title');
+    btn.removeAttribute('title');
+  });
+}
 if(document.readyState === 'loading'){
   document.addEventListener('DOMContentLoaded', () => {
     setTimeout(initTabReorder, 100);
     setTimeout(_initTopbarArrows_, 150);
+    setTimeout(_migrateTabTitlesToDataTip_, 160);
     if(typeof _registerServiceWorker_ === 'function') setTimeout(_registerServiceWorker_, 200);
   });
 } else {
   setTimeout(initTabReorder, 100);
   setTimeout(_initTopbarArrows_, 150);
+  setTimeout(_migrateTabTitlesToDataTip_, 160);
   if(typeof _registerServiceWorker_ === 'function') setTimeout(_registerServiceWorker_, 200);
 }
 
