@@ -14700,7 +14700,7 @@ async function handleLogin(){
 function updateUserDisplay(){
   const userSpan = document.getElementById('current-user');
   const companySpan = document.getElementById('current-company');
-  
+
   if(userSpan){
     const dept = currentAuth.department ? `（${currentAuth.department}）` : '';
     userSpan.textContent = currentAuth.userName ? `👤 ${currentAuth.userName}${dept}` : '';
@@ -14708,6 +14708,47 @@ function updateUserDisplay(){
   if(companySpan){
     companySpan.textContent = currentAuth.companyName || '';
   }
+  // 会社別のヘッダー色を適用
+  applyCompanyHeaderColor();
+}
+
+// 会社別ヘッダー色マップ (会社名の部分一致で判定)
+const COMPANY_HEADER_COLORS = {
+  'トキワ':     '#65a30d',  // 黄緑 (lime-600)
+  '村山':       '#6d28d9',  // 紫 (purple-700)
+  '北上':       '#c2410c',  // オレンジ (orange-700)
+  'アートエス': '#1d4ed8',  // 青 (blue-700)
+  '津島':       '#78350f',  // 茶色 (amber-900)
+  '中尾':       '#7f1d1d'   // エンジ (red-900)
+};
+
+// ヘッダーの色を会社に合わせて変える
+function applyCompanyHeaderColor(){
+  const topbar = document.querySelector('.topbar');
+  if(!topbar) return;
+  let color = '#1a1a1a';   // デフォルト (黒)
+  let label = '';
+  const name = (currentAuth && currentAuth.companyName) || '';
+  for(const key in COMPANY_HEADER_COLORS){
+    if(name.indexOf(key) >= 0){
+      color = COMPANY_HEADER_COLORS[key];
+      label = key;
+      break;
+    }
+  }
+  topbar.style.background = color;
+  topbar.dataset.companyTheme = label;
+  // 視認性確保: アクティブタブの色を強調 (背景色に応じて少し白くする)
+  // .tb-btn.act の border-bottom-color を反対色に
+  let actBorder = '#ffffff';
+  if(label === 'トキワ')  actBorder = '#f0fdf4';
+  if(label === '村山')    actBorder = '#f3e8ff';
+  if(label === '北上')    actBorder = '#ffedd5';
+  if(label === 'アートエス') actBorder = '#dbeafe';
+  if(label === '津島')    actBorder = '#fef3c7';
+  if(label === '中尾')    actBorder = '#fee2e2';
+  // Set CSS variable
+  topbar.style.setProperty('--act-tab-color', actBorder);
 }
 
 // 権限に応じてメニューを制御
@@ -14838,7 +14879,7 @@ function switchCompany(code){
   const result = doLogin(code, ''); // パスワードなしで切替（管理者権限の場合）
   if(result.success){
     document.getElementById('app-title').textContent = DB.conf.appName || '見積・案件管理';
-    updateCompanyDisplay();
+    updateUserDisplay();   // ← ヘッダー色も更新
     renderProjects();
     renderHistory();
   }
