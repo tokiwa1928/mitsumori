@@ -10069,6 +10069,68 @@ function applyFinancialAIIngest(extracted){
 
 var CHATBOT_HISTORY_KEY = 'tokiwa_hub_chat_history';
 // ─────────────────────────────────────────────────────
+// 🔍 過去見積書 (DB.history) から類似品を検索 (得意先 + 品名キーワード)
+// ─────────────────────────────────────────────────────
+function _findSimilarHistory_(cust, item){
+  if(!Array.isArray(DB.history) || !DB.history.length) return [];
+  var iItem = (item || '').toLowerCase();
+  var keywords = iItem.match(/[^\s　、\(\)（）]+/g) || [];
+  keywords = keywords.filter(function(k){ return k.length >= 2; });
+
+  var results = DB.history.filter(function(h){
+    if(!h.cust || !h.item) return false;
+    if(h.cust !== cust) return false;
+    var hItem = (h.item || '').toLowerCase();
+    if(!keywords.length){ return hItem === iItem; }
+    return keywords.some(function(k){ return hItem.indexOf(k) >= 0; });
+  });
+  // 同じ得意先で類似が無ければ、品名のみで全得意先から検索 (フォールバック)
+  if(!results.length && keywords.length){
+    results = DB.history.filter(function(h){
+      if(!h.item) return false;
+      var hItem = h.item.toLowerCase();
+      return keywords.every(function(k){ return hItem.indexOf(k) >= 0; });
+    }).map(function(h){ return Object.assign({}, h, { _otherCustomer: true }); });
+  }
+
+  results.sort(function(a, b){ return new Date(b.date || 0) - new Date(a.date || 0); });
+  return results;
+}
+
+// 過去履歴を参考に見積データを増強 (exTax / 過去参考メタ情報を追加)
+function _applyHistoryPricing_(est){
+  if(!est || !est.cust || !est.item) return est;
+  var similar = _findSimilarHistory_(est.cust, est.item);
+  if(!similar.length){
+    est.historyRefs = [];
+    return est;
+  }
+
+  var totalUnitp = similar.reduce(function(s, h){ return s + (parseFloat(h.unitp) || 0); }, 0);
+  var totalCr = similar.reduce(function(s, h){ return s + (parseFloat(h.cr) || 0); }, 0);
+  var validCr = similar.filter(function(h){ return typeof h.cr === 'number' && isFinite(h.cr); });
+  var validUnitp = similar.filter(function(h){ return typeof h.unitp === 'number' && h.unitp > 0; });
+
+  est.lastUnitp = validUnitp.length ? validUnitp[0].unitp : 0;
+  est.avgUnitp = validUnitp.length ? totalUnitp / validUnitp.length : 0;
+  est.avgCr = validCr.length ? totalCr / validCr.length : 0;
+  est.historyRefs = similar.slice(0, 3).map(function(h){
+    return { date: h.date, qty: h.qty, unitp: h.unitp, exTax: h.exTax, cr: h.cr, _otherCustomer: h._otherCustomer || false };
+  });
+  est.historyMatchCount = similar.length;
+  est.historyOtherCustomer = !similar[0] || similar[0]._otherCustomer === true;
+
+  // exTax が未入力なら前回単価ベースで自動算出
+  if((!est.exTax || est.exTax === 0) && est.lastUnitp && est.qty){
+    est.exTax = Math.round(est.qty * est.lastUnitp);
+    est.exTaxAuto = true;
+    est.exTaxBasis = '前回単価 ¥' + est.lastUnitp.toFixed(1) + '/部 × ' + est.qty + '部';
+  }
+
+  return est;
+}
+
+// ─────────────────────────────────────────────────────
 // 📋 見積管理 (見積一覧 - 案件化されていないもの)
 // ─────────────────────────────────────────────────────
 function renderEstimates(){
@@ -10120,6 +10182,7 @@ function renderEstimates(){
     '<th style="padding:8px 10px">数量</th>' +
     '<th style="padding:8px 10px">納期</th>' +
     '<th style="padding:8px 10px;text-align:right">税抜金額</th>' +
+    '<th style="padding:8px 10px">📊 過去参考</th>' +
     '<th style="padding:8px 10px">発生源</th>' +
     '<th style="padding:8px 10px">ステータス</th>' +
     '<th style="padding:8px 10px;text-align:center">操作</th>' +
@@ -10141,6 +10204,31 @@ function renderEstimates(){
     }
     var statusColor = e.status === '提出済' ? '#16a34a' : (e.status === '保留' ? '#f59e0b' : '#6b7280');
 
+    // 🆕 過去参考セル
+    var historyCell = '';
+    if(e.historyMatchCount && e.historyMatchCount > 0){
+      var lastP = e.lastUnitp ? '¥' + e.lastUnitp.toFixed(1) + '/部' : '-';
+      var avgP = e.avgUnitp ? '¥' + e.avgUnitp.toFixed(1) + '/部' : '';
+      var crP = e.avgCr ? (e.avgCr * 100).toFixed(0) + '%' : '-';
+      var otherCustNote = e.historyOtherCustomer ? '<div style="font-size:9px;color:#dc2626">※ 他の得意先の参考値</div>' : '';
+      historyCell =
+        '<div style="font-size:11px;line-height:1.4">' +
+          '<div style="color:#1e40af"><strong>前回:</strong> ' + lastP + '</div>' +
+          (avgP ? '<div style="color:#666">平均: ' + avgP + '</div>' : '') +
+          '<div style="color:#16a34a">原価率: ' + crP + '</div>' +
+          '<div style="font-size:9px;color:#888">類似 ' + e.historyMatchCount + '件</div>' +
+          otherCustNote +
+        '</div>';
+    } else {
+      historyCell = '<span style="font-size:11px;color:#aaa">参考なし</span>';
+    }
+
+    // 自動算出された価格には ✨ マーク
+    var priceDisplay = price;
+    if(e.exTaxAuto){
+      priceDisplay = '<div style="text-align:right">' + price + '<div style="font-size:9px;color:#7c3aed">✨ 自動算出</div></div>';
+    }
+
     html += '<tr style="border-bottom:1px solid #f3f4f6">' +
       '<td style="padding:8px 10px;font-family:monospace;font-size:12px;color:#666">' + (e.id||'') + '</td>' +
       '<td style="padding:8px 10px;font-size:12px;color:#666">' + dateStr + '</td>' +
@@ -10150,7 +10238,8 @@ function renderEstimates(){
       '</td>' +
       '<td style="padding:8px 10px">' + qty + '</td>' +
       '<td style="padding:8px 10px;font-size:12px">' + (e.dueDate || '-') + '</td>' +
-      '<td style="padding:8px 10px;text-align:right;font-family:monospace">' + price + '</td>' +
+      '<td style="padding:8px 10px;text-align:right;font-family:monospace">' + priceDisplay + '</td>' +
+      '<td style="padding:8px 10px">' + historyCell + '</td>' +
       '<td style="padding:8px 10px">' + srcBadge + '</td>' +
       '<td style="padding:8px 10px"><span style="color:' + statusColor + ';font-weight:600">' + (e.status||'見積中') + '</span></td>' +
       '<td style="padding:8px 10px;text-align:center;white-space:nowrap">' +
@@ -10174,13 +10263,33 @@ function renderEstimates(){
       sourceInfoHtml = '↗ 💬 チャットボット経由で作成';
     }
 
-    if(sourceInfoHtml || e.memo){
-      var combined = sourceInfoHtml ?
-        '<div style="margin-bottom:4px;padding:4px 8px;background:#faf5ff;border-radius:4px;cursor:pointer" onclick="jumpToEstimateSource(\'' + e.id + '\')" title="発生源を開く">' + sourceInfoHtml + '</div>' : '';
-      if(e.memo){
-        combined += '📝 ' + _escDiff(e.memo).replace(/\n/g, '<br>');
-      }
-      html += '<tr style="background:#fafafa"><td colspan="10" style="padding:6px 10px 10px 10px;font-size:11px;color:#666">' + combined + '</td></tr>';
+    var combined = '';
+    if(sourceInfoHtml){
+      combined += '<div style="margin-bottom:6px;padding:4px 8px;background:#faf5ff;border-radius:4px;cursor:pointer" onclick="jumpToEstimateSource(\'' + e.id + '\')" title="発生源を開く">' + sourceInfoHtml + '</div>';
+    }
+    // 🆕 顧客依頼メモ
+    if(e.customerRequestMemo){
+      var truncated = e.customerRequestMemo.length > 200 ? e.customerRequestMemo.substring(0, 200) + '…' : e.customerRequestMemo;
+      combined += '<div style="margin-bottom:6px;padding:8px 10px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px"><div style="font-size:10px;font-weight:700;color:#92400e;margin-bottom:3px">📨 顧客依頼メモ' + (e.customerRequestSubject ? ' (' + _escDiff(e.customerRequestSubject) + ')' : '') + '</div><div style="font-size:11px;color:#451a03;white-space:pre-wrap;line-height:1.5">' + _escDiff(truncated).replace(/\n/g, '<br>') + '</div></div>';
+    }
+    // 🆕 過去参考の詳細 (履歴 3 件)
+    if(e.historyRefs && e.historyRefs.length){
+      combined += '<div style="margin-bottom:6px;padding:8px 10px;background:#eff6ff;border-left:3px solid #1e40af;border-radius:4px">' +
+        '<div style="font-size:10px;font-weight:700;color:#1e3a8a;margin-bottom:3px">📊 過去の見積書参照 (直近' + e.historyRefs.length + '件)</div>' +
+        e.historyRefs.map(function(h){
+          var hCr = h.cr ? (h.cr * 100).toFixed(0) + '%' : '-';
+          var hExTax = h.exTax ? '¥' + h.exTax.toLocaleString() : '-';
+          var hUnitp = h.unitp ? '¥' + h.unitp.toFixed(1) + '/部' : '-';
+          return '<div style="font-size:11px;color:#1e3a8a;margin:2px 0">• ' + (h.date||'') + ' / ' + (h.qty||0) + '部 / ' + hUnitp + ' (合計 ' + hExTax + ', 原価率 ' + hCr + ')' + (h._otherCustomer ? ' <span style="color:#dc2626;font-size:9px">[他社]</span>' : '') + '</div>';
+        }).join('') +
+        (e.exTaxBasis ? '<div style="font-size:11px;color:#7c3aed;margin-top:4px;font-weight:600">✨ 推定根拠: ' + e.exTaxBasis + '</div>' : '') +
+        '</div>';
+    }
+    if(e.memo){
+      combined += '<div style="font-size:11px;color:#666">📝 ' + _escDiff(e.memo).replace(/\n/g, '<br>') + '</div>';
+    }
+    if(combined){
+      html += '<tr style="background:#fafafa"><td colspan="11" style="padding:8px 12px 12px 12px">' + combined + '</td></tr>';
     }
   });
 
@@ -10415,8 +10524,12 @@ async function createEstimateFromInquiry(inqId){
     status: '見積中',
     aiAutoCreated: true,
     fromInquiryId: inq.id,
-    fromSubject: inq.subject || ''
+    fromSubject: inq.subject || '',
+    customerRequestMemo: inq.body || '', // 🆕 顧客依頼メモ
+    customerRequestSubject: inq.subject || ''
   };
+  // 🆕 過去履歴ベースで自動価格算出
+  _applyHistoryPricing_(newEst);
   DB.estimates.push(newEst);
   inq.linked_quote_id = newEst.id;
   if(typeof saveDB === 'function') saveDB();
@@ -11282,13 +11395,18 @@ function _executeChatTool_(name, input){
           exTax: parseInt(input.exTax) || 0,
           memo: input.memo || '',
           status: '見積中',
-          aiCreated: true
+          aiCreated: true,
+          customerRequestMemo: input.customerRequestMemo || ''
         };
+        // 🆕 過去履歴ベースで自動価格算出
+        _applyHistoryPricing_(est);
         if(!DB.estimates) DB.estimates = [];
         DB.estimates.push(est);
         if(typeof saveDB === 'function') saveDB();
         if(typeof renderEstimates === 'function') try { renderEstimates(); } catch(e){}
-        return { success: true, estimateId: est.id, message: '見積 ' + est.id + ' を登録しました' };
+        var msg = '見積 ' + est.id + ' を登録しました';
+        if(est.exTaxAuto) msg += ' (過去履歴ベースで自動算出: ¥' + est.exTax.toLocaleString() + ')';
+        return { success: true, estimateId: est.id, message: msg, exTaxAuto: est.exTaxAuto, lastUnitp: est.lastUnitp };
       }
       case 'create_project': {
         if(!input.cust || !input.item) return { error: 'missing cust or item' };
