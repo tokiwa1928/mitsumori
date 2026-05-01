@@ -10581,16 +10581,16 @@ function renderEstimates(){
       priceDisplay = '<div style="text-align:right">' + price + '<div style="font-size:9px;color:#7c3aed">✨ 自動算出</div></div>';
     }
 
-    // 🆕 グループ会社色
+    // 🆕 グループ会社色 + チェーン
     var estGrp = (typeof _detectGroupCompany_ === 'function') ? _detectGroupCompany_(e) : null;
     var estRowStyle = estGrp ? 'background:' + estGrp.bg + ';border-left:4px solid ' + estGrp.border : '';
     var groupTagEst = estGrp ? '<span style="display:inline-block;background:' + estGrp.border + ';color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;margin-right:3px;font-weight:700">' + estGrp.label + '</span>' : '';
-    var endUserEst = e.end_user ? '<div style="font-size:10px;color:#666;margin-top:1px">👤 ' + _escDiff(e.end_user) + '</div>' : '';
+    var estChain = (typeof _renderHandoffChain_ === 'function') ? _renderHandoffChain_(e, {size:'small'}) : '';
 
     html += '<tr style="border-bottom:1px solid #f3f4f6;' + estRowStyle + '">' +
       '<td style="padding:8px 10px;font-family:monospace;font-size:12px;color:#666">' + (e.id||'') + '</td>' +
       '<td style="padding:8px 10px;font-size:12px;color:#666">' + dateStr + '</td>' +
-      '<td style="padding:8px 10px;font-weight:600">' + groupTagEst + _escDiff(e.cust||'') + endUserEst + '</td>' +
+      '<td style="padding:8px 10px;font-weight:600">' + groupTagEst + _escDiff(e.cust||'') + estChain + '</td>' +
       '<td style="padding:8px 10px">' + _escDiff(e.item||'') +
         (e.spec ? '<div style="font-size:11px;color:#888;margin-top:2px">' + _escDiff(e.spec) + '</div>' : '') +
       '</td>' +
@@ -12348,17 +12348,28 @@ function showAddProjectModal(){
           '<input id="add-proj-assignee" placeholder="担当者名" value="' + _escDiff(currentAuth?.userName || '') + '" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
           '<label style="font-weight:700;align-self:center">ステータス</label>' +
           '<select id="add-proj-status" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px"><option>制作中</option><option>校了待ち</option><option>印刷中</option><option>加工中</option><option>納品済</option><option>完了</option></select>' +
-          '<label style="font-weight:700;align-self:center">🏢 案件区分</label>' +
-          '<select id="add-proj-group" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
-            '<option value="">トキワ印刷案件 (デフォルト)</option>' +
-            '<option value="アート・エス">アート・エス案件 (社間)</option>' +
-            '<option value="村山">村山印刷案件 (社間)</option>' +
-            '<option value="北上">北上プリント案件 (社間)</option>' +
-            '<option value="津島">津島プリント案件 (社間)</option>' +
-            '<option value="中尾">中尾印刷案件 (社間)</option>' +
-          '</select>' +
           '<label style="font-weight:700;align-self:center">👤 エンドユーザー</label>' +
           '<input id="add-proj-enduser" placeholder="例: 伊勢原市役所 (社間案件のみ)" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
+          '<label style="font-weight:700;align-self:center">🏢 元請け</label>' +
+          '<select id="add-proj-group" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
+            '<option value="">なし (トキワ印刷案件)</option>' +
+            '<option value="アート・エス">アート・エス</option>' +
+            '<option value="村山">村山印刷</option>' +
+            '<option value="北上">北上プリント</option>' +
+            '<option value="津島">津島プリント</option>' +
+            '<option value="中尾">中尾印刷</option>' +
+            '<option value="トキワ">トキワ印刷</option>' +
+          '</select>' +
+          '<label style="font-weight:700;align-self:center">➡️ 再委託先</label>' +
+          '<select id="add-proj-subto" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
+            '<option value="">なし</option>' +
+            '<option value="トキワ">トキワ印刷</option>' +
+            '<option value="アート・エス">アート・エス</option>' +
+            '<option value="村山">村山印刷</option>' +
+            '<option value="北上">北上プリント</option>' +
+            '<option value="津島">津島プリント</option>' +
+            '<option value="中尾">中尾印刷</option>' +
+          '</select>' +
           '<label style="font-weight:700;align-self:start">備考</label>' +
           '<textarea id="add-proj-memo" rows="2" placeholder="備考・特記事項" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-family:inherit;resize:vertical"></textarea>' +
         '</div>' +
@@ -12392,8 +12403,9 @@ function submitAddProject(){
     status: document.getElementById('add-proj-status')?.value || '制作中',
     assignee: document.getElementById('add-proj-assignee')?.value?.trim() || '',
     memo: document.getElementById('add-proj-memo')?.value?.trim() || '',
-    groupCompany: document.getElementById('add-proj-group')?.value?.trim() || '', // 🆕 案件区分
+    groupCompany: document.getElementById('add-proj-group')?.value?.trim() || '', // 🆕 元請け
     end_user: document.getElementById('add-proj-enduser')?.value?.trim() || '',   // 🆕 エンドユーザー
+    subcontracted_to: document.getElementById('add-proj-subto')?.value?.trim() || '', // 🆕 再委託先
     steps: { 版下:'─', 校了:'─', 印刷:'─', 加工:'─', 納品:'─' },
     stepDates: {},
     createdAt: new Date().toISOString()
@@ -17568,7 +17580,8 @@ function renderProjects(){
     const projGrp = (typeof _detectGroupCompany_ === 'function') ? _detectGroupCompany_(r) : null;
     const projRowStyle = projGrp ? `background:${projGrp.bg};border-left:4px solid ${projGrp.border}` : '';
     const groupTag = projGrp ? `<span style="display:inline-block;background:${projGrp.border};color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;margin-right:3px;font-weight:700">${projGrp.label}</span>` : '';
-    const endUserDisplay = r.end_user ? `<div style="font-size:10px;color:#666;margin-top:1px">👤 ${r.end_user}</div>` : '';
+    // チェーン表示 (エンドユーザー → 元請け → 自社 → 再委託先)
+    const projChain = (typeof _renderHandoffChain_ === 'function') ? _renderHandoffChain_(r, {size:'small'}) : '';
 
     const mainRow=`<tr style="cursor:pointer;${projRowStyle}" onclick="toggleProjAcc(${oi},event)">
       <td style="font-size:11px;font-family:monospace;white-space:nowrap">
@@ -17580,7 +17593,7 @@ function renderProjects(){
         ${groupTag}
         <input type="text" value="${r.cust||''}" style="width:100%;font-size:12px;border:none;border-bottom:1px solid #e0ddd6;background:transparent"
           onchange="DB.projects[${oi}].cust=this.value;saveDB()">
-        ${endUserDisplay}
+        ${projChain}
       </td>
       <td onclick="event.stopPropagation()">
         <div style="font-size:12px;font-weight:600">${r.item||''}</div>
@@ -18068,6 +18081,65 @@ const COMPANY_LIGHT_COLORS = {
   '津島':       { bg: '#fef3c7', border: '#78350f', label: '津島プリント' },   // 薄い茶
   '中尾':       { bg: '#fee2e2', border: '#7f1d1d', label: '中尾印刷' }        // 薄いエンジ
 };
+
+// 会社名からグループ会社情報を取得 (なければトキワ)
+function _getCompanyColorByName_(name){
+  if(!name) return null;
+  for(var k in COMPANY_LIGHT_COLORS){
+    if(name.indexOf(k) >= 0) return Object.assign({ key: k }, COMPANY_LIGHT_COLORS[k]);
+  }
+  return null;
+}
+
+// 案件チェーン HTML を生成 (エンドユーザー → 元請け → 自社 → 再委託先)
+function _renderHandoffChain_(record, opts){
+  opts = opts || {};
+  var size = opts.size === 'small' ? 'small' : 'normal';
+  var fontSize = size === 'small' ? '10px' : '11px';
+  var arrowSize = size === 'small' ? '11px' : '13px';
+
+  var chain = [];
+
+  // ① エンドユーザー (実際の依頼主)
+  if(record.end_user){
+    chain.push({ icon:'👤', label:'エンドユーザー', name: record.end_user, color: '#6b7280', bg: '#f3f4f6' });
+  }
+  // ② 元請けグループ会社 (案件区分)
+  var origin = (record.groupCompany || record.originating_company || '');
+  var originColor = _getCompanyColorByName_(origin);
+  if(origin && originColor){
+    chain.push({ icon:'🏢', label:'元請け', name: originColor.label, color: originColor.border, bg: originColor.bg });
+  } else if(record.cust && _getCompanyColorByName_(record.cust)){
+    // cust がグループ会社なら元請け扱い
+    var c = _getCompanyColorByName_(record.cust);
+    chain.push({ icon:'🏢', label:'元請け', name: c.label, color: c.border, bg: c.bg });
+  } else if(record.cust && !record.end_user && !origin){
+    // 通常の客先 (グループ会社でない)
+    chain.push({ icon:'👥', label:'お客様', name: record.cust, color:'#6b7280', bg:'#f9fafb' });
+  }
+  // ③ 自社 (currentAuth)
+  var selfName = (typeof currentAuth !== 'undefined' && currentAuth?.companyName) || 'トキワ印刷';
+  var selfColor = _getCompanyColorByName_(selfName);
+  if(selfColor){
+    chain.push({ icon:'🏗️', label:'自社', name: selfColor.label, color: selfColor.border, bg: selfColor.bg });
+  }
+  // ④ 再委託先 (subcontracted_to)
+  if(record.subcontracted_to){
+    var subColor = _getCompanyColorByName_(record.subcontracted_to);
+    chain.push({ icon:'➡️', label:'再委託', name: subColor ? subColor.label : record.subcontracted_to, color: subColor ? subColor.border : '#6b7280', bg: subColor ? subColor.bg : '#f9fafb' });
+  }
+
+  if(chain.length <= 1) return ''; // チェーンなしなら表示しない
+
+  return '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;font-size:' + fontSize + ';margin-top:4px">' +
+    chain.map(function(c, i){
+      return (i > 0 ? '<span style="color:#9ca3af;font-size:' + arrowSize + '">→</span>' : '') +
+        '<span style="background:' + c.bg + ';color:' + c.color + ';padding:2px 6px;border-radius:4px;border:1px solid ' + c.color + '40;font-weight:600;white-space:nowrap" title="' + c.label + '">' +
+        c.icon + ' ' + _escDiff(c.name) +
+        '</span>';
+    }).join('') +
+    '</div>';
+}
 
 // グループ会社判定 (案件・連絡から groupCompany を推定)
 // 戻り値: { key:'トキワ'|'村山'|..., bg, border, label } または null (該当なし=デフォルトでトキワ扱い)
@@ -20188,15 +20260,14 @@ function renderInquiryList() {
     // 🆕 グループ会社別の統一色分け (連絡・見積・案件すべて同色)
     const grp = _detectGroupCompany_(inq);
     const cardStyle = `background:${grp.bg};border-left:4px solid ${grp.border}`;
-    const groupBadge = `<span style="background:${grp.border};color:#fff;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;white-space:nowrap" title="グループ会社案件">🏢 ${grp.label}</span>`;
-    // エンドユーザー表示 (社間案件で end_user 設定済の場合)
-    const endUserBadge = inq.end_user ? `<span style="background:#fff;color:#1a1a1a;font-size:10px;padding:2px 8px;border-radius:4px;border:1px dashed #ccc" title="実際のエンドユーザー">👤 ${_escDiff(inq.end_user)}</span>` : '';
+    const groupBadge = `<span style="background:${grp.border};color:#fff;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;white-space:nowrap" title="案件区分">🏢 ${grp.label} 案件</span>`;
+    // 案件チェーン (エンドユーザー → 元請け → 自社 → 再委託先)
+    const handoffChain = _renderHandoffChain_(inq);
 
     return `<div class="inq-card ${inq.priority}" style="${cardStyle}" onclick="openInquiryDetail('${inq.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           ${groupBadge}
-          ${endUserBadge}
           ${sourceBadge}
           ${kindBadge}
           ${aiExtractedBadge}
@@ -20208,6 +20279,7 @@ function renderInquiryList() {
         <span style="font-size:10px;color:#aaa;white-space:nowrap">${elapsed}</span>
       </div>
       <div style="font-weight:700;font-size:13px;margin-bottom:2px">${inq.subject||'（件名なし）'}</div>
+      ${handoffChain}
       ${showPreview}
       ${inq.extracted_data && !inq.linked_quote_id ? `<div style="margin-top:6px;padding:6px 8px;background:#faf5ff;border:1px dashed #c4b5fd;border-radius:6px;font-size:11px;color:#5b21b6">🤖 抽出: ${_escDiff((inq.extracted_data.cust||'?') + ' / ' + (inq.extracted_data.item||'?') + ' ' + (inq.extracted_data.qty||'')+(inq.extracted_data.unit||''))}</div>` : ''}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;flex-wrap:wrap;gap:6px">
@@ -20336,21 +20408,37 @@ function addInquiryManual() {
         </div>
         <div class="f"><label>件名 *</label><input id="inq-new-subject" placeholder="お問い合わせ件名"></div>
         <div class="f"><label>内容 *</label><textarea id="inq-new-body" rows="5" placeholder="お問い合わせ内容"></textarea></div>
-        <!-- 🆕 グループ会社案件区分 -->
+        <!-- 🆕 案件チェーン (エンドユーザー → 元請け → 自社 → 再委託先) -->
         <div style="background:#f9fafb;padding:10px 12px;border-radius:6px;border:1px solid #e5e7eb">
-          <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px">🏢 グループ会社案件区分 (社間案件の場合のみ)</div>
+          <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px">🏢 案件チェーン (社間案件の場合に入力)</div>
           <div class="g2">
-            <div class="f"><label style="font-size:11px">案件区分 (発注元グループ会社)</label>
+            <div class="f"><label style="font-size:11px">👤 エンドユーザー (実際の依頼主)</label><input id="inq-new-enduser" placeholder="例: 伊勢原市役所"></div>
+            <div class="f"><label style="font-size:11px">🏢 元請け (発注元グループ会社)</label>
               <select id="inq-new-group">
-                <option value="">トキワ印刷案件 (デフォルト)</option>
-                <option value="アート・エス">アート・エス案件</option>
-                <option value="村山">村山印刷案件</option>
-                <option value="北上">北上プリント案件</option>
-                <option value="津島">津島プリント案件</option>
-                <option value="中尾">中尾印刷案件</option>
+                <option value="">なし (トキワ印刷案件)</option>
+                <option value="アート・エス">アート・エス</option>
+                <option value="村山">村山印刷</option>
+                <option value="北上">北上プリント</option>
+                <option value="津島">津島プリント</option>
+                <option value="中尾">中尾印刷</option>
+                <option value="トキワ">トキワ印刷</option>
               </select>
             </div>
-            <div class="f"><label style="font-size:11px">エンドユーザー (実際の依頼主)</label><input id="inq-new-enduser" placeholder="例: 伊勢原市役所 (社間案件のみ)"></div>
+          </div>
+          <div class="f" style="margin-top:6px"><label style="font-size:11px">➡️ 再委託先 (グループ会社へ再委託の場合)</label>
+            <select id="inq-new-subto">
+              <option value="">なし (自社で対応)</option>
+              <option value="トキワ">トキワ印刷</option>
+              <option value="アート・エス">アート・エス</option>
+              <option value="村山">村山印刷</option>
+              <option value="北上">北上プリント</option>
+              <option value="津島">津島プリント</option>
+              <option value="中尾">中尾印刷</option>
+            </select>
+          </div>
+          <div style="font-size:10px;color:#888;margin-top:6px;line-height:1.4">
+            💡 例: 伊勢原市役所 → アート・エス → トキワ印刷 (自社) → 北上プリント の場合、<br>
+            　エンドユーザー: 伊勢原市役所 / 元請け: アート・エス / 再委託先: 北上プリント
           </div>
         </div>
         <div class="f"><label>担当者</label><input id="inq-new-assign" placeholder="担当者名"></div>
@@ -20383,6 +20471,7 @@ function saveNewInquiry() {
     assignee: document.getElementById('inq-new-assign')?.value?.trim() || '',
     groupCompany: document.getElementById('inq-new-group')?.value?.trim() || '', // 🆕 案件区分 (空ならトキワ扱い)
     end_user: document.getElementById('inq-new-enduser')?.value?.trim() || '',   // 🆕 エンドユーザー
+    subcontracted_to: document.getElementById('inq-new-subto')?.value?.trim() || '', // 🆕 再委託先
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     timeline: [{
