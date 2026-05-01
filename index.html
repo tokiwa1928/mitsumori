@@ -523,21 +523,12 @@ window.addEventListener('load', function(){
     <button class="tb-btn" data-page="inquiry" onclick="swPage('inquiry',this)" draggable="true" title="📨 連絡管理 — 社外 (Gmail / LINE WORKS / Web フォーム / 顧客問い合わせ) と 社内 (社内連絡 / 音声メモ) の統合受信トレイ。AI 返信下書き・自動見積抽出">📨 連絡管理</button>
     <button class="tb-btn" data-page="est" onclick="swPage('est',this)" draggable="true" title="📝 見積作成 — 新規見積をタブ式で複数並行作成。用紙・印刷・製版・データ・製本の原価を積算して見積書を作成">📝 見積作成</button>
     <button class="tb-btn" data-page="estimates" onclick="swPage('estimates',this)" draggable="true" title="📋 見積依頼 — お客様からの見積依頼を簡易記録。AI 自動抽出・チャットボット作成・手動入力。詳細計算は『見積作成』タブで行う">📋 見積依頼</button>
+    <button class="tb-btn" data-page="history" onclick="swPage('history',this)" draggable="true" title="📜 過去の見積書 — 見積作成タブで作って保存した正式見積書の一覧。明細・原価付きで完全コピー可能 (流用)">📜 過去の見積書</button>
     <button class="tb-btn" data-page="project" onclick="swPage('project',this)" draggable="true" title="📁 案件管理 — 受注確定後の案件管理。ステータス・納期・担当者・作業ステップ・タイムライン・校正・配送の一元管理">📁 案件管理</button>
     <button class="tb-btn" data-page="proofing" onclick="swPage('proofing',this)" draggable="true" title="📸 校正BOX — PDF 校正管理。新旧並列表示・自動差分検出・OCR テキスト抽出。Google Drive と連携">📸 校正BOX</button>
     <button class="tb-btn" data-page="schedule" onclick="swPage('schedule',this)" draggable="true" title="🏭 工程管理 — 制作・印刷・加工・製本の工程進捗管理。各工程の担当者・期日・ステータス追跡">🏭 工程管理</button>
     <button class="tb-btn" data-page="calendar" onclick="swPage('calendar',this)" draggable="true" title="📅 納品 — 案件の納期カレンダー。月次ビューで納品予定を一覧">📅 納品</button>
-    <button class="tb-btn" data-page="history" onclick="swPage('history',this)" draggable="true" title="📜 過去の見積書 — 見積作成タブで作って保存した正式見積書の一覧。明細・原価付きで完全コピー可能 (流用)">📜 過去の見積書</button>
     <button class="tb-btn" data-page="delivery" onclick="swPage('delivery',this)" draggable="true" title="🚚 配送 — 配送予定とドライバー管理。タスクタイプ別 (納品/校正出し/サンプル/集荷)。Google Calendar 連携">🚚 配送</button>
-    <!-- 💴 売上 ドロップダウン -->
-    <div class="tb-dropdown-wrap">
-      <button class="tb-btn" id="tb-sales-btn" onclick="toggleSalesMenu(event)" draggable="true" title="💴 売上 — 請求書 / 領収書 / 入金管理">💴 売上 ▼</button>
-      <div class="tb-dropdown" id="tb-sales-menu" style="display:none">
-        <a class="tb-dropdown-item" onclick="_navAdmin_('invoices')" title="請求書 (都度/締め両対応)">📄 請求書</a>
-        <a class="tb-dropdown-item" onclick="_navAdmin_('receipts')" title="領収書一覧・発行履歴">🧾 領収書</a>
-        <a class="tb-dropdown-item" onclick="_navAdmin_('payments')" title="入金消込・支払方法管理">💰 入金管理</a>
-      </div>
-    </div>
     <!-- 🔧 仕入 ドロップダウン -->
     <div class="tb-dropdown-wrap">
       <button class="tb-btn" id="tb-purchase-btn" onclick="togglePurchaseMenu(event)" draggable="true" title="🔧 仕入 — 仕入発注 / 外注発注 / 支払管理">🔧 仕入 ▼</button>
@@ -545,6 +536,15 @@ window.addEventListener('load', function(){
         <a class="tb-dropdown-item" onclick="_navAdmin_('purchases')" title="仕入先への発注">📦 仕入発注</a>
         <a class="tb-dropdown-item" onclick="_navAdmin_('outsource')" title="外注先への発注">🤝 外注発注</a>
         <a class="tb-dropdown-item" onclick="_navAdmin_('payouts')" title="支払予定・支払履歴">💸 支払管理</a>
+      </div>
+    </div>
+    <!-- 💴 売上 ドロップダウン -->
+    <div class="tb-dropdown-wrap">
+      <button class="tb-btn" id="tb-sales-btn" onclick="toggleSalesMenu(event)" draggable="true" title="💴 売上 — 請求書 / 領収書 / 入金管理">💴 売上 ▼</button>
+      <div class="tb-dropdown" id="tb-sales-menu" style="display:none">
+        <a class="tb-dropdown-item" onclick="_navAdmin_('invoices')" title="請求書 (都度/締め両対応)">📄 請求書</a>
+        <a class="tb-dropdown-item" onclick="_navAdmin_('receipts')" title="領収書一覧・発行履歴">🧾 領収書</a>
+        <a class="tb-dropdown-item" onclick="_navAdmin_('payments')" title="入金消込・支払方法管理">💰 入金管理</a>
       </div>
     </div>
     <button class="tb-btn" data-page="finance" onclick="swPage('finance',this)" draggable="true" title="📊 決算・文書 — 各社の決算書(P/L・B/S)分析、グループ7社比較、金融機関提出用文書の保管庫">📊 決算・文書</button>
@@ -588,6 +588,10 @@ window.addEventListener('load', function(){
 </div>
 <div class="est-tabbar no-print" id="est-tabbar">
   <button class="tab-add-btn" onclick="addTab()">＋ 新規見積</button>
+  <div style="margin-left:auto;display:flex;gap:6px;padding:5px 10px;align-items:center">
+    <button class="tab-add-btn" style="border-style:solid;border-color:#7c3aed;background:#ede9fe;color:#5b21b6;font-weight:700" onclick="showHistoryPanel()" title="過去の見積書から流用">📜 過去実績から探す</button>
+    <button class="tab-add-btn" style="border-style:solid;border-color:#1e40af;background:#dbeafe;color:#1e3a8a;font-weight:700" onclick="_openHistoryTab_()" title="過去の見積書 タブを開く">📂 過去の見積書一覧へ</button>
+  </div>
 </div>
 <div class="main">
 <div class="page act" id="page-est"><div id="tab-panels"></div></div>
@@ -3841,7 +3845,7 @@ function cloudSync(){
 // ═══════════════════ タブ並び替え (Drag & Drop) ════════════════
 
 const TAB_ORDER_KEY = 'tokiwa_hub_tab_order';
-const TAB_ORDER_VERSION = 'v8-2026-04-30-sales-purchase-dropdowns'; // デフォルト並び順バージョン (変更時は localStorage の旧データを破棄)
+const TAB_ORDER_VERSION = 'v9-2026-05-01-history-after-estimates'; // デフォルト並び順バージョン (変更時は localStorage の旧データを破棄)
 const TAB_ORDER_VERSION_KEY = 'tokiwa_hub_tab_order_version';
 
 // バージョンが古ければ localStorage の保存順序を破棄して HTML 順序を採用
@@ -12409,6 +12413,142 @@ function repeatProject(src, idx){
 }
 
 // ─────────────────────────────────────────────────────
+// 📜 過去実績パネル (見積作成タブから使う)
+// ─────────────────────────────────────────────────────
+function _openHistoryTab_(){
+  var btn = document.querySelector('.tb-btn[data-page="history"]');
+  if(btn && typeof swPage === 'function') swPage('history', btn);
+}
+
+function showHistoryPanel(){
+  if(!Array.isArray(DB.history) || !DB.history.length){
+    alert('過去の見積書がまだありません。\n見積作成タブで「実績保存」してから利用できます。');
+    return;
+  }
+
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:840px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#7c3aed;color:#fff;display:flex;justify-content:space-between;align-items:center">' +
+        '<div><strong style="font-size:14px">📜 過去実績から見積を流用</strong>' +
+        '<div style="font-size:11px;opacity:0.85;margin-top:2px">過去の見積書を選んで現在のタブに値を読み込みます</div></div>' +
+        '<button onclick="this.closest(\'.proof-modal\').remove()" style="font-size:24px;border:none;background:none;color:#fff;cursor:pointer;padding:0 8px">×</button>' +
+      '</div>' +
+      '<div style="padding:14px 20px;border-bottom:1px solid #e5e7eb;background:#f9fafb;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+        '<input id="hist-panel-q" placeholder="得意先・品名・仕様で検索…" oninput="_renderHistoryPanelList_()" style="flex:1;min-width:240px;font-size:13px;padding:8px 10px;border:1px solid #ccc;border-radius:6px">' +
+        '<select id="hist-panel-cust" onchange="_renderHistoryPanelList_()" style="font-size:12px;padding:6px 8px;border:1px solid #ccc;border-radius:6px"><option value="">全得意先</option></select>' +
+      '</div>' +
+      '<div id="hist-panel-list" style="overflow-y:auto;flex:1;padding:8px"></div>' +
+    '</div>';
+  document.body.appendChild(modal);
+
+  // 得意先リスト
+  var custs = Array.from(new Set((DB.history||[]).map(function(h){ return h.cust; }).filter(Boolean))).sort();
+  var sel = document.getElementById('hist-panel-cust');
+  if(sel){
+    custs.forEach(function(c){
+      var opt = document.createElement('option');
+      opt.value = c; opt.textContent = c;
+      sel.appendChild(opt);
+    });
+  }
+
+  _renderHistoryPanelList_();
+  setTimeout(function(){ document.getElementById('hist-panel-q')?.focus(); }, 100);
+}
+
+function _renderHistoryPanelList_(){
+  var list = document.getElementById('hist-panel-list');
+  if(!list) return;
+  var q = (document.getElementById('hist-panel-q')?.value || '').toLowerCase().trim();
+  var custF = document.getElementById('hist-panel-cust')?.value || '';
+  var rows = (DB.history || []).slice().reverse();
+  if(custF) rows = rows.filter(function(r){ return r.cust === custF; });
+  if(q) rows = rows.filter(function(r){ var hay = ((r.cust||'')+' '+(r.item||'')+' '+(r.spec||'')).toLowerCase(); return hay.indexOf(q) >= 0; });
+  rows = rows.slice(0, 60);
+
+  if(!rows.length){
+    list.innerHTML = '<div style="text-align:center;color:#888;padding:40px">該当する過去見積がありません</div>';
+    return;
+  }
+
+  list.innerHTML = rows.map(function(r, idx){
+    var realIdx = (DB.history || []).indexOf(r);
+    var dateStr = (r.date || '').slice(0, 10);
+    var totalStr = r.exTax ? '¥' + r.exTax.toLocaleString() : '-';
+    var unitpStr = r.unitp ? '@' + r.unitp.toFixed(1) : '';
+    var crStr = r.cr ? (r.cr * 100).toFixed(0) + '%' : '-';
+    var hasFullSnap = !!(r._formSnap && r._tabState);
+    return '<div style="padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:10px;transition:all .15s" onmouseover="this.style.background=\'#f3e8ff\';this.style.borderColor=\'#c4b5fd\'" onmouseout="this.style.background=\'#fff\';this.style.borderColor=\'#e5e7eb\'">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-weight:700;font-size:13px;margin-bottom:2px">' + _escDiff(r.cust || '') + ' <span style="color:#888;font-weight:400;font-size:12px">/ ' + _escDiff(r.item || '') + '</span>' +
+          (hasFullSnap ? ' <span style="background:#16a34a;color:#fff;font-size:9px;padding:1px 6px;border-radius:3px;font-weight:700">完全復元可</span>' : '') +
+        '</div>' +
+        '<div style="font-size:11px;color:#888">' + dateStr + ' · ' + (r.qty||0) + (r.unit||'部') + ' · ' + totalStr + ' ' + unitpStr + ' · 原価率 ' + crStr + '</div>' +
+        (r.spec ? '<div style="font-size:11px;color:#666;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:600px">' + _escDiff(r.spec) + '</div>' : '') +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">' +
+        (hasFullSnap ? '<button class="btn" style="background:#16a34a;color:#fff;border-color:#16a34a;font-size:11px;padding:5px 10px;white-space:nowrap;font-weight:700" onclick="_useHistFullToCurrentTab_(' + realIdx + ')">📋 完全復元 (現タブ)</button>' : '') +
+        '<button class="btn" style="background:#7c3aed;color:#fff;border-color:#7c3aed;font-size:11px;padding:5px 10px;white-space:nowrap" onclick="_useHistAsNewTab_(' + realIdx + ')">📝 新タブで開く</button>' +
+        '<button class="btn" style="font-size:11px;padding:5px 10px;white-space:nowrap" onclick="_copyHistToCurrentTab_(' + realIdx + ')">✏️ 値だけコピー</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// 完全復元: 現在のタブに既存履歴のフォーム/状態を復元
+function _useHistFullToCurrentTab_(idx){
+  var r = DB.history[idx];
+  if(!r){ alert('対象が見つかりません'); return; }
+  var activeTabId = document.querySelector('.tab-btn.act')?.dataset?.tab;
+  if(!activeTabId){ alert('見積タブを先に開いてください'); return; }
+  if(!confirm('現在のタブの内容を上書きして、過去見積を完全復元します。よろしいですか?')) return;
+  if(typeof applyHistData === 'function'){
+    try {
+      applyHistData(activeTabId, r, true);
+      document.querySelector('.proof-modal')?.remove();
+      alert('✅ 過去見積を完全復元しました');
+    } catch(e){ alert('復元エラー: ' + e.message); }
+  }
+}
+
+// 新タブで開く
+function _useHistAsNewTab_(idx){
+  var r = DB.history[idx];
+  if(!r){ alert('対象が見つかりません'); return; }
+  if(typeof addTab === 'function') addTab();
+  setTimeout(function(){
+    var activeTabId = document.querySelector('.tab-btn.act')?.dataset?.tab;
+    if(!activeTabId) return;
+    if(typeof applyHistData === 'function'){
+      try {
+        applyHistData(activeTabId, r, !!(r._formSnap && r._tabState));
+        document.querySelector('.proof-modal')?.remove();
+      } catch(e){
+        // 完全復元失敗 → 値だけコピー
+        applyHistData(activeTabId, r);
+        document.querySelector('.proof-modal')?.remove();
+      }
+    }
+  }, 200);
+}
+
+// 値だけ現タブにコピー (得意先・品名・仕様・数量・単価のみ)
+function _copyHistToCurrentTab_(idx){
+  var r = DB.history[idx];
+  if(!r) return;
+  var activeTabId = document.querySelector('.tab-btn.act')?.dataset?.tab;
+  if(!activeTabId){ alert('見積タブを先に開いてください'); return; }
+  if(typeof applyHistData === 'function'){
+    try { applyHistData(activeTabId, r); } catch(e){}
+  }
+  document.querySelector('.proof-modal')?.remove();
+  alert('✅ 値をコピーしました (詳細は手動で調整してください)');
+}
+
+// ─────────────────────────────────────────────────────
 // 📋 案件 → 見積詳細を見る (スナップショット復元 or 履歴検索)
 // ─────────────────────────────────────────────────────
 function showProjectEstimateView(projectId){
@@ -17478,8 +17618,13 @@ function renderHistory(){
 }
 function loadHistNew(idx){
   const r=DB.history[idx];if(!r)return;
-  const newId=addTab();
-  setTimeout(()=>{applyHist(newId,idx);},50);
+  // 見積作成タブに切り替え
+  const estBtn = document.querySelector('.tb-btn[data-page="est"]');
+  if(estBtn) swPage('est', estBtn);
+  setTimeout(()=>{
+    const newId=addTab();
+    setTimeout(()=>{applyHist(newId,idx);},50);
+  }, 100);
 }
 function loadHistFull(idx){
   const r=DB.history[idx];if(!r||!r._formSnap)return;
