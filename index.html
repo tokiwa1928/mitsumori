@@ -98,7 +98,9 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;font-size:13px;
 .tb-right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-shrink:0;padding-left:8px;align-self:center}
 .tb-icon-btn{padding:4px 10px;border:1px solid rgba(255,255,255,.3);border-radius:5px;background:transparent;color:rgba(255,255,255,.7);font-size:12px;cursor:pointer;font-family:inherit}
 .tb-icon-btn:hover{color:#fff;border-color:#fff}
-.main{flex:1;overflow:hidden;display:flex}
+.main{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative}
+/* page を .main の子であろうとなかろうと、.act の時は.main 内を埋める */
+.page.act{display:block;flex:1;overflow:auto}
 .page{display:none;flex:1;overflow:auto;padding:1rem 1.25rem}
 .page.act{display:block}
 .est-tabbar{display:flex;align-items:flex-end;gap:3px;padding:0 1.25rem;background:#f4f3f0;border-bottom:1px solid #ddd;overflow-x:auto;flex-shrink:0}
@@ -3129,6 +3131,11 @@ function saveDB(){
 // ═══════════════════════════════════════════════════════════════
 
 let cloudSyncStatus = 'idle'; // idle, syncing, error
+let lastCloudError = null;
+function showCloudErrorDetail(){
+  var msg = lastCloudError || '直近のエラー記録なし';
+  alert('☁️ クラウド同期エラー詳細\n\n' + msg + '\n\n[再試行] するには 「同期」 ボタン (右上) を押してください。');
+}
 
 async function callCloudAPI(action, params = {}, postData = null) {
   if (!CLOUD_CONFIG.CLOUD_MODE || !CLOUD_CONFIG.GAS_URL || CLOUD_CONFIG.GAS_URL.includes('YOUR_DEPLOYMENT_ID')) {
@@ -3166,6 +3173,7 @@ async function callCloudAPI(action, params = {}, postData = null) {
   } catch (error) {
     console.error('Cloud API error:', error);
     cloudSyncStatus = 'error';
+    lastCloudError = (error && error.message ? error.message : String(error)) + '\n\nアクション: ' + action;
     updateSyncIndicator();
     return { error: error.message };
   }
@@ -3180,7 +3188,7 @@ function updateSyncIndicator() {
   } else if (cloudSyncStatus === 'syncing') {
     indicator.innerHTML = '<span style="color:#f59e0b">🔄 同期中...</span>';
   } else if (cloudSyncStatus === 'error') {
-    indicator.innerHTML = '<span style="color:#ef4444">⚠️ 同期エラー</span>';
+    indicator.innerHTML = '<span style="color:#ef4444;cursor:pointer;text-decoration:underline" onclick="showCloudErrorDetail()" title="クリックでエラー詳細">⚠️ 同期エラー</span>';
   } else {
     indicator.innerHTML = '<span style="color:#22c55e">☁️ クラウド</span>';
   }
@@ -3997,6 +4005,22 @@ function _migrateTabTitlesToDataTip_(){
   });
 }
 
+// 🆕 全 .page 要素を .main 内に動的移動 (構造的に外にあるページを救う)
+function _consolidatePagesIntoMain_(){
+  var main = document.querySelector('#main-layout .main');
+  if(!main) return;
+  var moved = 0;
+  document.querySelectorAll('.page').forEach(function(p){
+    // 既に .main の子なら何もしない
+    if(p.parentElement === main) return;
+    // login-screen / company-select-screen は移動しない
+    if(p.id === 'login-screen' || p.id === 'company-select-screen') return;
+    main.appendChild(p);
+    moved++;
+  });
+  if(moved > 0) console.log('🔧 ' + moved + ' 個のページを .main 内に統合しました');
+}
+
 // 管理メニュー トグル
 function toggleAdminMenu(e){ _toggleDropdownMenu_('tb-admin-menu', e); }
 function toggleSalesMenu(e){ _toggleDropdownMenu_('tb-sales-menu', e); }
@@ -4040,12 +4064,14 @@ function _navAdmin_(page){
 }
 if(document.readyState === 'loading'){
   document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(_consolidatePagesIntoMain_, 50);
     setTimeout(initTabReorder, 100);
     setTimeout(_initTopbarArrows_, 150);
     setTimeout(_migrateTabTitlesToDataTip_, 160);
     if(typeof _registerServiceWorker_ === 'function') setTimeout(_registerServiceWorker_, 200);
   });
 } else {
+  setTimeout(_consolidatePagesIntoMain_, 50);
   setTimeout(initTabReorder, 100);
   setTimeout(_initTopbarArrows_, 150);
   setTimeout(_migrateTabTitlesToDataTip_, 160);
