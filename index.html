@@ -4052,15 +4052,34 @@ function _toggleDropdownMenu_(menuId, e){
   }
 }
 function _navAdmin_(page){
-  var menu = document.getElementById('tb-admin-menu');
-  if(menu) menu.style.display = 'none';
-  // 該当ページに切替 (data-page 属性を持つ仮想ボタンを生成して swPage を呼ぶ)
+  // すべてのドロップダウンを閉じる
+  ['tb-admin-menu','tb-sales-menu','tb-purchase-menu'].forEach(function(id){
+    var m = document.getElementById(id); if(m) m.style.display = 'none';
+  });
+  // ページ統合を再実行 (新規追加されたページがあれば .main に移動)
+  if(typeof _consolidatePagesIntoMain_ === 'function'){
+    try { _consolidatePagesIntoMain_(); } catch(e){}
+  }
+  // 該当ページに切替
   var virtualBtn = document.createElement('button');
   virtualBtn.dataset.page = page;
   swPage(page, virtualBtn);
-  // 管理ボタンをアクティブ表示
+  // 該当するドロップダウンボタンをアクティブ表示
   document.querySelectorAll('.tb-btn').forEach(function(b){ b.classList.remove('act'); });
-  document.getElementById('tb-admin-btn')?.classList.add('act');
+  var parentBtn = null;
+  if(['invoices','receipts','payments'].indexOf(page) >= 0) parentBtn = 'tb-sales-btn';
+  else if(['purchases','outsource','payouts'].indexOf(page) >= 0) parentBtn = 'tb-purchase-btn';
+  else if(['companies','master','settings'].indexOf(page) >= 0) parentBtn = 'tb-admin-btn';
+  if(parentBtn) document.getElementById(parentBtn)?.classList.add('act');
+  // 念のため、page 要素が確実に表示されるよう .act を再付与
+  setTimeout(function(){
+    var pageEl = document.getElementById('page-' + page);
+    if(pageEl && !pageEl.classList.contains('act')){
+      console.warn('Re-applying act to page-' + page);
+      document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('act'); });
+      pageEl.classList.add('act');
+    }
+  }, 50);
 }
 if(document.readyState === 'loading'){
   document.addEventListener('DOMContentLoaded', () => {
