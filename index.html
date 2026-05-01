@@ -26,6 +26,47 @@ const CLOUD_CONFIG = {
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;font-size:13px;background:#f4f3f0;color:#1a1a1a}
 .layout{display:flex;height:100vh;flex-direction:column}
+/* 📱 モバイル最適化 */
+@media (max-width:768px){
+  .topbar{padding:4px 8px;min-height:44px}
+  .topbar-title{font-size:13px;margin:0 6px}
+  .tb-btn{padding:0 8px;height:30px;font-size:11px}
+  .tb-right{font-size:10px}
+  .tb-icon-btn{padding:4px 6px;font-size:11px}
+  #current-company{font-size:10px;padding:3px 6px}
+  #current-user{display:none}
+  #global-search{width:120px;font-size:11px}
+  .page{padding:.75rem .85rem}
+  .sec{padding:10px}
+  .st{font-size:13px}
+  .btn{padding:6px 10px;font-size:12px;min-height:36px}
+  .btn-p{min-height:38px}
+  table{font-size:11px}
+  th, td{padding:4px 6px}
+  .inq-card{padding:10px;border-radius:8px}
+  /* タブを横スクロール表示に変更 */
+  .tb-scroll{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tb-scroll::-webkit-scrollbar{height:3px}
+  /* チャットボットを大きく */
+  #chatbot-panel{width:calc(100vw - 20px);height:calc(100vh - 120px);bottom:80px;right:10px;left:10px;max-width:none}
+  /* モーダルを画面いっぱいに */
+  .proof-modal > div{max-width:calc(100vw - 20px) !important;max-height:calc(100vh - 20px) !important}
+  /* 業務フロー図を縦に */
+  #workflow-diagram > div{flex-direction:column;min-width:auto !important}
+  #workflow-diagram > div > div{flex:1;width:100%}
+  /* クイックアクション 2列に */
+  #page-realtime > div:nth-child(2) > div:nth-child(2){grid-template-columns:repeat(3,1fr) !important;gap:6px !important}
+  /* グリッド系を1列に */
+  .g2{grid-template-columns:1fr !important}
+}
+@media (max-width:480px){
+  /* 超小型: タブ名を絵文字のみに */
+  .tb-btn{padding:0 6px;font-size:0;height:32px;min-width:32px}
+  .tb-btn:first-letter{font-size:16px}
+  /* タッチターゲットを大きく */
+  .btn{min-height:42px;font-size:13px}
+  input,select,textarea{font-size:14px !important;min-height:36px}
+}
 .topbar{background:#1a1a1a;color:#fff;display:flex;align-items:center;padding:4px .75rem;min-height:50px;flex-shrink:0;gap:0;flex-wrap:nowrap}
 .topbar-title{font-size:14px;font-weight:700;margin-right:14px;margin-left:6px;white-space:nowrap;letter-spacing:.02em;flex-shrink:0;align-self:center}
 .tb-nav-btn{flex-shrink:0;width:32px;height:32px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:6px;cursor:pointer;font-size:14px;font-family:inherit;display:flex;align-items:center;justify-content:center;transition:all .15s;align-self:center;margin-right:4px}
@@ -951,7 +992,7 @@ window.addEventListener('load', function(){
       <input id="proj-q" placeholder="得意先・品名・案件番号で検索…" style="width:220px;font-size:12px;padding:4px 8px" oninput="renderProjects()">
       <select id="proj-status-f" style="font-size:12px;padding:4px 8px" onchange="renderProjects()">
         <option value="">すべてのステータス</option>
-        <option>制作中</option><option>校了待ち</option><option>印刷中</option><option>加工中</option><option>納品済</option><option>完了</option>
+        <option>制作中</option><option>校了待ち</option><option>印刷中</option><option>加工中</option><option>納品済</option><option>完了</option><option>保留</option><option>失注</option><option>キャンセル</option>
       </select>
       <select id="proj-company-f" style="font-size:12px;padding:4px 8px" onchange="renderProjects()">
         <option value="">すべての会社</option>
@@ -1151,6 +1192,25 @@ window.addEventListener('load', function(){
       <strong>見積書・プレビューへの反映イメージ：</strong>
       <div id="conf-preview" style="margin-top:6px;font-size:11px;line-height:1.8;color:#888"></div>
     </div>
+  </div>
+
+  <!-- 🎓 ヘルプ・チュートリアル -->
+  <div class="sec" style="max-width:560px;margin-top:1rem;background:#f3e8ff;border:1px solid #c4b5fd">
+    <div class="st" style="color:#5b21b6">🎓 ヘルプ・チュートリアル</div>
+    <div style="font-size:12px;color:#5b21b6;line-height:1.6;margin-bottom:10px">
+      初回ログイン時に表示される使い方ガイドを再表示できます。
+    </div>
+    <button class="btn btn-p" style="background:#7c3aed;border-color:#7c3aed" onclick="showOnboarding(true)">🎓 チュートリアルを見る</button>
+  </div>
+
+  <!-- 📋 監査ログ -->
+  <div class="sec" style="max-width:560px;margin-top:1rem;background:#f3f4f6;border:1px solid #d1d5db">
+    <div class="st" style="color:#1a1a1a">📋 操作履歴 (監査ログ)</div>
+    <div style="font-size:12px;color:#444;line-height:1.6;margin-bottom:10px">
+      誰がいつ何を作成・変更・削除・送信したかを記録します。<br>
+      多人数で使う場合の追跡用です。最新1000件まで保持。
+    </div>
+    <button class="btn btn-p" style="background:#1a1a1a;border-color:#1a1a1a" onclick="showAuditLogModal()">📋 操作履歴を見る</button>
   </div>
 
   <!-- 💾 バックアップ・復元 -->
@@ -2947,6 +3007,11 @@ async function doLoginByEmail(email, password){
     setTimeout(function(){ requestNotificationPermission(false); }, 1500);
   }
 
+  // 初回ログイン時のオンボーディング表示
+  if(typeof showOnboarding === 'function'){
+    setTimeout(function(){ showOnboarding(false); }, 800);
+  }
+
   // 管理者の場合は会社選択画面へ
   if(role === 'admin'){
     return {success:true, isAdmin:true, company};
@@ -4024,6 +4089,40 @@ function _migrateTabTitlesToDataTip_(){
   document.querySelectorAll('.tb-btn[title]').forEach(function(btn){
     if(!btn.dataset.tip) btn.dataset.tip = btn.getAttribute('title');
     btn.removeAttribute('title');
+  });
+}
+
+// 🆕 ロール別タブ絞り込み (各役割で表示するタブを限定)
+var ROLE_TABS = {
+  // 管理者は全部
+  admin:    null, // null = 全部表示
+  // 経営者: 売上・決算重視
+  exec:     ['realtime','inquiry','project','finance','wiki','sales-menu','admin-menu'],
+  // 営業: 連絡・見積・案件
+  sales:    ['realtime','inquiry','est','estimates','project','history','wiki'],
+  // 制作: 案件・校正・工程
+  prod:     ['realtime','project','proofing','schedule','est','wiki'],
+  // 配送: 配送・納品のみ
+  delivery: ['realtime','delivery','calendar','project'],
+  // 経理: 売上・仕入・帳票
+  accounting:['realtime','project','sales-menu','purchase-menu','finance','wiki']
+};
+
+function applyRoleTabFilter(){
+  var role = (typeof currentAuth !== 'undefined' && currentAuth?.role) || 'admin';
+  var allowed = ROLE_TABS[role];
+  if(!allowed) return; // 制限なし
+  document.querySelectorAll('.tb-btn[data-page], .tb-dropdown-wrap').forEach(function(el){
+    var btn = el.classList.contains('tb-btn') ? el : el.querySelector('.tb-btn');
+    if(!btn) return;
+    var page = btn.dataset.page || btn.id.replace('tb-','').replace('-btn','');
+    // 売上/仕入/管理ドロップダウン用の特殊判定
+    if(btn.id === 'tb-sales-btn' && allowed.indexOf('sales-menu') < 0){ el.style.display='none'; return; }
+    if(btn.id === 'tb-purchase-btn' && allowed.indexOf('purchase-menu') < 0){ el.style.display='none'; return; }
+    if(btn.id === 'tb-admin-btn' && allowed.indexOf('admin-menu') < 0){ el.style.display='none'; return; }
+    if(page && allowed.indexOf(page) < 0){
+      el.style.display = 'none';
+    }
   });
 }
 
@@ -10758,7 +10857,7 @@ function renderEstimates(){
     html += '<tr style="border-bottom:1px solid #f3f4f6;' + estRowStyle + '">' +
       '<td style="padding:8px 10px;font-family:monospace;font-size:12px;color:#666">' + (e.id||'') + '</td>' +
       '<td style="padding:8px 10px;font-size:12px;color:#666">' + dateStr + '</td>' +
-      '<td style="padding:8px 10px;font-weight:600">' + groupTagEst + _escDiff(e.cust||'') + estChain + '</td>' +
+      '<td style="padding:8px 10px;font-weight:600"><span style="cursor:pointer;text-decoration:underline" onclick="event.stopPropagation();showCustomerDetail(\'' + (e.cust||'').replace(/\'/g,"\\\'") + '\')" title="顧客詳細を見る">' + groupTagEst + _escDiff(e.cust||'') + '</span>' + estChain + '</td>' +
       '<td style="padding:8px 10px">' + _escDiff(e.item||'') +
         (e.spec ? '<div style="font-size:11px;color:#888;margin-top:2px">' + _escDiff(e.spec) + '</div>' : '') +
       '</td>' +
@@ -11510,6 +11609,221 @@ function loadTestData(){
     '🤝 外注発注: ' + added.outsourceOrders + '件\n' +
     '💸 支払予定: ' + added.payouts + '件\n\n' +
     '🏠 ホームの業務フロー図、各タブで確認してください。');
+}
+
+// ─────────────────────────────────────────────────────
+// 👥 顧客詳細画面 (取引履歴・売上推移)
+// ─────────────────────────────────────────────────────
+function showCustomerDetail(custName){
+  if(!custName) return;
+  // 関連データを集計
+  var projects = (DB.projects || []).filter(function(p){ return p.cust === custName; });
+  var estimates = (DB.estimates || []).filter(function(e){ return e.cust === custName; });
+  var inquiries = (DB.inquiries || []).filter(function(i){ return i.from_company === custName || i.cust === custName || i.custName === custName; });
+  var invoices = (DB.invoices || []).filter(function(v){ return v.cust === custName; });
+  var payments = (DB.payments || []).filter(function(p){ return p.cust === custName; });
+  var history = (DB.history || []).filter(function(h){ return h.cust === custName; });
+
+  var totalSales = projects.reduce(function(s,p){return s+(p.exTax||0);}, 0);
+  var totalInvoiced = invoices.reduce(function(s,v){return s+(v.total||0);}, 0);
+  var totalPaid = payments.reduce(function(s,p){return s+(p.amount||0);}, 0);
+  var unpaid = totalInvoiced - totalPaid;
+
+  // 月別推移 (12ヶ月)
+  var months = [];
+  var now = new Date();
+  for(var i = 11; i >= 0; i--){
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'));
+  }
+  var monthlyData = months.map(function(m){
+    var v = projects.filter(function(p){return (p.orderDate||'').startsWith(m);}).reduce(function(s,p){return s+(p.exTax||0);},0);
+    return { month: m, sales: v };
+  });
+  var maxMonthly = Math.max.apply(null, monthlyData.map(function(d){return d.sales;}).concat([1]));
+
+  // 顧客マスタから情報を取得
+  var custInfo = (DB.master?.cust || []).find(function(c){
+    return (typeof c === 'string' ? c : c.org) === custName;
+  });
+  var custObj = typeof custInfo === 'string' ? { org: custInfo } : (custInfo || {});
+
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:900px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#0891b2;color:#fff;display:flex;justify-content:space-between;align-items:center">' +
+        '<div><strong style="font-size:16px">👥 ' + _escDiff(custName) + '</strong>' +
+        '<div style="font-size:11px;opacity:.85;margin-top:2px">取引履歴・売上推移</div></div>' +
+        '<button onclick="this.closest(\'.proof-modal\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button>' +
+      '</div>' +
+      '<div style="overflow-y:auto;flex:1;padding:18px 20px">' +
+        // KPI
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:14px">' +
+          '<div style="background:#dbeafe;padding:10px;border-radius:6px"><div style="font-size:10px;color:#1e3a8a">案件数</div><div style="font-size:18px;font-weight:700;font-family:monospace">' + projects.length + ' 件</div></div>' +
+          '<div style="background:#dcfce7;padding:10px;border-radius:6px"><div style="font-size:10px;color:#14532d">累計売上</div><div style="font-size:18px;font-weight:700;font-family:monospace">¥' + totalSales.toLocaleString() + '</div></div>' +
+          '<div style="background:#fef3c7;padding:10px;border-radius:6px"><div style="font-size:10px;color:#78350f">請求済</div><div style="font-size:18px;font-weight:700;font-family:monospace">¥' + totalInvoiced.toLocaleString() + '</div></div>' +
+          '<div style="background:' + (unpaid > 0 ? '#fee2e2' : '#dcfce7') + ';padding:10px;border-radius:6px"><div style="font-size:10px;color:#7f1d1d">未入金</div><div style="font-size:18px;font-weight:700;font-family:monospace">¥' + unpaid.toLocaleString() + '</div></div>' +
+        '</div>' +
+        // 月別売上推移 (簡易棒グラフ)
+        '<div style="margin-bottom:14px"><div style="font-size:13px;font-weight:700;margin-bottom:6px">📈 月別売上推移 (直近12ヶ月)</div>' +
+        '<div style="display:flex;align-items:flex-end;gap:2px;height:80px;background:#f9fafb;padding:8px;border-radius:6px">' +
+        monthlyData.map(function(d){
+          var h = maxMonthly > 0 ? (d.sales / maxMonthly * 100) : 0;
+          return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end">' +
+            (d.sales > 0 ? '<div style="font-size:8px;color:#666;margin-bottom:2px">¥' + Math.round(d.sales/1000) + 'k</div>' : '') +
+            '<div style="width:100%;background:' + (d.sales > 0 ? '#0891b2' : '#e5e7eb') + ';height:' + h + '%;border-radius:2px 2px 0 0;min-height:1px"></div>' +
+            '<div style="font-size:8px;color:#888;margin-top:2px">' + d.month.slice(5) + '</div>' +
+          '</div>';
+        }).join('') +
+        '</div></div>' +
+        // 顧客情報
+        '<div style="margin-bottom:14px;padding:10px;background:#f9fafb;border-radius:6px;font-size:12px">' +
+          '<div style="font-weight:700;margin-bottom:4px">📞 連絡先</div>' +
+          '担当: ' + _escDiff(custObj.user || '-') + ' / メール: ' + _escDiff(custObj.email || '-') + ' / TEL: ' + _escDiff(custObj.tel || '-') +
+          (custObj.note ? '<div style="margin-top:4px;color:#666">📝 ' + _escDiff(custObj.note) + '</div>' : '') +
+        '</div>' +
+        // 直近の案件
+        '<div style="margin-bottom:14px"><div style="font-size:13px;font-weight:700;margin-bottom:6px">📁 直近の案件 (' + projects.length + '件中、最新10件)</div>' +
+        (projects.length === 0 ? '<div style="color:#888;padding:8px;font-size:12px">案件はありません</div>' :
+          '<table style="width:100%;font-size:11px;border-collapse:collapse">' +
+          '<thead><tr style="background:#f3f4f6"><th style="padding:5px 8px;text-align:left">案件番号</th><th style="padding:5px 8px;text-align:left">受注日</th><th style="padding:5px 8px;text-align:left">品名</th><th style="padding:5px 8px;text-align:right">金額</th><th style="padding:5px 8px">状態</th></tr></thead><tbody>' +
+          projects.slice().reverse().slice(0,10).map(function(p){
+            return '<tr style="border-bottom:1px solid #f0f0f0;cursor:pointer" onclick="document.querySelector(\'.proof-modal\').remove();jumpToProject(\'' + p.id + '\')">' +
+              '<td style="padding:5px 8px;font-family:monospace">' + (p.id||'') + '</td>' +
+              '<td style="padding:5px 8px">' + (p.orderDate||'') + '</td>' +
+              '<td style="padding:5px 8px">' + _escDiff(p.item||'') + '</td>' +
+              '<td style="padding:5px 8px;text-align:right;font-family:monospace">¥' + (p.exTax||0).toLocaleString() + '</td>' +
+              '<td style="padding:5px 8px"><span style="font-size:9px;background:#e5e7eb;padding:1px 5px;border-radius:3px">' + (p.status||'-') + '</span></td>' +
+            '</tr>';
+          }).join('') + '</tbody></table>'
+        ) + '</div>' +
+        // その他の関連
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:11px">' +
+          '<div style="background:#f9fafb;padding:8px;border-radius:6px"><strong>📨 連絡履歴</strong>: ' + inquiries.length + ' 件</div>' +
+          '<div style="background:#f9fafb;padding:8px;border-radius:6px"><strong>📋 見積依頼</strong>: ' + estimates.length + ' 件</div>' +
+          '<div style="background:#f9fafb;padding:8px;border-radius:6px"><strong>📜 過去見積書</strong>: ' + history.length + ' 件</div>' +
+          '<div style="background:#f9fafb;padding:8px;border-radius:6px"><strong>📄 請求書</strong>: ' + invoices.length + ' 件</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+// ─────────────────────────────────────────────────────
+// 🎓 オンボーディング・チュートリアル (初回ログイン時)
+// ─────────────────────────────────────────────────────
+var ONBOARDING_KEY = 'tokiwa_hub_onboarding_done';
+var ONBOARDING_STEPS = [
+  { title: '👋 ようこそ！TOKIWA-HUB へ', body: 'このシステムでは、印刷会社の業務全体（連絡受付 → 見積 → 案件管理 → 校正 → 配送 → 請求 → 入金）を一貫して管理できます。<br><br>2分で主要機能をご案内します。' },
+  { title: '🏠 ホーム画面', body: '左上の <strong>TOKIWA-HUB</strong> をクリックすると、いつでもこの画面に戻れます。<br><br>ホームには:<br>・🚀 クイックアクション (よく使う操作)<br>・📊 業務フロー図 (今の進行状況)<br>・KPI ウィジェット (売上・案件数等)<br>が並びます。' },
+  { title: '📨 連絡管理', body: 'お客様からの問い合わせ・社内連絡・社間依頼が全部ここに集まります。<br><br>AI が見積依頼を自動抽出 → 「📝 見積を作成」ボタンでワンクリック転記。<br><br>LINE WORKS には返信下書きも自動生成。' },
+  { title: '📝 見積〜案件の流れ', body: '<strong>📋 見積依頼</strong> = メモ書き<br>↓<br><strong>📝 見積作成</strong> = 詳細計算 (用紙・印刷・製版等)<br>↓ 受注確定<br><strong>📁 案件管理</strong> = 進行中の案件<br>↓ 完了後<br><strong>📜 過去の見積書</strong> = アーカイブ' },
+  { title: '🤖 AI チャットボット', body: '右下の💬ボタンから AI と対話できます。<br><br>例:<br>・「今月の売上は？」<br>・「○○商事の見積作って」<br>・「未対応の問合せ教えて」<br><br>使い方が分からない時もここで聞けます。' },
+  { title: '💴 売上 / 🔧 仕入', body: 'ドロップダウンメニューから:<br>💴 売上 → 請求書・領収書・入金管理<br>🔧 仕入 → 仕入発注・外注発注・支払管理<br><br>各画面で「📁 案件選択」ボタンを押すと、案件情報が自動で入ります。' },
+  { title: '🔍 グローバル検索', body: '右上の検索バーに2文字以上入力すると、案件・連絡・見積・請求書などすべてを横断検索できます。<br><br>クリックで該当画面に直接ジャンプ。' },
+  { title: '🧪 テストデータ', body: 'まずは試してみたい場合は、<strong>⚙ 管理 → ⚙ 設定 → 🧪 テストデータ投入</strong> でサンプルデータを作れます。<br><br>本番マスタは触らないので安全です。準備ができたら一緒に削除できます。' },
+  { title: '🛠 開発依頼', body: '使ってみて気になる点があれば、チャットボット内の <strong>🛠 開発依頼</strong> ボタンから記録 → クリップボードにコピーして開発担当に渡せます。<br><br>準備完了！「使ってみる」を押してください。' }
+];
+
+function showOnboarding(force){
+  if(!force){
+    try { if(localStorage.getItem(ONBOARDING_KEY) === 'done') return; } catch(e){}
+  }
+  var step = 0;
+  var modal = document.createElement('div');
+  modal.id = 'onboarding-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;font-family:inherit';
+  document.body.appendChild(modal);
+
+  function render(){
+    var s = ONBOARDING_STEPS[step];
+    var isLast = step === ONBOARDING_STEPS.length - 1;
+    modal.innerHTML =
+      '<div style="background:#fff;width:100%;max-width:540px;border-radius:14px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.4)">' +
+        '<div style="padding:20px 24px;background:linear-gradient(135deg,#7c3aed,#1e40af);color:#fff">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+            '<div style="font-size:11px;opacity:.85">ステップ ' + (step + 1) + ' / ' + ONBOARDING_STEPS.length + '</div>' +
+            '<button onclick="document.getElementById(\'onboarding-modal\').remove();try{localStorage.setItem(\'' + ONBOARDING_KEY + '\',\'done\')}catch(e){}" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer">スキップ ×</button>' +
+          '</div>' +
+          '<div style="font-size:18px;font-weight:700">' + s.title + '</div>' +
+        '</div>' +
+        '<div style="padding:24px;font-size:14px;line-height:1.7;color:#1a1a1a;min-height:140px">' + s.body + '</div>' +
+        '<div style="padding:14px 24px;background:#f9fafb;display:flex;justify-content:space-between;align-items:center">' +
+          '<div style="display:flex;gap:4px">' +
+            ONBOARDING_STEPS.map(function(_, i){ return '<div style="width:8px;height:8px;border-radius:50%;background:' + (i === step ? '#7c3aed' : '#d1d5db') + '"></div>'; }).join('') +
+          '</div>' +
+          '<div style="display:flex;gap:8px">' +
+            (step > 0 ? '<button class="btn" onclick="window._obPrev_()">← 戻る</button>' : '') +
+            '<button class="btn btn-p" style="background:#7c3aed;border-color:#7c3aed" onclick="window._obNext_()">' + (isLast ? '✅ 使ってみる' : '次へ →') + '</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+  }
+  window._obPrev_ = function(){ if(step > 0){ step--; render(); } };
+  window._obNext_ = function(){
+    if(step < ONBOARDING_STEPS.length - 1){
+      step++;
+      render();
+    } else {
+      try { localStorage.setItem(ONBOARDING_KEY, 'done'); } catch(e){}
+      modal.remove();
+    }
+  };
+  render();
+}
+
+// ─────────────────────────────────────────────────────
+// 📋 監査ログ (誰がいつ何を変更したか)
+// ─────────────────────────────────────────────────────
+function _addAuditLog_(action, target, details){
+  if(!DB.auditLog) DB.auditLog = [];
+  DB.auditLog.push({
+    at: new Date().toISOString(),
+    by: currentAuth?.userName || '匿名',
+    company: currentAuth?.companyName || '',
+    role: currentAuth?.role || '',
+    action: action, // 'create' | 'update' | 'delete' | 'send' | 'login' 等
+    target: target, // 'project:PRJ-001' 等
+    details: details || ''
+  });
+  // 上限 1000 件
+  if(DB.auditLog.length > 1000) DB.auditLog = DB.auditLog.slice(-1000);
+}
+
+function showAuditLogModal(){
+  var logs = (DB.auditLog || []).slice().reverse().slice(0, 200);
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  var actionColors = { create:'#16a34a', update:'#1e40af', delete:'#dc2626', send:'#7c3aed', login:'#0891b2' };
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:780px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#1a1a1a;color:#fff;display:flex;justify-content:space-between"><div><strong>📋 操作履歴 (監査ログ)</strong><div style="font-size:11px;opacity:.85;margin-top:2px">直近200件 / 全' + (DB.auditLog||[]).length + '件記録中</div></div>' +
+        '<button onclick="this.closest(\'.proof-modal\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button></div>' +
+      '<div style="overflow-y:auto;flex:1;padding:8px">' +
+      (logs.length === 0
+        ? '<div style="text-align:center;color:#888;padding:40px">操作履歴がまだありません</div>'
+        : logs.map(function(l){
+            var ac = actionColors[l.action] || '#6b7280';
+            return '<div style="padding:6px 12px;border-bottom:1px solid #f0f0f0;font-size:12px">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center">' +
+                '<span style="background:' + ac + ';color:#fff;font-size:10px;padding:2px 6px;border-radius:3px;font-weight:700">' + l.action + '</span>' +
+                '<span style="font-size:10px;color:#888">' + new Date(l.at).toLocaleString('ja-JP') + '</span>' +
+              '</div>' +
+              '<div style="margin-top:3px"><strong>' + _escDiff(l.by) + '</strong> <span style="color:#888;font-size:11px">(' + _escDiff(l.company || '') + ', ' + _escDiff(l.role || '') + ')</span></div>' +
+              '<div style="font-size:11px;color:#1a1a1a;margin-top:2px">対象: ' + _escDiff(l.target || '') + '</div>' +
+              (l.details ? '<div style="font-size:11px;color:#555;margin-top:1px">' + _escDiff(l.details) + '</div>' : '') +
+            '</div>';
+          }).join('')
+      ) + '</div>' +
+      '<div style="padding:10px 20px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between">' +
+        '<button class="btn" onclick="if(confirm(\'監査ログを全削除しますか?\')){DB.auditLog=[];saveDB();this.closest(\'.proof-modal\').remove();alert(\'削除完了\')}" style="color:#dc2626;border-color:#dc2626">🗑 全削除</button>' +
+        '<button class="btn btn-p" onclick="this.closest(\'.proof-modal\').remove()">閉じる</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
 }
 
 // ─────────────────────────────────────────────────────
@@ -12496,7 +12810,7 @@ function issueReceiptForGroup(cust, targetDate){
   _printDocument_('領収書', cust, targetDate, entries);
 }
 
-// 帳票印刷用の HTML を生成して新規ウィンドウで開く
+// 帳票印刷用の HTML を生成して新規ウィンドウで開く (A4 最適化版)
 function _printDocument_(docType, cust, dateStr, entries){
   var subtotal = entries.reduce(function(s, e){ return s + (e.project?.exTax || 0); }, 0);
   var tax = Math.round(subtotal * 0.1);
@@ -12505,67 +12819,101 @@ function _printDocument_(docType, cust, dateStr, entries){
   var conf = DB.conf || {};
   var companyName = currentAuth?.companyName || conf.name || 'トキワ印刷株式会社';
 
-  var w = window.open('', '_blank', 'width=900,height=1000');
+  var w = window.open('', '_blank', 'width=900,height=1100');
   if(!w){ alert('ポップアップがブロックされました。許可してから再試行してください。'); return; }
 
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + docType + ' - ' + cust + '</title>' +
     '<style>' +
-    'body{font-family:"Yu Gothic","Hiragino Kaku Gothic ProN",sans-serif;padding:30px;color:#1a1a1a;font-size:13px}' +
-    '.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px}' +
-    '.title{font-size:32px;font-weight:700;letter-spacing:.3em;text-align:center;margin:20px 0;border-top:3px double #1a1a1a;border-bottom:3px double #1a1a1a;padding:8px}' +
-    '.cust{font-size:18px;border-bottom:1px solid #1a1a1a;padding-bottom:6px;width:60%}' +
-    '.sender{font-size:11px;text-align:right;line-height:1.6}' +
-    'table{width:100%;border-collapse:collapse;margin:20px 0;font-size:12px}' +
-    'th,td{border:1px solid #888;padding:8px 10px;text-align:left}' +
-    'th{background:#f4f3f0;font-weight:700}' +
-    'td.r{text-align:right;font-family:monospace}' +
-    '.total-row{background:#f9f9f7;font-weight:700;font-size:14px}' +
-    '.note{margin-top:30px;font-size:11px;color:#666;border-top:1px solid #ccc;padding-top:10px}' +
-    '@media print{body{padding:15mm}}' +
-    '@page{size:A4 portrait;margin:15mm}' +
+    '*{box-sizing:border-box}' +
+    'body{font-family:"Yu Mincho","Hiragino Mincho ProN","MS Mincho",serif;padding:0;color:#1a1a1a;font-size:11pt;background:#eee}' +
+    '.page-doc{width:210mm;min-height:297mm;padding:18mm 18mm 20mm;margin:8mm auto;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.15);position:relative}' +
+    '.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14mm}' +
+    '.title{font-size:32pt;font-weight:700;letter-spacing:.5em;text-align:center;margin:6mm auto;padding:6px 0;border-top:1.5pt solid #1a1a1a;border-bottom:1.5pt solid #1a1a1a;width:80mm;text-indent:.5em}' +
+    '.cust{font-size:16pt;border-bottom:1pt solid #1a1a1a;padding-bottom:4mm;width:80mm;letter-spacing:.05em}' +
+    '.cust .org{font-size:14pt}' +
+    '.sender{font-size:9pt;text-align:right;line-height:1.7;position:relative}' +
+    '.sender .biz-name{font-size:13pt;font-weight:700;letter-spacing:.05em;margin-bottom:2mm}' +
+    '.stamp{display:inline-block;width:18mm;height:18mm;border:2pt solid #c00;border-radius:50%;color:#c00;text-align:center;line-height:18mm;font-size:9pt;font-weight:700;margin-left:6mm;transform:rotate(-8deg);font-family:serif}' +
+    '.meta{margin-top:6mm;font-size:9pt;color:#555;display:flex;gap:10mm}' +
+    'table{width:100%;border-collapse:collapse;margin:6mm 0;font-size:10pt}' +
+    'th,td{border:.5pt solid #555;padding:2mm 3mm;text-align:left;vertical-align:top}' +
+    'th{background:#f4f3f0;font-weight:700;font-size:9pt}' +
+    'td.r{text-align:right;font-family:"Yu Gothic","sans-serif"}' +
+    '.total-row{background:#f9f9f7;font-weight:700;font-size:12pt}' +
+    '.subtotal-table{width:80mm;margin-left:auto}' +
+    '.note{margin-top:6mm;font-size:8.5pt;color:#666;border-top:.5pt solid #999;padding-top:3mm;line-height:1.6}' +
+    '.bank-info{margin-top:6mm;padding:3mm 4mm;background:#f9f9f7;border-left:2pt solid #1a1a1a;font-size:9pt;line-height:1.6}' +
+    '.amount-box{text-align:center;font-size:22pt;font-weight:700;padding:4mm 6mm;border:1.5pt solid #1a1a1a;margin:6mm auto;width:90mm;letter-spacing:.05em}' +
+    '@media screen{.print-btn-wrapper{position:fixed;top:10px;right:10px;z-index:9999}}' +
+    '@media print{body{background:#fff;padding:0}.page-doc{margin:0;box-shadow:none;width:auto;min-height:auto}.print-btn-wrapper{display:none}}' +
+    '@page{size:A4 portrait;margin:0}' +
     '</style></head><body>' +
+    '<div class="print-btn-wrapper"><button onclick="window.print()" style="padding:10px 24px;font-size:14px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700">🖨 印刷 / PDF保存</button></div>' +
+    '<div class="page-doc">' +
     '<div class="header">' +
-      '<div><div style="font-size:11px;color:#666">No. ' + docNo + '</div><div style="font-size:11px;color:#666">発行日: ' + new Date().toLocaleDateString('ja-JP') + '</div></div>' +
+      '<div><div style="font-size:9pt;color:#555">No. ' + docNo + '</div><div style="font-size:9pt;color:#555;margin-top:1mm">発行日: ' + new Date().toLocaleDateString('ja-JP') + '</div></div>' +
       '<div class="sender">' +
-        '<div style="font-size:14px;font-weight:700">' + _escDiff(companyName) + '</div>' +
+        '<div class="biz-name">' + _escDiff(companyName) + '</div>' +
         (conf.addr ? '<div>' + _escDiff(conf.addr) + '</div>' : '') +
         (conf.tel ? '<div>' + _escDiff(conf.tel) + '</div>' : '') +
         (conf.rep ? '<div>代表: ' + _escDiff(conf.rep) + '</div>' : '') +
+        '<div style="margin-top:3mm"><span class="stamp">印</span></div>' +
       '</div>' +
     '</div>' +
-    '<div class="cust"><strong>' + _escDiff(cust) + '</strong> 御中</div>' +
+    '<div class="cust"><span class="org">' + _escDiff(cust) + '</span> <span style="font-size:11pt">御中</span></div>' +
     '<div class="title">' + docType + '</div>';
 
   if(docType === '領収書'){
-    html += '<div style="font-size:14px;text-align:center;margin:20px 0">下記金額を領収いたしました</div>' +
-      '<div style="text-align:center;font-size:28px;font-weight:700;padding:14px;border:2px solid #1a1a1a;margin:20px auto;max-width:400px">¥' + total.toLocaleString() + ' -</div>' +
-      '<div style="text-align:center;font-size:13px;margin:10px 0">(税込)</div>' +
-      '<div style="margin:20px 0;font-size:12px"><strong>但し:</strong> ' + entries.map(function(e){ return e.project?.item || ''; }).filter(Boolean).join('、') + ' 代として</div>';
+    html += '<div style="font-size:13pt;text-align:center;margin:5mm 0;letter-spacing:.1em">下記金額を領収いたしました</div>' +
+      '<div class="amount-box">¥' + total.toLocaleString() + '<span style="font-size:14pt">　-</span></div>' +
+      '<div style="text-align:center;font-size:10pt;margin:2mm 0">(税込)</div>' +
+      '<div style="margin:6mm 0 4mm;font-size:11pt"><strong style="margin-right:4mm">但し</strong>' + entries.map(function(e){ return e.project?.item || ''; }).filter(Boolean).join('、') + ' 代として</div>' +
+      '<div style="margin:4mm 0;font-size:10pt;color:#555">上記金額正に領収いたしました</div>';
+  } else if(docType === '請求書'){
+    html += '<div style="font-size:11pt;text-align:center;margin:4mm 0;letter-spacing:.05em">下記の通りご請求申し上げます</div>' +
+      '<div class="amount-box">ご請求金額　¥' + total.toLocaleString() + '<span style="font-size:14pt">（税込）</span></div>';
+  } else if(docType === '納品書'){
+    html += '<div style="font-size:11pt;text-align:center;margin:4mm 0;letter-spacing:.05em">下記の通り納品いたします</div>';
   }
 
   html += '<table>' +
-    '<thead><tr><th>品名</th><th>仕様</th><th class="r">数量</th><th class="r">単価</th><th class="r">金額</th></tr></thead>' +
+    '<thead><tr><th style="width:25%">品名</th><th style="width:35%">仕様</th><th class="r" style="width:12%">数量</th><th class="r" style="width:12%">単価</th><th class="r" style="width:16%">金額</th></tr></thead>' +
     '<tbody>';
   entries.forEach(function(e){
     var p = e.project;
     var d = e.delivery;
-    var item = p?.item || d.taskType || '';
+    var item = p?.item || d?.taskType || '';
     var spec = p?.spec || '';
     var qty = p?.qty || 0;
     var unit = p?.unit || '部';
     var amt = p?.exTax || 0;
     var unitp = qty > 0 ? Math.round(amt / qty) : 0;
-    html += '<tr><td>' + _escDiff(item) + '</td><td style="font-size:10px;color:#666">' + _escDiff(spec) + '</td><td class="r">' + qty.toLocaleString() + ' ' + unit + '</td><td class="r">¥' + unitp.toLocaleString() + '</td><td class="r">¥' + amt.toLocaleString() + '</td></tr>';
+    html += '<tr><td>' + _escDiff(item) + '</td><td style="font-size:9pt;color:#555">' + _escDiff(spec) + '</td><td class="r">' + qty.toLocaleString() + ' ' + unit + '</td><td class="r">¥' + unitp.toLocaleString() + '</td><td class="r">¥' + amt.toLocaleString() + '</td></tr>';
   });
+  // 空行を埋めて見栄え
+  for(var fillI = entries.length; fillI < 5; fillI++){
+    html += '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>';
+  }
   html += '</tbody></table>' +
-    '<table style="width:50%;margin-left:auto">' +
+    '<table class="subtotal-table">' +
       '<tr><td>小計</td><td class="r">¥' + subtotal.toLocaleString() + '</td></tr>' +
       '<tr><td>消費税 (10%)</td><td class="r">¥' + tax.toLocaleString() + '</td></tr>' +
       '<tr class="total-row"><td>合計</td><td class="r">¥' + total.toLocaleString() + '</td></tr>' +
-    '</table>' +
-    '<div class="note">配送予定日: ' + dateStr + ' / ' + entries.length + '件まとめ発行</div>' +
-    '<div style="margin-top:30px;text-align:center"><button onclick="window.print()" style="padding:10px 30px;font-size:14px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨 印刷</button></div>' +
-  '</body></html>';
+    '</table>';
+
+  // 請求書には振込先
+  if(docType === '請求書'){
+    html += '<div class="bank-info"><strong>お振込先</strong><br>' +
+      '〇〇銀行 〇〇支店　普通　1234567<br>' +
+      '名義: ' + _escDiff(companyName) + '<br>' +
+      '<span style="font-size:8pt;color:#888">※ 設定タブの「振込先」項目で変更できます</span>' +
+      '</div>';
+  }
+
+  html += '<div class="note">' +
+    (docType === '納品書' || docType === '請求書' ? '配送予定日: ' + dateStr + ' / ' + entries.length + '件まとめ発行' : '') +
+    '</div>' +
+    '</div></body></html>';
 
   w.document.write(html);
   w.document.close();
@@ -12737,7 +13085,7 @@ function showAddProjectModal(){
           '<label style="font-weight:700;align-self:center">担当者</label>' +
           '<input id="add-proj-assignee" placeholder="担当者名" value="' + _escDiff(currentAuth?.userName || '') + '" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
           '<label style="font-weight:700;align-self:center">ステータス</label>' +
-          '<select id="add-proj-status" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px"><option>制作中</option><option>校了待ち</option><option>印刷中</option><option>加工中</option><option>納品済</option><option>完了</option></select>' +
+          '<select id="add-proj-status" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px"><option>制作中</option><option>校了待ち</option><option>印刷中</option><option>加工中</option><option>納品済</option><option>完了</option><option>保留</option><option>失注</option><option>キャンセル</option></select>' +
           '<label style="font-weight:700;align-self:center">👤 エンドユーザー</label>' +
           '<input id="add-proj-enduser" placeholder="例: 伊勢原市役所 (社間案件のみ)" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
           '<label style="font-weight:700;align-self:center">🏢 元請け</label>' +
@@ -12762,6 +13110,8 @@ function showAddProjectModal(){
           '</select>' +
           '<label style="font-weight:700;align-self:start">備考</label>' +
           '<textarea id="add-proj-memo" rows="2" placeholder="備考・特記事項" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-family:inherit;resize:vertical"></textarea>' +
+          '<label style="font-weight:700;align-self:start">失注理由</label>' +
+          '<select id="add-proj-lost-reason" style="font-size:13px;padding:6px 8px;border:1px solid #ccc;border-radius:4px"><option value="">(失注の場合のみ)</option><option>価格</option><option>納期</option><option>仕様不一致</option><option>競合他社</option><option>顧客都合</option><option>予算未確保</option><option>その他</option></select>' +
         '</div>' +
         '<div style="margin-top:18px;display:flex;justify-content:flex-end;gap:8px">' +
           '<button class="btn" onclick="this.closest(\'.proof-modal\').remove()">キャンセル</button>' +
@@ -12796,6 +13146,7 @@ function submitAddProject(){
     groupCompany: document.getElementById('add-proj-group')?.value?.trim() || '', // 🆕 元請け
     end_user: document.getElementById('add-proj-enduser')?.value?.trim() || '',   // 🆕 エンドユーザー
     subcontracted_to: document.getElementById('add-proj-subto')?.value?.trim() || '', // 🆕 再委託先
+    lostReason: document.getElementById('add-proj-lost-reason')?.value?.trim() || '', // 🆕 失注理由
     steps: { 版下:'─', 校了:'─', 印刷:'─', 加工:'─', 納品:'─' },
     stepDates: {},
     createdAt: new Date().toISOString()
@@ -18448,6 +18799,8 @@ function updateUserDisplay(){
   }
   // 会社別のヘッダー色を適用
   applyCompanyHeaderColor();
+  // ロール別タブ絞り込み
+  if(typeof applyRoleTabFilter === 'function') applyRoleTabFilter();
 }
 
 // 会社別ヘッダー色マップ (会社名の部分一致で判定)
