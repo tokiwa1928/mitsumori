@@ -12243,16 +12243,24 @@ function renderWorkflowDiagram(){
 }
 
 function _navToWorkflowStep_(tab){
+  // ドロップダウン経由のページ (請求書/領収書/入金) は _navAdmin_ で直接ジャンプ
+  if(['invoices','receipts','payments','purchases','outsource','payouts','companies','master','settings'].indexOf(tab) >= 0){
+    if(typeof _navAdmin_ === 'function'){
+      _navAdmin_(tab);
+      return;
+    }
+  }
+  // トップレベルタブ
   var btn = document.querySelector('.tb-btn[data-page="' + tab + '"]');
   if(btn && typeof swPage === 'function'){
     swPage(tab, btn);
     return;
   }
-  // ドロップダウン経由 (請求書/入金管理など)
-  if(tab === 'invoices' || tab === 'receipts' || tab === 'payments'){
-    var salesBtn = document.querySelector('.tb-btn[data-page="sales-menu"]');
-    if(salesBtn) toggleSalesMenu({ stopPropagation: function(){}, target: salesBtn });
-    return;
+  // 最終フォールバック: 仮想ボタンで swPage
+  if(typeof swPage === 'function'){
+    var virtualBtn = document.createElement('button');
+    virtualBtn.dataset.page = tab;
+    swPage(tab, virtualBtn);
   }
 }
 
