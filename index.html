@@ -162,8 +162,27 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;font-size:13px;
 .main{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative}
 /* page を .main の子であろうとなかろうと、.act の時は.main 内を埋める */
 .page.act{display:block;flex:1;overflow:auto}
-.page{display:none;flex:1;overflow:auto;padding:1rem 1.25rem}
+.page{display:none;flex:1;overflow:auto;padding:0}
 .page.act{display:block}
+/* 大きなページヘッダー */
+.page-header-big{display:flex;align-items:center;gap:14px;background:linear-gradient(to right,#fff,#f9fafb);padding:14px 1.25rem;border-bottom:2px solid #e5e7eb;margin:0 0 1rem;position:sticky;top:0;z-index:50}
+.page-header-big::before{content:'';position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--act-tab-color, #60a5fa)}
+.page-header-big .icon-big{font-size:34px;line-height:1;flex-shrink:0}
+.page-header-big .title-block{flex:1;min-width:0}
+.page-header-big .title-text{font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:.02em;line-height:1.2;display:flex;align-items:center;gap:10px}
+.page-header-big .breadcrumb{font-size:11px;color:#888;margin-top:2px}
+.page-header-big .breadcrumb .crumb-link{color:#1e40af;text-decoration:none;cursor:pointer}
+.page-header-big .breadcrumb .crumb-link:hover{text-decoration:underline}
+.page-header-big .desc{font-size:11px;color:#666;margin-top:2px}
+/* 既存の .page 内パディングを復元 (>* で直接の子のみ) */
+.page > *:not(.page-header-big){margin-left:1.25rem;margin-right:1.25rem}
+.page > *:last-child{margin-bottom:1rem}
+@media (max-width:768px){
+  .page-header-big{padding:10px 1rem}
+  .page-header-big .icon-big{font-size:26px}
+  .page-header-big .title-text{font-size:17px}
+  .page > *:not(.page-header-big){margin-left:1rem;margin-right:1rem}
+}
 .est-tabbar{display:flex;align-items:flex-end;gap:3px;padding:0 1.25rem;background:#f4f3f0;border-bottom:1px solid #ddd;overflow-x:auto;flex-shrink:0}
 .est-tab{padding:6px 14px;border:1px solid #ddd;border-bottom:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:12px;font-family:inherit;background:#e8e6e0;color:#888;white-space:nowrap;display:flex;align-items:center;gap:6px;margin-bottom:-1px}
 .est-tab:hover{background:#f0efe8;color:#1a1a1a}.est-tab.act{background:#fff;color:#1a1a1a;font-weight:700;border-color:#ddd}
@@ -580,7 +599,6 @@ window.addEventListener('load', function(){
   <button class="tb-nav-btn" id="tb-nav-back" onclick="navBack()" title="前のタブに戻る (Alt+←)" disabled>⬅</button>
   <button class="tb-nav-btn" id="tb-nav-forward" onclick="navForward()" title="次のタブに進む (Alt+→)" disabled>➡</button>
   <span class="topbar-title" id="app-title" onclick="_goHome_()" style="cursor:pointer" title="クリックでホームへ">TOKIWA-HUB</span>
-  <span id="current-page-indicator" style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,0.92);color:#1a1a1a;padding:4px 12px;border-radius:6px;font-size:13px;font-weight:700;margin-right:8px;align-self:center;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,0.2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="font-size:9px;color:#888;font-weight:400;margin-right:2px">▶</span><span id="current-page-name">🏠 ホーム</span></span>
   <button class="tb-arrow" id="tb-arrow-left" onclick="scrollTabs(-1)" title="左にスクロール">‹</button>
   <div class="tb-scroll" id="tb-scroll">
     <button class="tb-btn act" data-page="realtime" onclick="swPage('realtime',this)" draggable="true" title="🏠 ホーム — 業務フロー図 + KPI・売上グラフ・案件一覧などをウィジェット形式でカスタマイズ表示 (30秒自動更新)">🏠 ホーム</button>
@@ -998,6 +1016,7 @@ window.addEventListener('load', function(){
         <option value="ai">🤖 AI 自動抽出</option>
         <option value="manual">手動</option>
       </select>
+      <span id="est-period-wrapper"></span>
       <button class="btn" onclick="renderEstimates()">🔄 更新</button>
       <button class="btn" style="background:#ede9fe;border-color:#c4b5fd;color:#5b21b6" onclick="showHistorySearchModal()">📜 過去から探す</button>
     </div>
@@ -1021,6 +1040,7 @@ window.addEventListener('load', function(){
       </select>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <span id="proj-period-wrapper"></span>
       <button class="btn" onclick="renderProjects()">🔄 更新</button>
       <button class="btn" style="background:#fef3c7;border-color:#fcd34d" onclick="showAIIngestModal('project')">🤖 AI 取込</button>
       <button class="btn" style="background:#cffafe;border-color:#67e8f9;color:#0e7490" onclick="showRepeatProjectModal()">🔁 リピート</button>
@@ -1089,6 +1109,7 @@ window.addEventListener('load', function(){
     <div class="st" style="display:flex;justify-content:space-between;align-items:center">
       <span>見積実績一覧</span>
       <div style="display:flex;gap:8px;align-items:center">
+        <span id="hist-period-wrapper"></span>
         <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px"><input type="checkbox" id="hist-full-only" onchange="renderHistory()"> 明細付きのみ</label>
         <input id="hist-q" placeholder="得意先・品名で検索…" style="width:200px;font-size:12px" oninput="renderHistory()">
       </div>
@@ -1716,6 +1737,7 @@ window.addEventListener('load', function(){
       <div class="st" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <span>📨 連絡管理</span>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span id="inq-period-wrapper"></span>
           <span id="inq-count" style="font-size:11px;color:#888"></span>
           <button class="btn btn-p" onclick="addInquiryManual()">＋ 社外問合せ</button>
           <button class="btn" style="background:#fef9c3;border-color:#fde047" onclick="openInternalMessageModal()">🏢 社内連絡</button>
@@ -4169,6 +4191,182 @@ function _goHome_(){
   if(btn && typeof swPage === 'function') swPage('realtime', btn);
 }
 
+// ─────────────────────────────────────────────────────
+// 📅 期間フィルタ (直近6ヶ月をデフォルト、全期間切替可)
+// ─────────────────────────────────────────────────────
+window._periodFilter = window._periodFilter || {};
+
+function _getPeriodFilter_(listId){
+  return window._periodFilter[listId] || '6m';
+}
+
+function _setPeriodFilter_(listId, period, renderFn){
+  window._periodFilter[listId] = period;
+  // 「もっと見る」カウンタもリセット
+  if(window._listShowCount) window._listShowCount[listId] = null;
+  if(typeof window[renderFn] === 'function') window[renderFn]();
+}
+
+function _filterByPeriod_(records, listId, dateFields){
+  var period = _getPeriodFilter_(listId);
+  if(period === 'all' || !records || !records.length) return records;
+  var now = new Date();
+  var cutoff = new Date();
+  if(period === '1m') cutoff.setMonth(now.getMonth() - 1);
+  else if(period === '3m') cutoff.setMonth(now.getMonth() - 3);
+  else if(period === '6m') cutoff.setMonth(now.getMonth() - 6);
+  else if(period === '1y') cutoff.setFullYear(now.getFullYear() - 1);
+  else if(period === '2y') cutoff.setFullYear(now.getFullYear() - 2);
+  else return records;
+
+  // dateFields は順番に試す候補リスト
+  var fields = dateFields || ['createdAt','received_at','orderDate','date','savedAt','issuedAt'];
+  return records.filter(function(r){
+    var d = null;
+    for(var i = 0; i < fields.length; i++){
+      if(r[fields[i]]){ d = r[fields[i]]; break; }
+    }
+    if(!d) return true; // 日付不明は含める
+    return new Date(d) >= cutoff;
+  });
+}
+
+function _renderPeriodFilter_(listId, renderFn, totalCount){
+  var current = _getPeriodFilter_(listId);
+  var labels = { '1m':'直近1ヶ月', '3m':'直近3ヶ月', '6m':'直近6ヶ月', '1y':'直近1年', '2y':'直近2年', 'all':'全期間' };
+  var opts = ['1m','3m','6m','1y','2y','all'].map(function(k){
+    var label = labels[k] + (k === 'all' && totalCount ? ' (' + totalCount + '件)' : '');
+    return '<option value="' + k + '"' + (current === k ? ' selected' : '') + '>📅 ' + label + '</option>';
+  }).join('');
+  return '<select onchange="_setPeriodFilter_(\'' + listId + '\',this.value,\'' + renderFn + '\')" style="font-size:12px;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;background:#fff;font-family:inherit">' + opts + '</select>';
+}
+
+// ─────────────────────────────────────────────────────
+// ⚡ パフォーマンス最適化: ページング設定 + インデックス
+// ─────────────────────────────────────────────────────
+var PAGE_LIMITS = {
+  inquiry:   100, // 連絡管理 (1ページ表示数)
+  estimates: 100, // 見積依頼
+  project:   100, // 案件管理
+  history:   100, // 過去の見積書
+  invoices:  100, // 請求書
+  receipts:  100, // 領収書
+  payments:  100, // 入金
+  purchases: 100, // 仕入発注
+  outsource: 100, // 外注発注
+  payouts:   100  // 支払予定
+};
+
+// 「もっと見る」用カウンター (各リスト ID → 表示件数)
+window._listShowCount = window._listShowCount || {};
+
+function _getShowCount_(listId, defaultLimit){
+  if(!window._listShowCount[listId]){
+    window._listShowCount[listId] = defaultLimit || 100;
+  }
+  return window._listShowCount[listId];
+}
+
+function _expandShowCount_(listId, defaultLimit){
+  window._listShowCount[listId] = (window._listShowCount[listId] || defaultLimit || 100) + (defaultLimit || 100);
+  // 該当ページを再描画
+  var renderMap = {
+    'inq-list': 'renderInquiryList',
+    'proj-body': 'renderProjects',
+    'estimates-list-container': 'renderEstimates',
+    'hist-body': 'renderHistory',
+    'invoices-list': 'renderInvoices',
+    'receipts-list': 'renderReceipts',
+    'payments-list': 'renderPayments',
+    'purchases-list': 'renderPurchases',
+    'outsource-list': 'renderOutsource',
+    'payouts-list': 'renderPayouts'
+  };
+  var fn = renderMap[listId];
+  if(fn && typeof window[fn] === 'function') window[fn]();
+}
+
+function _renderShowMoreButton_(listId, totalCount, currentShown, defaultLimit){
+  if(currentShown >= totalCount) return '';
+  var remaining = totalCount - currentShown;
+  return '<div style="text-align:center;padding:14px 0;background:#f9fafb;border-top:1px solid #e5e7eb">' +
+    '<button class="btn" onclick="_expandShowCount_(\'' + listId + '\',' + (defaultLimit||100) + ')" style="font-size:12px;padding:8px 24px;background:#1e40af;color:#fff;border:none;border-radius:6px;font-weight:700">' +
+    '⬇️ 次の' + Math.min(remaining, defaultLimit||100) + '件を表示 (残り ' + remaining + '件)' +
+    '</button>' +
+    '</div>';
+}
+
+// 高速化: 検索インデックス作成 (lowercase化キャッシュ)
+var _searchIndex = new WeakMap();
+function _getSearchKey_(record){
+  var cached = _searchIndex.get(record);
+  if(cached) return cached;
+  var keys = ['id','cust','item','spec','subject','body','from_name','from_company','memo','vendor','note','custName','company','email','tel','summary','end_user'];
+  var parts = [];
+  keys.forEach(function(k){ if(record[k]) parts.push(String(record[k])); });
+  var key = parts.join(' ').toLowerCase();
+  _searchIndex.set(record, key);
+  return key;
+}
+
+// 既存の検索を高速化したフィルタ
+function _fastSearchFilter_(rows, query){
+  if(!query) return rows;
+  var q = query.toLowerCase().trim();
+  if(!q) return rows;
+  return rows.filter(function(r){ return _getSearchKey_(r).indexOf(q) >= 0; });
+}
+
+// 各ページの大きなヘッダー定義
+var PAGE_HEADERS = {
+  realtime:  { icon:'🏠', title:'ホーム', desc:'業務全体の進行状況とよく使う操作' },
+  inquiry:   { icon:'📨', title:'連絡管理', desc:'社外問合せ・社内連絡・社間依頼・音声メモを統合' },
+  est:       { icon:'📝', title:'見積作成', desc:'用紙・印刷・製版・データ・製本の原価計算' },
+  estimates: { icon:'📋', title:'見積依頼', desc:'お客様からの依頼を簡易記録 (詳細は見積作成へ)' },
+  history:   { icon:'📜', title:'過去の見積書', desc:'保存済の正式見積書アーカイブ・流用元' },
+  project:   { icon:'📁', title:'案件管理', desc:'受注確定後の案件・進捗・タイムライン' },
+  proofing:  { icon:'📸', title:'校正BOX', desc:'PDF校正・新旧比較・差分検出' },
+  schedule:  { icon:'🏭', title:'工程管理', desc:'制作・印刷・加工・製本の工程進捗' },
+  calendar:  { icon:'📅', title:'納品', desc:'月次カレンダーで納品予定を確認' },
+  delivery:  { icon:'🚚', title:'配送', desc:'配送予定・納品書/領収書発行・ドライバー管理' },
+  finance:   { icon:'📊', title:'決算・文書', desc:'各社の決算書分析・グループ7社比較・文書保管庫' },
+  wiki:      { icon:'📖', title:'Wiki', desc:'社内ナレッジベース・マニュアル・FAQ' },
+  master:    { icon:'📚', title:'マスター', desc:'得意先・仕入先・印刷条件・用紙・加工データ' },
+  companies: { icon:'🏢', title:'会社管理', desc:'グループ7社・ユーザー・権限管理' },
+  settings:  { icon:'⚙', title:'設定', desc:'システム設定・税率・標準歩留り・自社情報' },
+  invoices:  { icon:'📄', title:'請求書', desc:'都度請求/締め請求の発行と管理' },
+  receipts:  { icon:'🧾', title:'領収書', desc:'領収書の発行履歴' },
+  payments:  { icon:'💰', title:'入金管理', desc:'入金記録・消込・支払方法管理' },
+  purchases: { icon:'📦', title:'仕入発注', desc:'用紙・インキ・資材の仕入先発注' },
+  outsource: { icon:'🤝', title:'外注発注', desc:'製本・特殊加工・配送など外注管理' },
+  payouts:   { icon:'💸', title:'支払管理', desc:'仕入先・外注先への支払予定と履歴' }
+};
+
+function _injectPageHeader_(id, pageEl){
+  if(!pageEl) return;
+  var def = PAGE_HEADERS[id];
+  if(!def) return;
+  // 既存のヘッダーを除去
+  var existing = pageEl.querySelector(':scope > .page-header-big');
+  if(existing) existing.remove();
+
+  var header = document.createElement('div');
+  header.className = 'page-header-big';
+  header.style.position = 'relative';
+  header.innerHTML =
+    '<div class="icon-big">' + def.icon + '</div>' +
+    '<div class="title-block">' +
+      '<div class="title-text">' + _escDiff(def.title) + '</div>' +
+      '<div class="breadcrumb">' +
+        '<a class="crumb-link" onclick="_goHome_()">🏠 ホーム</a> ＞ <span style="color:#1a1a1a;font-weight:600">' + def.icon + ' ' + _escDiff(def.title) + '</span>' +
+      '</div>' +
+      (def.desc ? '<div class="desc">' + _escDiff(def.desc) + '</div>' : '') +
+    '</div>';
+
+  // 先頭に挿入
+  pageEl.insertBefore(header, pageEl.firstChild);
+}
+
 // 🔍 グローバル検索
 function onGlobalSearchInput(){
   var q = (document.getElementById('global-search')?.value || '').toLowerCase().trim();
@@ -4479,22 +4677,8 @@ function swPage(id,btn){
     console.error('表示切替エラー:', e);
   }
 
-  // 現在ページ名を更新 (ヘッダーバッジ)
-  try {
-    var pageNameEl = document.getElementById('current-page-name');
-    if(pageNameEl){
-      var nameMap = {
-        realtime:'🏠 ホーム', inquiry:'📨 連絡管理', est:'📝 見積作成',
-        estimates:'📋 見積依頼', history:'📜 過去の見積書', project:'📁 案件管理',
-        proofing:'📸 校正BOX', schedule:'🏭 工程管理', calendar:'📅 納品',
-        delivery:'🚚 配送', finance:'📊 決算・文書', wiki:'📖 Wiki',
-        master:'📚 マスター', companies:'🏢 会社管理', settings:'⚙ 設定',
-        invoices:'📄 請求書', receipts:'🧾 領収書', payments:'💰 入金管理',
-        purchases:'📦 仕入発注', outsource:'🤝 外注発注', payouts:'💸 支払管理'
-      };
-      pageNameEl.textContent = nameMap[id] || id;
-    }
-  } catch(e){}
+  // 大きなページヘッダーを動的挿入
+  try { _injectPageHeader_(id, pageEl); } catch(e){ console.warn('page header inject failed:', e); }
 
   // est-tabbar 表示制御
   try {
@@ -10799,8 +10983,14 @@ function renderEstimates(){
   var statusFilter = document.getElementById('est-status-f')?.value || '';
   var sourceFilter = document.getElementById('est-source-f')?.value || '';
 
+  // ⚡ 期間フィルタ
+  var allEsts = DB.estimates || [];
+  var periodFilteredEsts = _filterByPeriod_(allEsts, 'estimates-list-container', ['createdAt']);
+  var pwEst = document.getElementById('est-period-wrapper');
+  if(pwEst) pwEst.innerHTML = _renderPeriodFilter_('estimates-list-container', 'renderEstimates', allEsts.length);
+
   // 案件化されたものは除外
-  var rows = DB.estimates.filter(function(e){
+  var rows = periodFilteredEsts.filter(function(e){
     if(e.linkedProjectId) return false;
     // フィルタ
     if(q){
@@ -10825,9 +11015,14 @@ function renderEstimates(){
     return;
   }
 
+  // ⚡ パフォーマンス: 表示件数制限
+  var totalCount = rows.length;
+  var showLimit = _getShowCount_('estimates-list-container', PAGE_LIMITS.estimates);
+  var displayRows = rows.slice(0, showLimit);
+
   var html =
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-size:12px;color:#555">' +
-    '<span><strong>' + rows.length + '件</strong> の見積（未受注）</span>' +
+    '<span><strong>' + totalCount + '件</strong> 中 ' + displayRows.length + ' 件表示 (未受注)</span>' +
     '<span>🤖 AI抽出: ' + rows.filter(function(r){return r.aiAutoCreated}).length + '件</span>' +
     '</div>';
   html += '<table style="width:100%;font-size:13px;border-collapse:collapse">';
@@ -10845,7 +11040,7 @@ function renderEstimates(){
     '<th style="padding:8px 10px;text-align:center">操作</th>' +
     '</tr></thead><tbody>';
 
-  rows.forEach(function(e){
+  displayRows.forEach(function(e){
     var dateStr = e.createdAt ? new Date(e.createdAt).toLocaleDateString('ja-JP') : '-';
     var qty = (e.qty || 0) + (e.unit || '部');
     var price = e.exTax ? '¥' + e.exTax.toLocaleString() : '-';
@@ -10957,6 +11152,8 @@ function renderEstimates(){
   });
 
   html += '</tbody></table>';
+  // ⚡ もっと見るボタン
+  html += _renderShowMoreButton_('estimates-list-container', totalCount, displayRows.length, PAGE_LIMITS.estimates);
   container.innerHTML = html;
 }
 
@@ -18712,7 +18909,13 @@ function renderProjects(){
   const q=(document.getElementById('proj-q')?.value||'').toLowerCase();
   const sf=document.getElementById('proj-status-f')?.value||'';
   const cf=document.getElementById('proj-company-f')?.value||'';
-  const rows=(DB.projects||[]).filter(r=>{
+  // ⚡ 期間フィルタ
+  var allProjs = DB.projects || [];
+  var periodFilteredProjs = _filterByPeriod_(allProjs, 'proj-body', ['orderDate','createdAt']);
+  // 期間セレクタを描画
+  var pwProj = document.getElementById('proj-period-wrapper');
+  if(pwProj) pwProj.innerHTML = _renderPeriodFilter_('proj-body', 'renderProjects', allProjs.length);
+  const rows=periodFilteredProjs.filter(r=>{
     if(sf&&r.status!==sf)return false;
     if(q&&!(r.cust+r.item+(r.spec||'')+(r.id||'')+(r.assignee||'')).toLowerCase().includes(q))return false;
     // 会社フィルタ
@@ -18732,8 +18935,13 @@ function renderProjects(){
   // 会社コードから会社名を取得するマップ
   const companyMap={};
   (DB.companies||[]).forEach(c=>{ companyMap[c.id]=c.code; });
-  
-  body.innerHTML=rows.slice().reverse().map((r,ri)=>{
+
+  // ⚡ パフォーマンス: 表示件数制限
+  const _projTotalCount = rows.length;
+  const _projShowLimit = _getShowCount_('proj-body', PAGE_LIMITS.project);
+  const _projDisplayRows = rows.slice().reverse().slice(0, _projShowLimit);
+
+  body.innerHTML=_projDisplayRows.map((r,ri)=>{
     const oi=(DB.projects||[]).lastIndexOf(r);
     const sc=statusColor[r.status]||'#888';
     // 会社コード表示（他社案件は識別しやすく）
@@ -18928,14 +19136,24 @@ function saveProjDetail(){
 function renderHistory(){
   const q=(document.getElementById('hist-q')?.value||'').toLowerCase();
   const fullOnly=document.getElementById('hist-full-only')?.checked;
-  const rows=DB.history.filter(r=>{
+  // ⚡ 期間フィルタ
+  var allHist = DB.history || [];
+  var periodFilteredHist = _filterByPeriod_(allHist, 'hist-body', ['date','savedAt']);
+  var pwHist = document.getElementById('hist-period-wrapper');
+  if(pwHist) pwHist.innerHTML = _renderPeriodFilter_('hist-body', 'renderHistory', allHist.length);
+  const rows=periodFilteredHist.filter(r=>{
     if(q && !(r.cust+r.item+r.spec).toLowerCase().includes(q)) return false;
     if(fullOnly && !r._formSnap) return false;
     return true;
   });
   const body=document.getElementById('hist-body');if(!body)return;
   if(!rows.length){body.innerHTML='<tr><td colspan="10" style="text-align:center;color:#aaa;padding:1rem">実績がありません。見積作成で「実績として保存」してください</td></tr>';return;}
-  body.innerHTML=rows.slice().reverse().map((r,ri)=>{
+  // ⚡ パフォーマンス: 表示件数制限
+  const _histTotalCount = rows.length;
+  const _histShowLimit = _getShowCount_('hist-body', PAGE_LIMITS.history);
+  const _histDisplayRows = rows.slice().reverse().slice(0, _histShowLimit);
+
+  body.innerHTML=_histDisplayRows.map((r,ri)=>{
     const bc=r.cr==null?'bn':r.cr<0.7?'bg':r.cr<0.8?'ba':'br';
     const bl=r.cr==null?'—':(r.cr*100).toFixed(1)+'%';
     const origI=DB.history.length-1-ri;
@@ -21386,7 +21604,11 @@ function renderInquiryList() {
   const intercoSources = ['interco'];
   const voiceSources = ['voice_memo'];
 
-  let items = (DB.inquiries||[]).filter(inq => {
+  // ⚡ 期間フィルタ (デフォルト直近6ヶ月)
+  var allInquiries = DB.inquiries || [];
+  var periodFiltered = _filterByPeriod_(allInquiries, 'inq-list', ['received_at','createdAt']);
+
+  let items = periodFiltered.filter(inq => {
     // スコープ判定
     var src = inq.source_type || '';
     if(scope === 'external' && externalSources.indexOf(src) < 0) return false;
@@ -21417,11 +21639,19 @@ function renderInquiryList() {
 
   const countEl = document.getElementById('inq-count');
   if(countEl) countEl.textContent = `${items.length}件`;
+  // 期間セレクタを描画
+  var pwEl = document.getElementById('inq-period-wrapper');
+  if(pwEl) pwEl.innerHTML = _renderPeriodFilter_('inq-list', 'renderInquiryList', allInquiries.length);
 
   if(items.length === 0) {
     container.innerHTML = '<div style="text-align:center;color:#888;padding:2rem;font-size:12px">問い合わせがありません</div>';
     return;
   }
+
+  // ⚡ パフォーマンス: 表示件数制限
+  var totalCount = items.length;
+  var showLimit = _getShowCount_('inq-list', PAGE_LIMITS.inquiry);
+  items = items.slice(0, showLimit);
 
   const statusLabels = {new:'新規',progress:'対応中',waiting:'返信待ち',done:'完了'};
   const prioLabels = {urgent:'緊急',normal:'通常',low:'低'};
@@ -21515,7 +21745,7 @@ function renderInquiryList() {
         </div>
       </div>
     </div>`;
-  }).join('');
+  }).join('') + _renderShowMoreButton_('inq-list', totalCount, items.length, PAGE_LIMITS.inquiry);
 }
 
 function getElapsedTime(dateStr) {
