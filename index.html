@@ -4194,14 +4194,30 @@ function _goHome_(){
 // ─────────────────────────────────────────────────────
 // 📅 期間フィルタ (直近6ヶ月をデフォルト、全期間切替可)
 // ─────────────────────────────────────────────────────
-window._periodFilter = window._periodFilter || {};
+// 期間フィルタは localStorage に永続化
+window._periodFilter = window._periodFilter || (function(){
+  try { return JSON.parse(localStorage.getItem('tokiwa_period_filter') || '{}'); }
+  catch(e){ return {}; }
+})();
+
+// リスト別のデフォルト (アーカイブ用途は全期間、業務中心は6ヶ月)
+var PERIOD_DEFAULTS = {
+  'inq-list': '6m',                    // 連絡管理 (業務中心)
+  'proj-body': '6m',                   // 案件管理 (業務中心)
+  'estimates-list-container': '6m',    // 見積依頼 (業務中心)
+  'hist-body': 'all',                  // 過去の見積書 (アーカイブ → 全期間)
+  'invoices-list': '1y',               // 請求書 (1年)
+  'payments-list': '6m'                // 入金 (6ヶ月)
+};
 
 function _getPeriodFilter_(listId){
-  return window._periodFilter[listId] || '6m';
+  return window._periodFilter[listId] || PERIOD_DEFAULTS[listId] || '6m';
 }
 
 function _setPeriodFilter_(listId, period, renderFn){
   window._periodFilter[listId] = period;
+  // localStorage に保存
+  try { localStorage.setItem('tokiwa_period_filter', JSON.stringify(window._periodFilter)); } catch(e){}
   // 「もっと見る」カウンタもリセット
   if(window._listShowCount) window._listShowCount[listId] = null;
   if(typeof window[renderFn] === 'function') window[renderFn]();
