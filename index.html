@@ -737,6 +737,15 @@ window.addEventListener('load', function(){
       <button onclick="showMonthlySalesReport()" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:8px;padding:12px 10px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:4px" onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">
         <span style="font-size:22px">📈</span><span>月次レポート</span>
       </button>
+      <button onclick="showAlertDispatchModal()" style="background:rgba(220,38,38,0.4);color:#fff;border:1px solid rgba(255,255,255,0.5);border-radius:8px;padding:12px 10px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:4px" onmouseover="this.style.background='rgba(220,38,38,0.6)'" onmouseout="this.style.background='rgba(220,38,38,0.4)'">
+        <span style="font-size:22px">🚨</span><span>アラート確認</span>
+      </button>
+      <button onclick="showProjectGantt()" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:8px;padding:12px 10px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:4px" onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">
+        <span style="font-size:22px">📊</span><span>ガントチャート</span>
+      </button>
+      <button onclick="showBulkInvoiceModal()" style="background:rgba(220,38,38,0.4);color:#fff;border:1px solid rgba(255,255,255,0.5);border-radius:8px;padding:12px 10px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:4px" onmouseover="this.style.background='rgba(220,38,38,0.6)'" onmouseout="this.style.background='rgba(220,38,38,0.4)'">
+        <span style="font-size:22px">💰</span><span>締め日一括請求</span>
+      </button>
     </div>
   </div>
 
@@ -16660,6 +16669,25 @@ function copyDriverRouteToClipboard(driverKey, date){
   if(navigator.clipboard) navigator.clipboard.writeText(text).then(function(){ alert('✅ クリップボードにコピーしました\nドライバーへの配布用に印刷・送信できます'); });
 }
 
+// KKK-1: 案件詳細タブ切替
+function _swProjTab_(btn, tabName, oi){
+  // 同じ案件のタブのみ操作
+  document.querySelectorAll('.proj-detail-tab[data-oi="' + oi + '"]').forEach(function(b){
+    b.style.borderBottom = '2px solid transparent';
+    b.style.color = '#666';
+    b.style.fontWeight = '400';
+    b.classList.remove('act');
+  });
+  btn.style.borderBottom = '2px solid #1e40af';
+  btn.style.color = '#1e40af';
+  btn.style.fontWeight = '700';
+  btn.classList.add('act');
+  ['basic','progress','spec','drive','action'].forEach(function(t){
+    var el = document.getElementById('proj-tab-' + t + '-' + oi);
+    if(el) el.style.display = (t === tabName) ? 'block' : 'none';
+  });
+}
+
 function openDriverRouteInMaps(driverKey, date){
   var items = (DB.deliveryItems || []).filter(function(d){
     return (d.date || '').slice(0,10) === date && ((d.driver || d.assignee || '__unassigned__') === driverKey);
@@ -16669,6 +16697,532 @@ function openDriverRouteInMaps(driverKey, date){
   // Google Maps の dirs URL: 経由地は "/" 区切り
   var url = 'https://www.google.com/maps/dir/' + addresses.map(encodeURIComponent).join('/');
   window.open(url, '_blank');
+}
+
+// ─────────────────────────────────────────────────────
+// 🚨 LLL-1: 重要案件アラート (LINE WORKS push)
+// ─────────────────────────────────────────────────────
+// 担当者名 → LW ユーザー ID マッピング (contactTargets を流用)
+function _resolveAssigneeLwUserId_(assigneeName){
+  if(!assigneeName) return '';
+  var ct = _getContactTargets_().find(function(t){
+    return t.type === 'lw_user' && (t.name === assigneeName || t.name.indexOf(assigneeName) >= 0);
+  });
+  return ct ? ct.targetId : '';
+}
+
+// 全アラート候補を集計
+function _collectAlertCandidates_(){
+  var today = new Date();
+  var alerts = [];
+
+  // 1. 納期 1 日前 (まだ未完了)
+  (DB.projects || []).forEach(function(p){
+    if(!p.dueDate) return;
+    if(p.status === '完了' || p.status === '納品済' || p.status === 'キャンセル' || p.status === '失注') return;
+    var due = new Date(p.dueDate);
+    var diffDays = Math.floor((due - today) / (1000 * 60 * 60 * 24));
+    if(diffDays === 1){
+      alerts.push({
+        type: 'due_tomorrow',
+        projectId: p.id,
+        cust: p.cust,
+        item: p.item,
+        assignee: p.assignee || '',
+        priority: 'high',
+        message: '🚨【納期1日前】案件 ' + p.id + '\n顧客: ' + (p.cust||'') + '\n品名: ' + (p.item||'') + '\n納期: ' + p.dueDate + '\nステータス: ' + (p.status||'')
+      });
+    } else if(diffDays < 0){
+      alerts.push({
+        type: 'overdue',
+        projectId: p.id,
+        cust: p.cust,
+        item: p.item,
+        assignee: p.assignee || '',
+        priority: 'critical',
+        message: '🔥【納期超過 ' + Math.abs(diffDays) + '日】案件 ' + p.id + '\n顧客: ' + (p.cust||'') + '\n品名: ' + (p.item||'') + '\n納期: ' + p.dueDate + ' (' + Math.abs(diffDays) + '日経過)\nステータス: ' + (p.status||'')
+      });
+    } else if(diffDays === 3){
+      alerts.push({
+        type: 'due_3days',
+        projectId: p.id,
+        cust: p.cust,
+        item: p.item,
+        assignee: p.assignee || '',
+        priority: 'medium',
+        message: '⚠【納期3日前】案件 ' + p.id + '\n顧客: ' + (p.cust||'') + '\n品名: ' + (p.item||'') + '\n納期: ' + p.dueDate
+      });
+    }
+  });
+
+  // 2. 校了待ち長期化 (3日以上 校了が ─/未送付/送付済 のまま)
+  (DB.projects || []).forEach(function(p){
+    if(!p.steps || !p.stepDates) return;
+    var koryoStatus = p.steps['校了'] || '';
+    var koryoDate = p.stepDates['校了'] || '';
+    if(koryoStatus === '送付済' && koryoDate){
+      var sentDay = new Date(koryoDate);
+      var diffDays = Math.floor((today - sentDay) / (1000 * 60 * 60 * 24));
+      if(diffDays >= 3){
+        alerts.push({
+          type: 'koryo_pending',
+          projectId: p.id,
+          cust: p.cust,
+          item: p.item,
+          assignee: p.assignee || '',
+          priority: 'medium',
+          message: '⏳【校了 ' + diffDays + '日待ち】案件 ' + p.id + '\n顧客: ' + (p.cust||'') + '\n品名: ' + (p.item||'') + '\n校正送付日: ' + koryoDate + '\nお客様への督促を検討してください'
+        });
+      }
+    }
+  });
+
+  // 3. 緊急問合せ (urgent priority かつ 24時間以内未対応)
+  (DB.inquiries || []).forEach(function(inq){
+    if(inq.priority !== 'urgent') return;
+    if(inq.status === 'done' || inq.status === 'progress') return;
+    var received = new Date(inq.received_at || inq.createdAt || 0);
+    var hours = (today - received) / (1000 * 60 * 60);
+    if(hours <= 24 && hours >= 1){
+      alerts.push({
+        type: 'urgent_inquiry',
+        inquiryId: inq.id,
+        cust: inq.from_company || inq.from_name || '',
+        assignee: inq.assignee || '',
+        priority: 'high',
+        message: '🚨【緊急連絡 未対応】\n受付: ' + Math.round(hours) + '時間前\n送信元: ' + (inq.from_name||'') + (inq.from_company?' ('+inq.from_company+')':'') + '\n件名: ' + (inq.subject||'') + '\n本文: ' + (inq.body||'').substring(0,150) + '...'
+      });
+    }
+  });
+
+  return alerts;
+}
+
+// アラート確認モーダル (送信前プレビュー)
+async function showAlertDispatchModal(){
+  var alerts = _collectAlertCandidates_();
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+
+  if(alerts.length === 0){
+    modal.innerHTML =
+      '<div style="background:#fff;width:100%;max-width:500px;border-radius:10px;overflow:hidden">' +
+        '<div style="padding:14px 20px;background:#16a34a;color:#fff;display:flex;justify-content:space-between"><strong>✨ アラート無し</strong><button onclick="this.closest(\'.proof-modal\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button></div>' +
+        '<div style="padding:30px;text-align:center"><div style="font-size:48px;margin-bottom:10px">✨</div><div style="color:#666">緊急対応が必要な案件はありません</div></div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    return;
+  }
+
+  // 担当者別にグループ化
+  var byAssignee = {};
+  alerts.forEach(function(a){
+    var key = a.assignee || '__unassigned__';
+    if(!byAssignee[key]) byAssignee[key] = [];
+    byAssignee[key].push(a);
+  });
+
+  var prioColor = { critical:'#dc2626', high:'#f59e0b', medium:'#0891b2' };
+  var typeIcon = { due_tomorrow:'🚨', overdue:'🔥', due_3days:'⚠', koryo_pending:'⏳', urgent_inquiry:'🚨' };
+
+  var groupHtml = Object.keys(byAssignee).map(function(assignee){
+    var list = byAssignee[assignee];
+    var lwUserId = _resolveAssigneeLwUserId_(assignee);
+    var hasLW = !!lwUserId;
+    return '<div style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:12px;overflow:hidden">' +
+      '<div style="background:' + (hasLW ? '#dcfce7' : '#fef3c7') + ';padding:8px 14px;display:flex;justify-content:space-between;align-items:center">' +
+        '<div><strong>👤 ' + (assignee === '__unassigned__' ? '⚠ 未割当' : assignee) + '</strong>' +
+        (hasLW ? '<span style="font-size:10px;color:#14532d;margin-left:8px">📲 LW: ' + lwUserId.substring(0,12) + '...</span>' : '<span style="font-size:10px;color:#92400e;margin-left:8px">⚠ LW ID 未設定</span>') +
+        '</div>' +
+        '<span style="font-size:11px;color:#666"><strong>' + list.length + '</strong> 件</span>' +
+      '</div>' +
+      list.map(function(a){
+        return '<div style="padding:8px 14px;border-top:1px solid #f3f4f6;display:flex;gap:8px;align-items:flex-start">' +
+          '<span style="background:' + prioColor[a.priority] + ';color:#fff;font-size:10px;padding:2px 6px;border-radius:3px;font-weight:700;white-space:nowrap">' + typeIcon[a.type] + ' ' + a.priority + '</span>' +
+          '<div style="flex:1;font-size:11px;color:#374151;white-space:pre-wrap">' + _escDiff(a.message) + '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }).join('');
+
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:780px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#dc2626;color:#fff;display:flex;justify-content:space-between"><div><strong>🚨 重要案件アラート (' + alerts.length + '件)</strong><div style="font-size:11px;opacity:.85;margin-top:2px">LINE WORKS で担当者に通知</div></div><button onclick="this.closest(\'.proof-modal\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button></div>' +
+      '<div style="overflow-y:auto;flex:1;padding:14px 20px">' + groupHtml + '</div>' +
+      '<div style="padding:12px 20px;background:#f9fafb;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;gap:8px">' +
+        '<div style="font-size:11px;color:#666;align-self:center">⚠ 「LW ID 未設定」の担当者には届きません。<br>📞 宛先マスタで担当者名と LW ユーザー ID を登録してください</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button class="btn" onclick="this.closest(\'.proof-modal\').remove()">キャンセル</button>' +
+          '<button class="btn btn-p" style="background:#dc2626;border-color:#dc2626" onclick="_executeAlertDispatch_(' + JSON.stringify(alerts).replace(/"/g,'&quot;') + ')">📤 全員に送信</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+// ─────────────────────────────────────────────────────
+// 📊 MMM-1: 工程ガントチャート
+// ─────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────
+// 💰 NNN-1: 締め日請求一括発行 (月末処理の自動化)
+// ─────────────────────────────────────────────────────
+function showBulkInvoiceModal(){
+  // 対象月を選択 (デフォルト: 今月)
+  var now = new Date();
+  var defaultMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:1100px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#dc2626;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">' +
+        '<div><strong>💰 締め日請求一括発行</strong>' +
+        '<div style="font-size:11px;opacity:.85;margin-top:2px">月末締め顧客の未請求案件をまとめて請求書発行</div></div>' +
+        '<div style="display:flex;gap:6px;align-items:center">' +
+          '<input type="month" id="bulk-invoice-month" value="' + defaultMonth + '" onchange="renderBulkInvoicePreview()" style="padding:4px 8px;border-radius:4px;border:none;font-size:12px">' +
+          '<button onclick="this.closest(\'.proof-modal\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="bulk-invoice-body" style="overflow-y:auto;flex:1;padding:14px"></div>' +
+      '<div id="bulk-invoice-footer" style="padding:12px 20px;background:#f9fafb;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;gap:8px"></div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  setTimeout(renderBulkInvoicePreview, 50);
+}
+
+function renderBulkInvoicePreview(){
+  var body = document.getElementById('bulk-invoice-body');
+  var footer = document.getElementById('bulk-invoice-footer');
+  if(!body) return;
+  var month = document.getElementById('bulk-invoice-month')?.value || '';
+  if(!month) return;
+
+  var monthStart = month + '-01';
+  var monthEnd = (function(){
+    var p = month.split('-');
+    var d = new Date(parseInt(p[0]), parseInt(p[1]), 0);
+    return p[0] + '-' + p[1] + '-' + String(d.getDate()).padStart(2,'0');
+  })();
+
+  // 当月内に「納品済」になった、まだ請求書が発行されていない案件を抽出
+  var alreadyInvoicedProjectIds = new Set();
+  (DB.invoices || []).forEach(function(inv){
+    if(Array.isArray(inv.lineItems)){
+      inv.lineItems.forEach(function(li){ if(li.projectId) alreadyInvoicedProjectIds.add(li.projectId); });
+    }
+    if(inv.projectId) alreadyInvoicedProjectIds.add(inv.projectId);
+  });
+
+  var targets = (DB.projects || []).filter(function(p){
+    if(alreadyInvoicedProjectIds.has(p.id)) return false;
+    if(!p.exTax || p.exTax <= 0) return false;
+    // 当月内の納品案件 (stepDates.納品 もしくは dueDate)
+    var deliveredDate = (p.stepDates && p.stepDates['納品']) || p.dueDate || '';
+    if(!deliveredDate) return false;
+    if(deliveredDate < monthStart || deliveredDate > monthEnd) return false;
+    if(p.status === 'キャンセル' || p.status === '失注') return false;
+    return true;
+  });
+
+  // 顧客別グループ化
+  var byCust = {};
+  targets.forEach(function(p){
+    var key = p.cust || '(顧客未設定)';
+    if(!byCust[key]) byCust[key] = { projects: [], total: 0 };
+    byCust[key].projects.push(p);
+    byCust[key].total += (p.exTax || 0);
+  });
+
+  var custKeys = Object.keys(byCust).sort();
+  var grandTotal = custKeys.reduce(function(s, k){ return s + byCust[k].total; }, 0);
+  var grandCount = custKeys.reduce(function(s, k){ return s + byCust[k].projects.length; }, 0);
+
+  if(custKeys.length === 0){
+    body.innerHTML = '<div style="text-align:center;padding:60px;color:#888"><div style="font-size:36px;margin-bottom:8px">📭</div>' + month + ' に発行対象の案件はありません<br><span style="font-size:11px">(納品済かつ未請求の案件のみ抽出)</span></div>';
+    footer.innerHTML = '';
+    return;
+  }
+
+  var html = '<div style="background:#fef3c7;border:1px solid #fbbf24;color:#78350f;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:12px">📅 <strong>' + month + ' 締め分</strong>: 顧客 ' + custKeys.length + '社 / 案件 ' + grandCount + '件 / 合計 ¥' + grandTotal.toLocaleString() + ' (税抜)</div>';
+  html += '<table style="width:100%;font-size:12px;border-collapse:collapse">';
+  html += '<thead><tr style="background:#f3f4f6"><th style="padding:8px;text-align:left"><input type="checkbox" id="bulk-inv-all" checked onchange="document.querySelectorAll(\'.bulk-inv-cb\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th style="padding:8px;text-align:left">顧客</th><th style="padding:8px;text-align:right">案件数</th><th style="padding:8px;text-align:right">合計 (税抜)</th><th style="padding:8px">案件内訳</th></tr></thead><tbody>';
+  custKeys.forEach(function(cust){
+    var g = byCust[cust];
+    html += '<tr style="border-bottom:1px solid #e5e7eb">' +
+      '<td style="padding:8px"><input type="checkbox" class="bulk-inv-cb" data-cust="' + cust.replace(/"/g,'&quot;') + '" checked></td>' +
+      '<td style="padding:8px;font-weight:700">' + _escDiff(cust) + '</td>' +
+      '<td style="padding:8px;text-align:right">' + g.projects.length + '</td>' +
+      '<td style="padding:8px;text-align:right;font-family:monospace;font-weight:700">¥' + g.total.toLocaleString() + '</td>' +
+      '<td style="padding:8px;font-size:11px;color:#666">' +
+        g.projects.map(function(p){ return p.id + ' ' + (p.item||'').substring(0,15) + ' ¥' + (p.exTax||0).toLocaleString(); }).join('<br>') +
+      '</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+
+  footer.innerHTML =
+    '<div style="font-size:11px;color:#666;align-self:center">⚠ 発行された請求書は 💴売上 → 請求書 タブで確認・編集できます</div>' +
+    '<button class="btn btn-p" style="background:#dc2626;border-color:#dc2626" onclick="executeBulkInvoiceIssue(\'' + month + '\')">📤 選択した顧客に一括発行</button>';
+}
+
+function executeBulkInvoiceIssue(month){
+  var checked = Array.from(document.querySelectorAll('.bulk-inv-cb')).filter(function(c){ return c.checked; });
+  if(!checked.length){ alert('1社以上選択してください'); return; }
+  if(!confirm(checked.length + ' 社に対して請求書を一括発行します。\n\n月: ' + month + '\n\n続行しますか?')) return;
+
+  var monthStart = month + '-01';
+  var monthEnd = (function(){
+    var p = month.split('-');
+    var d = new Date(parseInt(p[0]), parseInt(p[1]), 0);
+    return p[0] + '-' + p[1] + '-' + String(d.getDate()).padStart(2,'0');
+  })();
+
+  var alreadyInvoicedProjectIds = new Set();
+  (DB.invoices || []).forEach(function(inv){
+    if(Array.isArray(inv.lineItems)){
+      inv.lineItems.forEach(function(li){ if(li.projectId) alreadyInvoicedProjectIds.add(li.projectId); });
+    }
+    if(inv.projectId) alreadyInvoicedProjectIds.add(inv.projectId);
+  });
+
+  if(!DB.invoices) DB.invoices = [];
+  var issuedCount = 0;
+  var totalAmount = 0;
+
+  checked.forEach(function(cb){
+    var cust = cb.dataset.cust;
+    var projects = (DB.projects || []).filter(function(p){
+      if(p.cust !== cust) return false;
+      if(alreadyInvoicedProjectIds.has(p.id)) return false;
+      var deliveredDate = (p.stepDates && p.stepDates['納品']) || p.dueDate || '';
+      if(!deliveredDate || deliveredDate < monthStart || deliveredDate > monthEnd) return false;
+      if(p.status === 'キャンセル' || p.status === '失注') return false;
+      return true;
+    });
+    if(!projects.length) return;
+
+    var subtotal = projects.reduce(function(s, p){ return s + (p.exTax || 0); }, 0);
+    var tax = Math.floor(subtotal * 0.10);
+    var total = subtotal + tax;
+
+    var invoice = {
+      id: 'INV' + new Date().getTime() + '-' + Math.floor(Math.random() * 1000),
+      companyId: currentAuth?.companyId || 'COMP001',
+      cust: cust,
+      issueDate: new Date().toISOString().slice(0, 10),
+      dueDate: '', // 集計後手動設定
+      closingMonth: month,
+      lineItems: projects.map(function(p){
+        return {
+          projectId: p.id,
+          item: p.item || '',
+          qty: p.qty || 1,
+          unit: p.unit || '部',
+          unitPrice: Math.round((p.exTax||0) / Math.max(1, (p.qty||1))),
+          subtotal: p.exTax || 0
+        };
+      }),
+      subtotal: subtotal,
+      tax: tax,
+      total: total,
+      status: 'issued',
+      paymentStatus: 'unpaid',
+      memo: '【' + month + ' 締め一括請求】' + projects.length + '件',
+      createdAt: new Date().toISOString(),
+      createdBy: (currentAuth && currentAuth.userName) || '',
+      bulkIssued: true
+    };
+    DB.invoices.push(invoice);
+
+    // プロジェクトに請求済みマークをつける
+    projects.forEach(function(p){
+      p.invoicedAt = new Date().toISOString();
+      p.invoiceId = invoice.id;
+    });
+
+    issuedCount++;
+    totalAmount += total;
+  });
+
+  if(typeof _addAuditLog_ === 'function') _addAuditLog_('bulk_invoice', 'system', month + '締め: ' + issuedCount + '件発行 / 合計 ¥' + totalAmount.toLocaleString());
+  if(typeof saveDB === 'function') saveDB();
+  if(typeof saveToCloud === 'function') saveToCloud();
+  alert('✅ 一括発行完了\n\n発行件数: ' + issuedCount + ' 件\n合計金額: ¥' + totalAmount.toLocaleString() + ' (税込)\n\n💴売上 → 請求書 タブで確認・編集できます');
+  document.querySelector('.proof-modal')?.remove();
+  if(typeof renderInvoices === 'function') try { renderInvoices(); } catch(e){}
+}
+
+function showProjectGantt(){
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:1280px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#1e293b;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">' +
+        '<div><strong>📊 工程ガントチャート</strong>' +
+        '<div style="font-size:11px;opacity:.85;margin-top:2px">案件の 5 工程 (版下/校了/印刷/加工/納品) を日次タイムラインで可視化</div></div>' +
+        '<div style="display:flex;gap:6px;align-items:center">' +
+          '<select id="gantt-range" onchange="renderGanttChart()" style="padding:4px 8px;border-radius:4px;border:none;font-size:12px">' +
+            '<option value="14">直近14日</option>' +
+            '<option value="30" selected>直近30日</option>' +
+            '<option value="60">直近60日</option>' +
+            '<option value="90">直近90日</option>' +
+          '</select>' +
+          '<select id="gantt-status" onchange="renderGanttChart()" style="padding:4px 8px;border-radius:4px;border:none;font-size:12px">' +
+            '<option value="active">稼働中のみ</option>' +
+            '<option value="all">全案件</option>' +
+            '<option value="overdue">納期超過のみ</option>' +
+          '</select>' +
+          '<button onclick="this.closest(\'.proof-modal\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="gantt-body" style="overflow:auto;flex:1;padding:14px"></div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  setTimeout(renderGanttChart, 50);
+}
+
+function renderGanttChart(){
+  var body = document.getElementById('gantt-body');
+  if(!body) return;
+  var rangeDays = parseInt(document.getElementById('gantt-range')?.value || '30', 10);
+  var statusFilter = document.getElementById('gantt-status')?.value || 'active';
+
+  var today = new Date();
+  today.setHours(0,0,0,0);
+  var startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - 7); // 7日前から
+  var endDate = new Date(today);
+  endDate.setDate(endDate.getDate() + (rangeDays - 7));
+
+  var dayCount = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+  var dayWidth = 28;
+
+  // 案件フィルタ
+  var projects = (DB.projects || []).filter(function(p){
+    if(!p.orderDate && !p.dueDate) return false;
+    if(statusFilter === 'active'){
+      if(p.status === '完了' || p.status === '納品済' || p.status === 'キャンセル' || p.status === '失注') return false;
+    }
+    if(statusFilter === 'overdue'){
+      if(!p.dueDate) return false;
+      if(new Date(p.dueDate) >= today) return false;
+      if(p.status === '完了' || p.status === '納品済') return false;
+    }
+    // 期間内の案件のみ
+    var st = p.orderDate ? new Date(p.orderDate) : startDate;
+    var en = p.dueDate ? new Date(p.dueDate) : endDate;
+    return en >= startDate && st <= endDate;
+  });
+  projects.sort(function(a,b){ return (a.dueDate||'').localeCompare(b.dueDate||''); });
+
+  if(!projects.length){
+    body.innerHTML = '<div style="text-align:center;padding:60px;color:#888"><div style="font-size:36px;margin-bottom:8px">📊</div>表示対象の案件がありません</div>';
+    return;
+  }
+
+  // ヘッダー (日付)
+  var headerCells = '';
+  for(var i = 0; i < dayCount; i++){
+    var d = new Date(startDate);
+    d.setDate(d.getDate() + i);
+    var isToday = d.toDateString() === today.toDateString();
+    var isWeekend = d.getDay() === 0 || d.getDay() === 6;
+    var bgColor = isToday ? '#1e40af' : (isWeekend ? '#fef3c7' : '#f9fafb');
+    var textColor = isToday ? '#fff' : (isWeekend ? '#78350f' : '#666');
+    headerCells += '<div style="min-width:' + dayWidth + 'px;padding:4px 0;background:' + bgColor + ';color:' + textColor + ';text-align:center;font-size:9px;border-right:1px solid #e5e7eb' + (isToday ? ';font-weight:700' : '') + '">' +
+      '<div>' + (d.getMonth()+1) + '/' + d.getDate() + '</div>' +
+      '<div style="font-size:8px">' + ['日','月','火','水','木','金','土'][d.getDay()] + '</div>' +
+    '</div>';
+  }
+
+  var stepIcons = { '版下':'📐', '校了':'✅', '印刷':'🖨', '加工':'✂', '納品':'🚚' };
+  var stepColors = { '版下':'#7c3aed', '校了':'#16a34a', '印刷':'#1e40af', '加工':'#f59e0b', '納品':'#0891b2' };
+
+  var rowsHtml = projects.map(function(p, idx){
+    var bars = '';
+    var startD = p.orderDate ? new Date(p.orderDate) : null;
+    var endD = p.dueDate ? new Date(p.dueDate) : null;
+    if(startD && endD){
+      var startOffset = Math.max(0, Math.floor((startD - startDate) / (1000 * 60 * 60 * 24)));
+      var duration = Math.floor((endD - startD) / (1000 * 60 * 60 * 24)) + 1;
+      var widthPx = duration * dayWidth;
+      var leftPx = startOffset * dayWidth;
+      var isOverdue = endD < today && p.status !== '完了' && p.status !== '納品済';
+      var barColor = isOverdue ? '#dc2626' : (p.status === '完了' || p.status === '納品済' ? '#16a34a' : '#1e40af');
+
+      // 工程マーカー (stepDates)
+      var stepMarkers = '';
+      ['版下','校了','印刷','加工','納品'].forEach(function(step){
+        var dt = p.stepDates && p.stepDates[step];
+        if(!dt) return;
+        var dDate = new Date(dt);
+        var dOff = Math.floor((dDate - startDate) / (1000 * 60 * 60 * 24));
+        if(dOff < 0 || dOff >= dayCount) return;
+        stepMarkers += '<div title="' + step + ' (' + dt + ') ' + (p.steps?.[step]||'') + '" style="position:absolute;left:' + (dOff * dayWidth + dayWidth/2 - 8) + 'px;top:8px;width:16px;height:16px;background:' + stepColors[step] + ';color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;cursor:pointer;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);z-index:2">' + stepIcons[step] + '</div>';
+      });
+
+      bars = '<div style="position:absolute;left:' + leftPx + 'px;top:8px;width:' + widthPx + 'px;height:16px;background:' + barColor + ';border-radius:3px;display:flex;align-items:center;padding:0 6px;z-index:1" title="' + p.id + ' / ' + p.cust + '">' +
+        '<span style="color:#fff;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + p.id + ' ' + (p.cust||'') + '</span>' +
+      '</div>' + stepMarkers;
+    }
+    return '<div style="display:flex;border-bottom:1px solid #f3f4f6">' +
+      '<div style="min-width:240px;max-width:240px;padding:8px;font-size:11px;border-right:1px solid #e5e7eb;background:#fafafa;cursor:pointer" onclick="document.querySelector(\'.proof-modal\')?.remove();swPage(\'project\',document.querySelector(\'.tb-btn[data-page=project]\'))">' +
+        '<div style="font-weight:700;font-family:monospace">' + p.id + '</div>' +
+        '<div style="color:#666;font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (p.cust||'') + '</div>' +
+        '<div style="color:#888;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (p.item||'') + '</div>' +
+      '</div>' +
+      '<div style="position:relative;flex:1;height:32px;background-image:repeating-linear-gradient(90deg,transparent,transparent ' + (dayWidth-1) + 'px,#f0f0f0 ' + (dayWidth-1) + 'px,#f0f0f0 ' + dayWidth + 'px)">' + bars + '</div>' +
+    '</div>';
+  }).join('');
+
+  body.innerHTML =
+    '<div style="margin-bottom:10px;display:flex;gap:14px;font-size:11px;flex-wrap:wrap">' +
+      '<span><span style="display:inline-block;width:14px;height:10px;background:#1e40af;border-radius:2px;vertical-align:middle"></span> 進行中</span>' +
+      '<span><span style="display:inline-block;width:14px;height:10px;background:#16a34a;border-radius:2px;vertical-align:middle"></span> 完了</span>' +
+      '<span><span style="display:inline-block;width:14px;height:10px;background:#dc2626;border-radius:2px;vertical-align:middle"></span> 納期超過</span>' +
+      '<span style="margin-left:8px;color:#666">マーカー: 📐版下 ✅校了 🖨印刷 ✂加工 🚚納品</span>' +
+      '<span style="margin-left:auto;color:#888">' + projects.length + '案件 / ' + dayCount + '日</span>' +
+    '</div>' +
+    '<div style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">' +
+      '<div style="display:flex;position:sticky;top:0;z-index:3;background:#fff">' +
+        '<div style="min-width:240px;max-width:240px;padding:8px;font-size:11px;background:#1e293b;color:#fff;border-right:1px solid #374151;font-weight:700">案件</div>' +
+        '<div style="display:flex;flex:1">' + headerCells + '</div>' +
+      '</div>' +
+      rowsHtml +
+    '</div>';
+}
+
+async function _executeAlertDispatch_(alertsHtml){
+  // alertsHtml は HTML エスケープ済の JSON 文字列 — 復元
+  var alerts;
+  try { alerts = typeof alertsHtml === 'string' ? JSON.parse(alertsHtml.replace(/&quot;/g,'"')) : alertsHtml; }
+  catch(e){ alert('データ復元失敗'); return; }
+  if(!confirm(alerts.length + ' 件のアラートを LINE WORKS で送信します。よろしいですか?')) return;
+
+  var dispatched = alerts.map(function(a){
+    return Object.assign({}, a, { assigneeLwUserId: _resolveAssigneeLwUserId_(a.assignee) });
+  }).filter(function(a){ return !!a.assigneeLwUserId; });
+
+  if(dispatched.length === 0){
+    alert('⚠ 送信可能な担当者 (LW ID 登録済) がいません');
+    return;
+  }
+  try {
+    var resp = await callCloudAPI('dispatchAlerts', {}, { alerts: dispatched });
+    if(resp && resp.success){
+      if(typeof _addAuditLog_ === 'function') _addAuditLog_('alert', 'system', resp.sent + '件送信 / ' + resp.failed + '件失敗 / 計' + resp.total + '件');
+      alert('✅ 送信完了\n\n送信成功: ' + resp.sent + '件\n失敗: ' + resp.failed + '件\nスキップ: ' + (alerts.length - dispatched.length) + '件 (LW ID 未設定)');
+      document.querySelector('.proof-modal')?.remove();
+    } else {
+      alert('⚠ ' + (resp?.error || '送信失敗'));
+    }
+  } catch(e){
+    alert('⚠ ' + e.message);
+  }
 }
 
 // ── Chatbot Tool Use 定義 ──────────────────────────────
@@ -21123,26 +21677,76 @@ function renderProjects(){
       ? `<button class="use-btn" style="background:#0891b2;color:#fff;border-color:#0891b2;white-space:nowrap" onclick="showProjectDriveFolderPreview('${r.id}')">📁 Drive プレビュー</button>`
       : `<button class="use-btn" style="background:#ecfeff;border-color:#67e8f9;color:#0e7490;white-space:nowrap" onclick="createProjectDriveFolder('${r.id}')">📁 Drive フォルダ作成</button>`;
     const repeatBtn = `<button class="use-btn" style="background:#fef3c7;border-color:#fbbf24;color:#78350f;white-space:nowrap" onclick="repeatProjectFromPrevious('${r.id}')" title="この案件をリピート (新案件作成 + 校了データを 00_前回データ にコピー)">🔁 リピート発注</button>`;
+    // KKK-1: タブ式整理 (基本/進捗/仕様/Drive/アクション)
+    const stepIcons = { '版下':'📐', '校了':'✅', '印刷':'🖨', '加工':'✂', '納品':'🚚' };
+    const stepStatusColor = function(s){
+      if(s === '完了' || s === 'OK' || s === '済' || s === '送付済') return '#16a34a';
+      if(s === '進行中' || s === '対応中' || s === '校正中') return '#f59e0b';
+      if(s === '未着手' || s === '─') return '#9ca3af';
+      return '#6b7280';
+    };
+    const stepsHtml = ['版下','校了','印刷','加工','納品'].map(function(stepName){
+      var st = (r.steps && r.steps[stepName]) || '─';
+      var dt = (r.stepDates && r.stepDates[stepName]) || '';
+      return '<div style="flex:1;text-align:center;padding:8px 4px;background:' + stepStatusColor(st) + '15;border-radius:6px;border:1px solid ' + stepStatusColor(st) + '40">' +
+        '<div style="font-size:11px;color:' + stepStatusColor(st) + ';font-weight:700">' + stepIcons[stepName] + ' ' + stepName + '</div>' +
+        '<div style="font-size:11px;font-weight:600;color:' + stepStatusColor(st) + ';margin-top:2px">' + st + '</div>' +
+        (dt ? '<div style="font-size:9px;color:#888;margin-top:2px">' + dt + '</div>' : '') +
+      '</div>';
+    }).join('');
+
     const specRow=`<tr id="proj-acc-${oi}" style="display:none;background:#f9f9f7">
-      <td colspan="12" style="padding:.5rem 1rem .75rem 2rem">
-        <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">
-          <div>
-            ${r.spec?`<div style="margin-bottom:4px"><span style="font-size:10px;font-weight:700;color:#aaa;letter-spacing:.08em">仕様・規格</span><div style="font-size:12px;white-space:pre-wrap;margin-top:2px;color:#1a1a1a">${r.spec}</div></div>`:''}
-            ${r.memo?`<div style="margin-top:6px"><span style="font-size:10px;font-weight:700;color:#aaa;letter-spacing:.08em">備考・メモ</span><div style="font-size:12px;white-space:pre-wrap;margin-top:2px;color:#555">${r.memo}</div></div>`:''}
-            ${r.qty?`<div style="margin-top:6px;font-size:11px;color:#888">数量: <strong>${r.qty.toLocaleString()}${r.unit||''}</strong>　原価合計: <strong>${r.grand?fmt(r.grand):''}</strong></div>`:''}
-            ${r.fromRepeatProjectId?`<div style="margin-top:6px;font-size:11px;color:#92400e;background:#fef3c7;padding:4px 8px;border-radius:4px;display:inline-block">🔁 リピート: ${r.fromRepeatProjectId} の R${r.repeatCount||1} 版</div>`:''}
+      <td colspan="12" style="padding:0">
+        <div style="background:#fff;margin:8px 12px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+          <!-- タブヘッダー -->
+          <div style="display:flex;background:#f9fafb;border-bottom:1px solid #e5e7eb">
+            <button class="proj-detail-tab act" data-tab="basic" data-oi="${oi}" onclick="_swProjTab_(this,'basic',${oi})" style="flex:1;padding:10px;border:none;background:transparent;font-size:12px;cursor:pointer;border-bottom:2px solid #1e40af;color:#1e40af;font-weight:700">📋 基本</button>
+            <button class="proj-detail-tab" data-tab="progress" data-oi="${oi}" onclick="_swProjTab_(this,'progress',${oi})" style="flex:1;padding:10px;border:none;background:transparent;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#666">🔄 進捗</button>
+            <button class="proj-detail-tab" data-tab="spec" data-oi="${oi}" onclick="_swProjTab_(this,'spec',${oi})" style="flex:1;padding:10px;border:none;background:transparent;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#666">📝 仕様</button>
+            <button class="proj-detail-tab" data-tab="drive" data-oi="${oi}" onclick="_swProjTab_(this,'drive',${oi})" style="flex:1;padding:10px;border:none;background:transparent;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#666">📁 データ</button>
+            <button class="proj-detail-tab" data-tab="action" data-oi="${oi}" onclick="_swProjTab_(this,'action',${oi})" style="flex:1;padding:10px;border:none;background:transparent;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#666">⚡ アクション</button>
           </div>
-          <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
-            ${driveBtn}
-            ${repeatBtn}
-            ${specBtn}
-            ${estimateBtn}
-            ${workBtn}
-            ${timelineBtn}
-            ${outsourceSpecBtn}
-            ${proofBadge}
-            ${deliveryBtn}
-            <button class="use-btn" style="white-space:nowrap" onclick="editProjDetail(${oi})">✏ 編集</button>
+          <!-- 基本タブ -->
+          <div id="proj-tab-basic-${oi}" class="proj-tab-content" style="padding:14px">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:10px">
+              <div style="background:#dbeafe;padding:8px;border-radius:6px"><div style="font-size:10px;color:#1e3a8a">数量</div><div style="font-size:14px;font-weight:700">${r.qty?r.qty.toLocaleString():'-'}${r.unit||''}</div></div>
+              <div style="background:#dcfce7;padding:8px;border-radius:6px"><div style="font-size:10px;color:#14532d">原価合計</div><div style="font-size:14px;font-weight:700">${r.grand?fmt(r.grand):'-'}</div></div>
+              <div style="background:#fef3c7;padding:8px;border-radius:6px"><div style="font-size:10px;color:#78350f">税抜売価</div><div style="font-size:14px;font-weight:700">¥${(r.exTax||0).toLocaleString()}</div></div>
+              <div style="background:#f3e8ff;padding:8px;border-radius:6px"><div style="font-size:10px;color:#5b21b6">納期</div><div style="font-size:14px;font-weight:700">${r.dueDate||'-'}</div></div>
+            </div>
+            ${r.fromRepeatProjectId?`<div style="margin-bottom:8px;font-size:11px;color:#92400e;background:#fef3c7;padding:6px 10px;border-radius:4px;display:inline-block">🔁 リピート: ${r.fromRepeatProjectId} の R${r.repeatCount||1} 版</div>`:''}
+            ${r.memo?`<div style="background:#f9fafb;padding:8px 12px;border-radius:6px;font-size:12px;line-height:1.6;white-space:pre-wrap;color:#555"><strong style="font-size:10px;color:#888">📝 備考:</strong><br>${_escDiff(r.memo)}</div>`:''}
+          </div>
+          <!-- 進捗タブ -->
+          <div id="proj-tab-progress-${oi}" class="proj-tab-content" style="display:none;padding:14px">
+            <div style="display:flex;gap:6px;margin-bottom:10px">${stepsHtml}</div>
+            <div style="font-size:11px;color:#888;text-align:center">⬆ 5 工程の状況。クリックで「✏ 編集」から変更可能</div>
+          </div>
+          <!-- 仕様タブ -->
+          <div id="proj-tab-spec-${oi}" class="proj-tab-content" style="display:none;padding:14px">
+            ${r.spec?`<div style="background:#fafafa;padding:10px 12px;border-radius:6px;font-size:13px;white-space:pre-wrap;line-height:1.7;color:#1a1a1a;border-left:3px solid #1e40af">${_escDiff(r.spec)}</div>`:'<div style="text-align:center;color:#888;padding:20px;font-size:12px">仕様未入力</div>'}
+            <div style="margin-top:10px;display:flex;gap:6px;justify-content:flex-end">
+              ${specBtn}
+              ${outsourceSpecBtn}
+            </div>
+          </div>
+          <!-- Drive タブ -->
+          <div id="proj-tab-drive-${oi}" class="proj-tab-content" style="display:none;padding:14px">
+            ${r.driveFolderId
+              ? `<div style="background:#ecfeff;border:1px solid #67e8f9;border-radius:6px;padding:10px;margin-bottom:8px"><div style="font-size:12px;color:#0e7490;margin-bottom:6px">✅ Drive フォルダ連携済み</div><a href="https://drive.google.com/drive/folders/${r.driveFolderId}" target="_blank" style="font-size:11px;color:#0891b2;text-decoration:underline">📁 Drive で開く →</a></div><div style="display:flex;gap:6px;flex-wrap:wrap">${driveBtn}${repeatBtn}</div>`
+              : `<div style="text-align:center;color:#888;padding:20px;font-size:12px">📁 Drive フォルダがまだありません</div><div style="display:flex;gap:6px;justify-content:center">${driveBtn}</div>`
+            }
+          </div>
+          <!-- アクションタブ -->
+          <div id="proj-tab-action-${oi}" class="proj-tab-content" style="display:none;padding:14px">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px">
+              ${estimateBtn}
+              ${workBtn}
+              ${timelineBtn}
+              ${proofBadge}
+              ${deliveryBtn}
+              <button class="use-btn" style="white-space:nowrap;background:#1e293b;color:#fff;border-color:#1e293b" onclick="editProjDetail(${oi})">✏ 編集</button>
+            </div>
           </div>
         </div>
       </td>
