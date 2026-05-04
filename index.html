@@ -17008,13 +17008,24 @@ function executeBulkInvoiceIssue(month){
     var tax = Math.floor(subtotal * 0.10);
     var total = subtotal + tax;
 
+    // 支払期限 = 翌月末日 (デフォルト)
+    var dueDateObj = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0);
+    dueDateObj.setMonth(dueDateObj.getMonth() + 1);
+    var dueDateStr = dueDateObj.getFullYear() + '-' + String(dueDateObj.getMonth()+1).padStart(2,'0') + '-' + String(dueDateObj.getDate()).padStart(2,'0');
+
     var invoice = {
       id: 'INV' + new Date().getTime() + '-' + Math.floor(Math.random() * 1000),
       companyId: currentAuth?.companyId || 'COMP001',
       cust: cust,
+      type: 'shime',                  // ← 既存 renderInvoices が type='shime' フィルタを使う
+      issuedAt: new Date().toISOString(),  // ← 既存は issuedAt (issueDate ではない)
       issueDate: new Date().toISOString().slice(0, 10),
-      dueDate: '', // 集計後手動設定
+      dueDate: dueDateStr,
       closingMonth: month,
+      // 既存形式の品名/数量/単価を最上位にも持たせる (renderInvoices の総計計算用にも)
+      item: projects.length === 1
+        ? (projects[0].item || '')
+        : ('【' + month + ' 締め】' + projects.length + '件まとめ請求'),
       lineItems: projects.map(function(p){
         return {
           projectId: p.id,
@@ -17028,9 +17039,8 @@ function executeBulkInvoiceIssue(month){
       subtotal: subtotal,
       tax: tax,
       total: total,
-      status: 'issued',
-      paymentStatus: 'unpaid',
-      memo: '【' + month + ' 締め一括請求】' + projects.length + '件',
+      status: 'sent',                 // ← 発行 = 送付済として登録 (draft/sent/paid/overdue)
+      memo: '【' + month + ' 締め一括請求】\n対象案件 ' + projects.length + '件:\n' + projects.map(function(p){ return '・' + p.id + ' ' + (p.item||'') + ' ¥' + (p.exTax||0).toLocaleString(); }).join('\n'),
       createdAt: new Date().toISOString(),
       createdBy: (currentAuth && currentAuth.userName) || '',
       bulkIssued: true
