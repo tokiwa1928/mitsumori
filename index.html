@@ -3445,7 +3445,17 @@ async function loadFromCloud() {
     console.warn('Notification check failed:', e);
   }
 
-  // 🤖 メール下書きを自動生成 (バックグラウンド、最大 5 件/同期)
+  // 🤖 メール要約 + 下書きを自動生成 (バックグラウンド、各最大 5 件/同期)
+  if(typeof autoGenerateAllSummaries === 'function'){
+    setTimeout(function(){
+      autoGenerateAllSummaries({ maxBatch: 5 }).then(function(r){
+        if(r.generated > 0){
+          console.log('自動要約生成: ' + r.generated + ' 件');
+          if(typeof _toastMsg === 'function') _toastMsg('🤖 ' + r.generated + ' 件のメールに AI 要約を生成しました');
+        }
+      }).catch(function(e){ console.warn('auto summary batch failed', e); });
+    }, 1000);
+  }
   if(typeof autoGenerateAllDrafts === 'function'){
     setTimeout(function(){
       autoGenerateAllDrafts({ maxBatch: 5 }).then(function(r){
@@ -3454,7 +3464,7 @@ async function loadFromCloud() {
           if(typeof _toastMsg === 'function') _toastMsg('🤖 ' + r.generated + ' 件のメールに自動下書きを作成しました');
         }
       }).catch(function(e){ console.warn('auto draft batch failed', e); });
-    }, 1500);
+    }, 6000);  // 要約より遅延 (要約完成後に下書き)
   }
 
   return true;
@@ -16545,6 +16555,58 @@ function _shouldAutoDraft_(inq){
   return src === 'gmail' || src === 'web_form' || src === 'linesvc';
 }
 
+// 🆕 AI で要約を自動生成 (1件) — 連絡カードの要約欄を埋める
+async function generateInquirySummary(inq){
+  if(!inq) return null;
+  if(inq.summary && inq.summary.trim()) return inq.summary;  // 既に要約があれば skip
+  if(!inq.body || inq.body.length < 30) return null;          // 短すぎる本文は要約不要
+  try {
+    var prompt = '以下のメール / 連絡を **2〜3 文の日本語要約** にしてください。\n' +
+      '- 誰が何をしてほしいかを冒頭に\n' +
+      '- 数量・期限・品名など具体的な情報を含める\n' +
+      '- 装飾語や挨拶は省く\n' +
+      '- 出力は要約本文のみ (前置き・引用符なし)\n\n' +
+      '## 件名\n' + (inq.subject || '(件名なし)') + '\n\n' +
+      '## 本文\n' + (inq.body || '');
+    var resp = await callCloudAPI('claudeChat', {}, {
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 300
+    });
+    if(!resp || !resp.success) return null;
+    var summary = resp.text || (resp.content && resp.content[0]?.text) || '';
+    summary = summary.trim().replace(/^["「『]|["」』]$/g, '').substring(0, 250);
+    if(summary){
+      inq.summary = summary;
+      if(typeof saveDB === 'function') saveDB();
+      return summary;
+    }
+  } catch(e){ console.warn('summary 生成失敗:', inq.id, e); }
+  return null;
+}
+
+// 一括: 要約が無いメール系問合せに自動生成 (sync 後 or 手動)
+async function autoGenerateAllSummaries(opts){
+  opts = opts || {};
+  var targets = (DB.inquiries || []).filter(function(inq){
+    if(inq.summary && inq.summary.trim()) return false;
+    if(!inq.body || inq.body.length < 50) return false;
+    var s = inq.source_type || '';
+    return s === 'gmail' || s === 'web_form' || s === 'linesvc';
+  });
+  if(opts.maxBatch) targets = targets.slice(0, opts.maxBatch);
+  var generated = 0;
+  for(var i = 0; i < targets.length; i++){
+    var r = await generateInquirySummary(targets[i]);
+    if(r) generated++;
+    if(i < targets.length - 1) await new Promise(function(res){ setTimeout(res, 800); });
+  }
+  if(generated > 0){
+    if(typeof saveDB === 'function') saveDB();
+    if(typeof renderInquiryList === 'function') renderInquiryList();
+  }
+  return { generated: generated, total: targets.length };
+}
+
 // 全メール下書きを一括自動生成 (sync 後 or 手動)
 async function autoGenerateAllDrafts(opts){
   opts = opts || {};
@@ -25191,7 +25253,9 @@ function renderInquiryList() {
           ${(inq.from_company || inq.company) ? '<span style="color:#888"> · ' + (inq.from_company || inq.company) + '</span>' : ''}
           ${inq.summary
             ? '<div style="color:#374151;margin-top:2px;white-space:pre-wrap;word-break:break-word">🤖 ' + _escDiff(inq.summary) + '</div>'
-            : (inq.body ? '<div style="color:#666;margin-top:2px;white-space:pre-wrap;word-break:break-word">' + _escDiff(inq.body.length > 200 ? inq.body.substring(0, 200) + '…' : inq.body) + '</div>' : '')
+            : (inq.body
+                ? '<div style="color:#666;margin-top:2px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;line-height:1.5;max-height:4.5em" title="' + _escDiff(inq.body) + '">' + _escDiff(inq.body.replace(/\n+/g, ' ').substring(0, 300)) + '</div>'
+                : '')
           }
         </div>
         <div style="display:flex;gap:6px;font-size:10px;color:#888;align-items:center;flex-wrap:nowrap;white-space:nowrap;flex-shrink:0">
