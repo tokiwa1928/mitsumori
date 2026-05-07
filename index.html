@@ -632,8 +632,7 @@ window.addEventListener('load', function(){
       </div>
     </div>
     <button class="tb-btn" data-page="schedule" onclick="swPage('schedule',this)" draggable="true" title="🏭 工程管理 — 制作・印刷・加工・製本の工程進捗管理。各工程の担当者・期日・ステータス追跡">🏭 工程管理</button>
-    <button class="tb-btn" data-page="calendar" onclick="swPage('calendar',this)" draggable="true" title="📅 納品 — 案件の納期カレンダー。月次ビューで納品予定を一覧">📅 納品</button>
-    <button class="tb-btn" data-page="delivery" onclick="swPage('delivery',this)" draggable="true" title="🚚 配送 — 配送予定とドライバー管理。タスクタイプ別 (納品/校正出し/サンプル/集荷)。Google Calendar 連携">🚚 配送</button>
+    <button class="tb-btn" data-page="delivery" onclick="swPage('delivery',this)" draggable="true" title="🚚 配送/納品 — 配送予定 + 納品カレンダー (サブタブで切替)。ドライバー別ビュー、Google Calendar 連携">🚚 配送/納品</button>
     <!-- 💴 売上 ドロップダウン -->
     <div class="tb-dropdown-wrap">
       <button class="tb-btn" id="tb-sales-btn" onclick="toggleSalesMenu(event)" draggable="true" title="💴 売上 — 請求書 / 領収書 / 入金管理">💴 売上 ▼</button>
@@ -1191,24 +1190,7 @@ window.addEventListener('load', function(){
 
 <!-- 設定ページ -->
 <!-- 納品カレンダーページ -->
-<div class="page" id="page-calendar">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
-    <div style="display:flex;align-items:center;gap:10px">
-      <button class="btn" onclick="calPrevMonth()">◀</button>
-      <span id="cal-title" style="font-size:15px;font-weight:700;min-width:120px;text-align:center"></span>
-      <button class="btn" onclick="calNextMonth()">▶</button>
-      <button class="btn" onclick="calToday()">今月</button>
-    </div>
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <span style="font-size:11px;color:#aaa">凡例：</span>
-      <span style="background:#1e40af;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px">納期</span>
-      <span style="background:#065f46;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px">納品済</span>
-      <span style="background:#78350f;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px">期限超過</span>
-      <button class="btn" onclick="swPage('project',document.querySelector('.tb-btn[onclick*=project]'))">案件一覧へ</button>
-    </div>
-  </div>
-  <div id="cal-grid" style="overflow-x:auto"></div>
-</div>
+<!-- (旧) 納品カレンダー単独ページは 配送タブのサブタブに統合済 -->
 
 <div class="page" id="page-settings">
   <div class="sec" style="max-width:560px">
@@ -1469,7 +1451,7 @@ window.addEventListener('load', function(){
       </div>
     </div>
     
-    <!-- 案件スケジュール一覧 -->
+    <!-- 案件スケジュール一覧 (メイン) -->
     <div class="sec" style="flex:2;min-width:500px">
       <div class="st" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <span>📋 案件スケジュール</span>
@@ -1481,23 +1463,14 @@ window.addEventListener('load', function(){
             <option value="today">本日作業</option>
             <option value="delayed">遅延あり</option>
           </select>
+          <button class="btn" style="font-size:11px;padding:4px 10px" onclick="showScheduleTemplateModal()" title="工程日数のテンプレートを管理">⚙ テンプレート</button>
         </div>
       </div>
-      <div id="schedule-list" style="max-height:500px;overflow-y:auto;margin-top:.5rem"></div>
+      <div id="schedule-list" style="max-height:600px;overflow-y:auto;margin-top:.5rem"></div>
     </div>
   </div>
-  
-  <!-- スケジュールテンプレート設定 -->
-  <div class="sec" style="margin-top:1rem">
-    <div class="st" style="display:flex;align-items:center;justify-content:space-between">
-      <span>📝 スケジュールテンプレート</span>
-      <button class="add-btn" onclick="addScheduleTemplate()">＋ テンプレート追加</button>
-    </div>
-    <div style="font-size:11px;color:#666;margin-bottom:.5rem">
-      品目ごとに標準の工程日数を設定します。納期から逆算してスケジュールを自動生成できます。
-    </div>
-    <div id="schedule-templates" style="display:flex;gap:1rem;flex-wrap:wrap"></div>
-  </div>
+  <!-- スケジュールテンプレートはモーダルへ移動 (showScheduleTemplateModal) -->
+  <div id="schedule-templates" style="display:none"></div>
 </div>
 
 <!-- 校正BOXページ -->
@@ -1573,6 +1546,15 @@ window.addEventListener('load', function(){
 
 <!-- 配送管理ページ -->
 <div class="page" id="page-delivery">
+  <!-- 🚚 / 📅 サブタブナビゲーション -->
+  <div style="display:flex;gap:6px;align-items:center;border-bottom:2px solid #e5e7eb;margin-bottom:12px;padding-bottom:6px;flex-wrap:wrap">
+    <button id="dlv-subtab-btn-shipping" class="btn" style="background:#0e7490;color:#fff;border-color:#0e7490;font-weight:700" onclick="swDeliverySubtab('shipping')">🚚 配送予定</button>
+    <button id="dlv-subtab-btn-calendar" class="btn" style="background:#fff;color:#0e7490;border-color:#67e8f9" onclick="swDeliverySubtab('calendar')">📅 納品カレンダー</button>
+    <span style="margin-left:auto;font-size:11px;color:#888">配送と納品が1つのタブに統合されました</span>
+  </div>
+
+  <!-- ===== サブタブ1: 配送予定 ===== -->
+  <div id="dlv-subtab-shipping">
   <!-- 使い方ガイド -->
   <div style="background:#cffafe;border:1px solid #67e8f9;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#0e7490;line-height:1.6">
     <strong>🚚 配送BOX とは:</strong> 配送予定の管理 + 納品書・領収書の発行を行う場所です。<br>
@@ -1598,11 +1580,18 @@ window.addEventListener('load', function(){
       <div class="st" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <span>🚚 配送予定表 (個別)</span>
         <div style="display:flex;gap:8px;align-items:center">
-          <input type="date" id="delivery-date" onchange="renderDeliverySchedule()" style="font-size:12px;padding:4px 8px">
+          <input type="date" id="delivery-date" onchange="document.getElementById('delivery-period').value='date';renderDeliverySchedule()" style="font-size:12px;padding:4px 8px">
           <button class="btn btn-p" onclick="addDeliveryItem()">＋ 配送追加</button>
         </div>
       </div>
       <div style="margin-bottom:.5rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="delivery-period" onchange="renderDeliverySchedule()" style="font-size:12px;padding:4px 8px;background:#dbeafe;border-color:#93c5fd">
+          <option value="today">📅 今日</option>
+          <option value="week" selected>📅 今週</option>
+          <option value="month">📅 今月</option>
+          <option value="date">指定日のみ</option>
+          <option value="all">すべて</option>
+        </select>
         <select id="delivery-driver" style="font-size:12px;padding:4px 8px" onchange="renderDeliverySchedule()">
           <option value="">全ドライバー</option>
         </select>
@@ -1670,6 +1659,31 @@ window.addEventListener('load', function(){
     </div>
     <div id="driver-list" style="margin-top:1rem;display:flex;gap:8px;flex-wrap:wrap"></div>
   </div>
+  </div><!-- /#dlv-subtab-shipping -->
+
+  <!-- ===== サブタブ2: 納品カレンダー ===== -->
+  <div id="dlv-subtab-calendar" style="display:none">
+    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#78350f;line-height:1.6">
+      <strong>📅 納品カレンダーとは:</strong> 案件の納期・納品済日を月別カレンダーで俯瞰できます。<br>
+      <strong>使い方:</strong> 日付セルの案件をクリックで案件詳細へ遷移。 <strong>凡例:</strong> 青=納期 / 緑=納品済 / 茶=期限超過
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn" onclick="calPrevMonth()">◀</button>
+        <span id="dlv-cal-title" style="font-size:15px;font-weight:700;min-width:120px;text-align:center"></span>
+        <button class="btn" onclick="calNextMonth()">▶</button>
+        <button class="btn" onclick="calToday()">今月</button>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:11px;color:#aaa">凡例：</span>
+        <span style="background:#1e40af;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px">納期</span>
+        <span style="background:#065f46;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px">納品済</span>
+        <span style="background:#78350f;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px">期限超過</span>
+        <button class="btn" onclick="swPage('project',document.querySelector('.tb-btn[onclick*=project]'))">案件一覧へ</button>
+      </div>
+    </div>
+    <div id="dlv-cal-grid" style="overflow-x:auto"></div>
+  </div><!-- /#dlv-subtab-calendar -->
 </div>
 
 <!-- 社間依頼ページ -->
@@ -1748,9 +1762,8 @@ window.addEventListener('load', function(){
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span id="inq-period-wrapper"></span>
           <span id="inq-count" style="font-size:11px;color:#888"></span>
-          <button class="btn btn-p" onclick="addInquiryManual()">＋ 社外問合せ</button>
-          <button class="btn" style="background:#fef9c3;border-color:#fde047" onclick="openInternalMessageModal()">🏢 社内連絡</button>
-          <button class="btn" style="background:#cffafe;border-color:#67e8f9;color:#0e7490" onclick="createIntercoRequest()">🔄 社間依頼</button>
+          <button class="btn btn-p" onclick="addInquiryManual()">📞 受電・対面メモ</button>
+          <button class="btn" style="background:#fef9c3;border-color:#fde047" onclick="openInternalMessageModal()">🏢 社内/社間連絡</button>
           <button class="btn" onclick="showInquiryFormPreview()">📋 公開フォーム</button>
         </div>
       </div>
@@ -9692,6 +9705,35 @@ function renderScheduleTemplates(){
 }
 
 // スケジュールテンプレートを追加
+// 🆕 スケジュールテンプレート管理モーダル
+function showScheduleTemplateModal(){
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:920px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#1e40af;color:#fff;display:flex;justify-content:space-between"><div><strong>⚙ スケジュールテンプレート管理</strong><div style="font-size:11px;opacity:0.85;margin-top:2px">品目ごとに標準工程日数を設定 (納期から逆算で自動スケジュール生成)</div></div><button onclick="this.closest(\'.proof-modal\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button></div>' +
+      '<div style="padding:10px 20px;background:#f9fafb;border-bottom:1px solid #e5e7eb"><button class="btn btn-p" onclick="addScheduleTemplate();_refreshScheduleTemplateModal_()">＋ テンプレート追加</button></div>' +
+      '<div id="sched-tpl-modal-body" style="overflow-y:auto;flex:1;padding:14px 20px"></div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  _refreshScheduleTemplateModal_();
+}
+
+function _refreshScheduleTemplateModal_(){
+  var body = document.getElementById('sched-tpl-modal-body');
+  if(!body) return;
+  // renderScheduleTemplates が #schedule-templates に書き込むので、一時的に対象を切替
+  var hidden = document.getElementById('schedule-templates');
+  if(hidden && typeof renderScheduleTemplates === 'function'){
+    // 既存の関数を呼んでから DOM を移動
+    renderScheduleTemplates();
+    body.innerHTML = hidden.innerHTML;
+  } else {
+    body.innerHTML = '<div style="text-align:center;color:#888;padding:30px">テンプレート機能が読み込まれていません</div>';
+  }
+}
+
 function addScheduleTemplate(){
   const name = prompt('テンプレート名を入力（例: チラシ（標準））:');
   if(!name) return;
@@ -10124,6 +10166,51 @@ function createProofingFromProjectId(projectId){
   createProofingFromProject(project, true);
 }
 
+// 🆕 連絡管理から校正BOX へ転送 (新規校正セッション作成 + 連絡をリンク)
+function forwardInquiryToProofing(inqId){
+  const inq = (DB.inquiries||[]).find(i => i.id === inqId);
+  if(!inq){ alert('連絡が見つかりません'); return; }
+  if(!confirm('この連絡内容を校正BOXに転送しますか?\n\n新規校正セッションが作成され、本文+添付があれば一緒に登録されます。\nリンク済みの案件があればその案件に紐付けます。')) return;
+
+  const linkedProj = inq.linked_project_id ? (DB.projects||[]).find(p => p.id === inq.linked_project_id) : null;
+  const proofId = 'PRF' + Date.now();
+  const newProof = {
+    id: proofId,
+    projectId: linkedProj ? linkedProj.id : '',
+    custName: inq.from_company || inq.from_name || (linkedProj && linkedProj.cust) || '',
+    prodName: inq.subject || (linkedProj && linkedProj.item) || '校正案件',
+    status: 'waiting',
+    versions: [],
+    createdAt: new Date().toISOString(),
+    fromInquiryId: inq.id,
+    note: '【連絡管理から転送】\n' +
+      '受付: ' + (inq.received_at ? new Date(inq.received_at).toLocaleString('ja-JP') : '-') + '\n' +
+      'チャネル: ' + (inq.source_type || '不明') + '\n' +
+      '送信元: ' + (inq.from_name||'') + (inq.from_company ? ' (' + inq.from_company + ')' : '') + '\n' +
+      '──────────────\n' +
+      (inq.body || '(本文なし)') + '\n' +
+      '──────────────\n' +
+      '🔗 元の問合せ: ' + inq.id
+  };
+  if(!DB.proofings) DB.proofings = [];
+  DB.proofings.push(newProof);
+  // 連絡側にも紐付け
+  if(!inq.linked_proofing_id) inq.linked_proofing_id = proofId;
+  if(!inq.timeline) inq.timeline = [];
+  inq.timeline.push({
+    type: 'forward',
+    date: new Date().toISOString(),
+    text: '校正BOX に転送 (新規セッション ' + proofId + ' 作成)',
+    by: currentAuth?.userName || ''
+  });
+  if(typeof _addAuditLog_ === 'function') _addAuditLog_('forward', 'inquiry:' + inqId, '校正BOX に転送 → ' + proofId);
+  if(typeof saveDB === 'function') saveDB();
+  if(typeof saveToCloud === 'function') try { saveToCloud(); } catch(e){}
+  alert('✅ 校正BOX に転送しました\n\nセッション: ' + proofId + '\n' + (linkedProj ? '案件 ' + linkedProj.id + ' にも紐付け済み' : '案件は未リンク (校正BOX で手動設定可)'));
+  closeInquiryDetail();
+  jumpToProofing(proofId);
+}
+
 // 校正セッションへジャンプ (案件画面ボタンから)
 function jumpToProofing(proofingId){
   const btn = document.querySelector('.tb-btn[onclick*="proofing"]');
@@ -10140,6 +10227,197 @@ function jumpToProject(projectId){
     const q = document.getElementById('proj-q');
     if(q){ q.value = projectId; renderProjects(); }
   }, 100);
+}
+
+// ─────────────────────────────────────────────────────
+// 🤝 外注見積依頼モーダル (複数先送信 + 顧客名匿名化)
+// ─────────────────────────────────────────────────────
+function showOutsourceQuoteModal(inqId){
+  const inq = (DB.inquiries||[]).find(i => i.id === inqId);
+  if(!inq){ alert('連絡が見つかりません'); return; }
+
+  // 外注先候補: DB.master.outsourceVendors または DB.master.cust の type='vendor'
+  var vendors = [];
+  if(Array.isArray(DB.master?.outsourceVendors)) vendors = vendors.concat(DB.master.outsourceVendors);
+  if(Array.isArray(DB.master?.cust)){
+    DB.master.cust.forEach(function(c){
+      if(c && (c.type === 'vendor' || c.type === 'both')){
+        vendors.push({ name: c.org || '', email: c.orgEmail || c.email || '', tel: c.tel || '' });
+      }
+    });
+  }
+  // 重複排除
+  var seen = {};
+  vendors = vendors.filter(function(v){
+    var k = (v.name || '').trim();
+    if(!k || seen[k]) return false;
+    seen[k] = true;
+    return true;
+  });
+
+  // 連絡宛先マスタからLW/LINE宛先も
+  var lwTargets = (typeof _getContactTargets_ === 'function')
+    ? _getContactTargets_().filter(function(t){ return t.type === 'lw_user' || t.type === 'lw_channel'; })
+    : [];
+
+  // 匿名化された依頼内容を生成
+  var anonymizedBody = (typeof _anonymizeBody_ === 'function')
+    ? _anonymizeBody_(inq.body || '', inq)
+    : (inq.body || '');
+  var anonymizedSubject = (typeof _anonymizeBody_ === 'function')
+    ? _anonymizeBody_(inq.subject || '', inq)
+    : (inq.subject || '');
+
+  var defaultMessage = '【外注見積依頼】\n\n' +
+    'いつもお世話になっております。\n' +
+    'トキワ印刷の' + (currentAuth?.userName || '担当') + 'です。\n\n' +
+    '下記案件のお見積りをお願いいたします。\n\n' +
+    '──────────────\n' +
+    '件名: ' + anonymizedSubject + '\n\n' +
+    '内容:\n' + anonymizedBody + '\n' +
+    '──────────────\n\n' +
+    '※ 上記はお客様情報を伏せた内容です。\n' +
+    'ご希望納期: \n' +
+    '回答期限: ' + new Date(Date.now() + 3*24*60*60*1000).toLocaleDateString('ja-JP') + ' まで\n\n' +
+    'ご検討のほどよろしくお願いいたします。';
+
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+
+  var vendorListHtml = vendors.length === 0
+    ? '<div style="color:#888;padding:10px;font-size:11px">外注先マスタが空です。⚙ 管理 → マスター → 外注先 で登録してください</div>'
+    : vendors.map(function(v, i){
+        var hasMail = v.email ? '📧' : '';
+        return '<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;margin-bottom:4px;cursor:pointer;font-size:12px">' +
+          '<input type="checkbox" class="oq-vendor-cb" data-name="' + (v.name||'').replace(/"/g,'&quot;') + '" data-email="' + (v.email||'').replace(/"/g,'&quot;') + '" style="width:16px;height:16px">' +
+          '<strong style="flex:1">' + (v.name || '') + '</strong>' +
+          '<span style="color:#888;font-size:10px">' + (v.email || '(メール未登録)') + ' ' + hasMail + '</span>' +
+        '</label>';
+      }).join('');
+
+  var lwListHtml = lwTargets.length === 0 ? '' :
+    '<div style="font-size:12px;font-weight:700;margin:10px 0 6px;color:#065f46">📲 LINE WORKS 宛先 (任意)</div>' +
+    lwTargets.map(function(t){
+      return '<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#ecfdf5;border:1px solid #86efac;border-radius:4px;margin-bottom:4px;cursor:pointer;font-size:12px">' +
+        '<input type="checkbox" class="oq-lw-cb" data-id="' + t.id + '" style="width:16px;height:16px">' +
+        '<strong style="flex:1">' + t.name + '</strong>' +
+        '<span style="color:#888;font-size:10px">' + (t.type === 'lw_channel' ? '💬 トーク' : '👤 ユーザー') + '</span>' +
+      '</label>';
+    }).join('');
+
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:780px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#f59e0b;color:#fff;display:flex;justify-content:space-between"><div><strong>🤝 外注見積依頼</strong><div style="font-size:11px;opacity:0.85;margin-top:2px">複数の外注先に同時送信。お客様情報は自動匿名化済み</div></div><button onclick="this.closest(\'.proof-modal\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button></div>' +
+      '<div style="overflow-y:auto;flex:1;padding:14px 20px">' +
+        '<div style="background:#fef3c7;color:#78350f;padding:8px 12px;border-radius:6px;font-size:11px;margin-bottom:12px">🔒 <strong>自動匿名化済</strong>: 顧客名・会社名・連絡先・住所等は伏せられています。送信前に下のメッセージで確認できます</div>' +
+        // 外注先選択
+        '<div style="font-size:12px;font-weight:700;margin-bottom:6px">📦 外注先を選択 (複数可)</div>' +
+        '<div style="max-height:180px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px;padding:6px;margin-bottom:10px">' + vendorListHtml + '</div>' +
+        '<div style="display:flex;gap:6px;margin-bottom:14px">' +
+          '<button class="btn" style="font-size:11px;padding:3px 8px" onclick="document.querySelectorAll(\'.oq-vendor-cb\').forEach(function(c){c.checked=true})">✅ 全選択</button>' +
+          '<button class="btn" style="font-size:11px;padding:3px 8px" onclick="document.querySelectorAll(\'.oq-vendor-cb\').forEach(function(c){c.checked=false})">⬜ 全解除</button>' +
+        '</div>' +
+        lwListHtml +
+        // メッセージ
+        '<div style="font-size:12px;font-weight:700;margin:14px 0 6px">📝 送信メッセージ (匿名化済 / 編集可)</div>' +
+        '<textarea id="oq-message" rows="14" style="width:100%;font-size:12px;padding:8px 10px;border:1px solid #ccc;border-radius:6px;font-family:inherit;line-height:1.6;resize:vertical">' + _escDiff(defaultMessage) + '</textarea>' +
+      '</div>' +
+      '<div style="padding:12px 20px;background:#f9fafb;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;gap:8px">' +
+        '<div style="font-size:10px;color:#666;align-self:center;line-height:1.4">⚠ メールは Gmail から、<br>LINE WORKS は Bot から送信されます</div>' +
+        '<button class="btn btn-p" style="background:#f59e0b;border-color:#f59e0b" onclick="submitOutsourceQuote(\'' + inqId + '\')">📤 選択先に一括送信</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+async function submitOutsourceQuote(inqId){
+  const inq = (DB.inquiries||[]).find(i => i.id === inqId);
+  if(!inq) return;
+  var message = document.getElementById('oq-message')?.value || '';
+  if(!message.trim()){ alert('メッセージを入力してください'); return; }
+
+  var selectedVendors = Array.from(document.querySelectorAll('.oq-vendor-cb'))
+    .filter(c => c.checked)
+    .map(c => ({ name: c.dataset.name, email: c.dataset.email }));
+  var selectedLw = Array.from(document.querySelectorAll('.oq-lw-cb'))
+    .filter(c => c.checked).map(c => c.dataset.id);
+
+  if(selectedVendors.length === 0 && selectedLw.length === 0){
+    alert('送信先を 1 つ以上選択してください'); return;
+  }
+
+  if(!confirm('以下に外注見積依頼を一括送信します:\n\n📧 メール: ' + selectedVendors.filter(v => v.email).length + ' 件\n📲 LINE WORKS: ' + selectedLw.length + ' 件\n\n続行しますか?')) return;
+
+  var subject = '【外注見積依頼】' + (inq.subject || '案件') + ' (匿名化)';
+  var sentMail = 0, sentLw = 0, failed = 0;
+
+  // メール送信
+  for(var i = 0; i < selectedVendors.length; i++){
+    var v = selectedVendors[i];
+    if(!v.email){ continue; }
+    try {
+      if(typeof callCloudAPI === 'function'){
+        var resp = await callCloudAPI('forwardInquiryToEmail', {}, {
+          replyTo: v.email,
+          subject: subject,
+          body: message,
+          by: currentAuth?.userName || ''
+        });
+        if(resp && resp.success) sentMail++;
+        else failed++;
+      }
+    } catch(e){ failed++; console.warn('mail failed:', v.email, e); }
+  }
+
+  // LINE WORKS 送信
+  var ct = (typeof _getContactTargets_ === 'function') ? _getContactTargets_() : [];
+  for(var j = 0; j < selectedLw.length; j++){
+    var target = ct.find(t => t.id === selectedLw[j]);
+    if(!target) continue;
+    try {
+      if(typeof callCloudAPI === 'function'){
+        var resp2 = await callCloudAPI('forwardInquiryToLineworks', {}, {
+          inquiryId: inqId,
+          target: target.type === 'lw_channel' ? 'channel' : 'user',
+          targetId: target.targetId,
+          message: '【外注見積依頼】\n\n' + message,
+          by: currentAuth?.userName || ''
+        });
+        if(resp2 && resp2.success) sentLw++;
+        else failed++;
+      }
+    } catch(e){ failed++; }
+  }
+
+  // 履歴を保存 (DB.outsourceQuoteRequests)
+  if(!DB.outsourceQuoteRequests) DB.outsourceQuoteRequests = [];
+  DB.outsourceQuoteRequests.push({
+    id: 'OQR' + Date.now(),
+    fromInquiryId: inqId,
+    sentAt: new Date().toISOString(),
+    sentBy: currentAuth?.userName || '',
+    vendors: selectedVendors.map(v => v.name),
+    lwTargets: selectedLw,
+    message: message,
+    sentMail: sentMail,
+    sentLw: sentLw,
+    failed: failed
+  });
+  // 連絡側 timeline に記録
+  if(!inq.timeline) inq.timeline = [];
+  inq.timeline.push({
+    type: 'forward',
+    date: new Date().toISOString(),
+    text: '🤝 外注見積依頼を一括送信 (メール ' + sentMail + ' 件 / LW ' + sentLw + ' 件 / 失敗 ' + failed + ' 件)\n対象: ' + selectedVendors.map(v=>v.name).join(', '),
+    by: currentAuth?.userName || ''
+  });
+  if(typeof _addAuditLog_ === 'function') _addAuditLog_('outsource_quote', 'inquiry:' + inqId, sentMail + 'mail / ' + sentLw + 'lw / ' + failed + 'failed');
+  if(typeof saveDB === 'function') saveDB();
+  if(typeof saveToCloud === 'function') try { saveToCloud(); } catch(e){}
+
+  document.querySelector('.proof-modal')?.remove();
+  alert('✅ 外注見積依頼 送信結果\n\n📧 メール: ' + sentMail + ' 件成功\n📲 LINE WORKS: ' + sentLw + ' 件成功\n⚠ 失敗: ' + failed + ' 件');
 }
 
 // 配送タブにジャンプして指定日のリストを表示
@@ -11194,7 +11472,7 @@ function renderEstimates(){
     } else {
       srcBadge = '<span style="color:#888;font-size:11px">手動</span>';
     }
-    var statusColor = e.status === '提出済' ? '#16a34a' : (e.status === '保留' ? '#f59e0b' : '#6b7280');
+    var statusColor = e.status === '提出済' ? '#16a34a' : (e.status === 'お客様確認中' ? '#0891b2' : (e.status === '保留' ? '#f59e0b' : '#6b7280'));
 
     // 🆕 過去参考セル
     var historyCell = '';
@@ -11242,9 +11520,10 @@ function renderEstimates(){
       '<td style="padding:8px 10px"><span style="color:' + statusColor + ';font-weight:600">' + (e.status||'見積中') + '</span></td>' +
       '<td style="padding:8px 10px;text-align:center;white-space:nowrap">' +
         '<button class="btn" style="padding:4px 8px;font-size:11px" onclick="editEstimateInTab(\'' + e.id + '\')" title="見積タブで編集">📝 編集</button> ' +
-        (e.status === '提出済'
+        (e.status === '提出済' || e.status === 'お客様確認中'
           ? '<button class="btn" style="padding:4px 8px;font-size:11px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa" onclick="revertEstimateToActive(\'' + e.id + '\')" title="見積中に戻す">↩ 見積中</button> '
-          : '<button class="btn" style="padding:4px 8px;font-size:11px;background:#0891b2;color:#fff" onclick="markEstimateAsSubmitted(\'' + e.id + '\')" title="提出済にする (連絡管理から非表示)">📤 提出済</button> ') +
+          : '<button class="btn" style="padding:4px 8px;font-size:11px;background:#0891b2;color:#fff" onclick="markEstimateAsSubmitted(\'' + e.id + '\')" title="提出済にする">📤 提出済</button> '
+          + '<button class="btn" style="padding:4px 8px;font-size:11px;background:#06b6d4;color:#fff" onclick="markEstimateAsAwaitingCustomer(\'' + e.id + '\')" title="提出してお客様回答待ち">⏳ お客様確認中</button> ') +
         '<button class="btn" style="padding:4px 8px;font-size:11px;background:#16a34a;color:#fff" onclick="confirmEstimateAsProject(\'' + e.id + '\')" title="受注確定して案件化">✅ 受注確定</button> ' +
         '<button class="btn" style="padding:4px 8px;font-size:11px;background:#fee;color:#dc2626" onclick="deleteEstimate(\'' + e.id + '\')" title="削除">🗑️</button>' +
       '</td>' +
@@ -11644,6 +11923,24 @@ function _openLinkedEstimate_(inqId){
     }, 150);
   }
   setTimeout(function(){ _waitForTabbar_(0); }, 100);
+}
+
+// 見積を「お客様確認中」にマーク (= 提出済みで返答待ち)
+function markEstimateAsAwaitingCustomer(estId){
+  var est = (DB.estimates || []).find(function(e){ return e.id === estId; });
+  if(!est){ alert('見積が見つかりません'); return; }
+  if(est.linkedProjectId){ alert('既に受注確定済みです'); return; }
+  if(!confirm('この見積を「お客様確認中」にマークしますか?\n\n※ 提出済 + お客様の回答待ち状態になります')) return;
+  est.status = 'お客様確認中';
+  est.submittedAt = est.submittedAt || new Date().toISOString();
+  est.awaitingCustomerSince = new Date().toISOString();
+  if(!est.fromInquiryUpdates) est.fromInquiryUpdates = [];
+  est.fromInquiryUpdates.push({ at: new Date().toISOString(), action: 'awaiting_customer', by: currentAuth?.userName || '' });
+  if(typeof _addAuditLog_ === 'function') _addAuditLog_('update', 'estimate:' + est.id, 'お客様確認中にマーク');
+  if(typeof saveDB === 'function') saveDB();
+  if(typeof saveToCloud === 'function') try { saveToCloud(); } catch(e){}
+  if(typeof renderEstimates === 'function') renderEstimates();
+  alert('✅ 見積 ' + est.id + ' をお客様確認中にしました');
 }
 
 // 見積を「提出済」にマーク (連絡管理から非表示になる)
@@ -20388,6 +20685,43 @@ function initDeliveryPage(){
   renderDriverList();
   renderDriverSelect();
   renderDeliverySchedule();
+  // サブタブ状態の復元 (デフォルトは shipping)
+  try {
+    var saved = localStorage.getItem('dlv_subtab') || 'shipping';
+    swDeliverySubtab(saved, true);
+  } catch(e){ swDeliverySubtab('shipping', true); }
+}
+
+// ───────────────────────────────────────────────
+// 配送/納品 サブタブ切替
+// ───────────────────────────────────────────────
+function swDeliverySubtab(name, skipPersist){
+  var sShip = document.getElementById('dlv-subtab-shipping');
+  var sCal  = document.getElementById('dlv-subtab-calendar');
+  var bShip = document.getElementById('dlv-subtab-btn-shipping');
+  var bCal  = document.getElementById('dlv-subtab-btn-calendar');
+  if(!sShip || !sCal) return;
+  var isCal = (name === 'calendar');
+  sShip.style.display = isCal ? 'none' : '';
+  sCal.style.display  = isCal ? '' : 'none';
+  // ボタンスタイル
+  if(bShip && bCal){
+    if(isCal){
+      bShip.style.background = '#fff'; bShip.style.color = '#0e7490'; bShip.style.borderColor = '#67e8f9'; bShip.style.fontWeight = '400';
+      bCal.style.background  = '#0e7490'; bCal.style.color = '#fff'; bCal.style.borderColor = '#0e7490'; bCal.style.fontWeight = '700';
+    } else {
+      bShip.style.background = '#0e7490'; bShip.style.color = '#fff'; bShip.style.borderColor = '#0e7490'; bShip.style.fontWeight = '700';
+      bCal.style.background  = '#fff'; bCal.style.color = '#0e7490'; bCal.style.borderColor = '#67e8f9'; bCal.style.fontWeight = '400';
+    }
+  }
+  // 状態保存
+  if(!skipPersist){
+    try { localStorage.setItem('dlv_subtab', name); } catch(e){}
+  }
+  // カレンダーは表示時に必ず描画
+  if(isCal){
+    try { renderCalendar(); } catch(e){ console.error('renderCalendar failed:', e); }
+  }
 }
 
 // ドライバー一覧を描画
@@ -20457,30 +20791,76 @@ function deleteDriver(id){
 function renderDeliverySchedule(){
   const container = document.getElementById('delivery-schedule-list');
   if(!container) return;
-  
+
   const date = document.getElementById('delivery-date')?.value || '';
   const driverId = document.getElementById('delivery-driver')?.value || '';
   const statusFilter = document.getElementById('delivery-status-filter')?.value || '';
-  
+  const period = document.getElementById('delivery-period')?.value || 'week';
+
+  // 期間範囲計算
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayStr = today.toISOString().slice(0,10);
+  let periodStart = '', periodEnd = '';
+  if(period === 'today'){
+    periodStart = periodEnd = todayStr;
+  } else if(period === 'week'){
+    // 今週 (月曜～日曜)
+    const dow = today.getDay();
+    const monOff = (dow === 0 ? -6 : 1 - dow);
+    const mon = new Date(today); mon.setDate(today.getDate() + monOff);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    periodStart = mon.toISOString().slice(0,10);
+    periodEnd = sun.toISOString().slice(0,10);
+  } else if(period === 'month'){
+    const y = today.getFullYear(), m = today.getMonth();
+    periodStart = new Date(y, m, 1).toISOString().slice(0,10);
+    periodEnd = new Date(y, m+1, 0).toISOString().slice(0,10);
+  }
+
   let items = (DB.deliveryItems || []).filter(item => {
-    if(date && item.date !== date) return false;
+    if(period === 'date' && date && item.date !== date) return false;
+    if(period !== 'date' && period !== 'all'){
+      const d = (item.date || '').slice(0,10);
+      if(!d || d < periodStart || d > periodEnd) return false;
+    }
     if(driverId && item.driverId !== driverId) return false;
     if(statusFilter && item.status !== statusFilter) return false;
     return true;
   });
   
-  // 順序でソート
-  items.sort((a, b) => (a.order || 0) - (b.order || 0));
+  // 期間表示時は日付昇順 → 同日内は order 順
+  items.sort((a, b) => {
+    var da = (a.date||''), db = (b.date||'');
+    if(da !== db) return da.localeCompare(db);
+    return (a.order || 0) - (b.order || 0);
+  });
   
   if(items.length === 0){
-    container.innerHTML = '<div style="text-align:center;color:#888;padding:2rem;font-size:12px">配送予定がありません</div>';
+    var emptyLabel = period === 'today' ? '今日' : period === 'week' ? '今週' : period === 'month' ? '今月' : '指定期間';
+    container.innerHTML = '<div style="text-align:center;color:#888;padding:2rem;font-size:12px">' + emptyLabel + 'の配送予定はありません</div>';
     return;
   }
-  
+
   const statusColors = { pending: '#fef3c7', delivering: '#dbeafe', done: '#dcfce7' };
   const statusLabels = { pending: '未配送', delivering: '配送中', done: '完了' };
-  
-  container.innerHTML = items.map((item, i) => {
+
+  // 期間サマリ (件数 + 期間ラベル)
+  var periodLabel = period === 'today' ? '今日' : period === 'week' ? '今週 (' + periodStart.slice(5) + '〜' + periodEnd.slice(5) + ')' : period === 'month' ? '今月' : period === 'date' ? (date || '指定日') : 'すべて';
+  var summaryHtml = '<div style="background:#eff6ff;color:#1e3a8a;padding:6px 12px;border-radius:6px;margin-bottom:8px;font-size:12px;font-weight:700">📅 ' + periodLabel + ': ' + items.length + ' 件</div>';
+
+  // 日付別グループヘッダ (期間表示時)
+  var lastDate = '';
+  var multiDay = (period === 'week' || period === 'month' || period === 'all');
+  container.innerHTML = summaryHtml + items.map((item, i) => {
+    var d = (item.date || '').slice(0,10);
+    var dateHeader = '';
+    if(multiDay && d !== lastDate){
+      var dObj = new Date(d);
+      var dow = ['日','月','火','水','木','金','土'][dObj.getDay()];
+      var isToday = d === todayStr;
+      dateHeader = '<div style="background:' + (isToday ? '#1e40af' : '#f3f4f6') + ';color:' + (isToday ? '#fff' : '#374151') + ';padding:5px 10px;border-radius:4px;margin:8px 0 4px;font-size:11px;font-weight:700">' + d + ' (' + dow + ')' + (isToday ? ' ← 今日' : '') + '</div>';
+      lastDate = d;
+    }
     const driver = (DB.drivers || []).find(d => d.id === item.driverId);
     const bgColor = statusColors[item.status] || '#fff';
 
@@ -20492,7 +20872,7 @@ function renderDeliverySchedule(){
       ? `<button onclick="jumpToProject('${item.projectId}')" style="font-size:10px;color:#1e40af;background:none;border:none;text-decoration:underline;cursor:pointer;padding:0">案件 ${item.projectId} →</button>`
       : '';
 
-    return `<div style="background:${bgColor};border:1px solid #e0ddd6;border-radius:8px;padding:12px;margin-bottom:8px;border-left:4px solid ${typeInfo.color}">
+    return dateHeader + `<div style="background:${bgColor};border:1px solid #e0ddd6;border-radius:8px;padding:12px;margin-bottom:8px;border-left:4px solid ${typeInfo.color}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="display:flex;gap:12px;align-items:flex-start;flex:1">
           <div style="font-size:20px;font-weight:700;color:#888;width:30px;flex-shrink:0">${i + 1}</div>
@@ -22244,6 +22624,13 @@ function addProjectManual(){
 // ═══════════════════════════════════════════════════
 let _calYear=new Date().getFullYear();
 let _calMonth=new Date().getMonth(); // 0-indexed
+let _calListPeriod = (function(){ try { return localStorage.getItem('dlv_cal_list_period') || 'week'; } catch(e){ return 'week'; } })(); // 'week' | 'month'
+
+function setCalListPeriod(p){
+  _calListPeriod = p;
+  try { localStorage.setItem('dlv_cal_list_period', p); } catch(e){}
+  renderCalendar();
+}
 
 function calToday(){ _calYear=new Date().getFullYear(); _calMonth=new Date().getMonth(); renderCalendar(); }
 function calPrevMonth(){ _calMonth--; if(_calMonth<0){_calMonth=11;_calYear--;} renderCalendar(); }
@@ -22251,7 +22638,9 @@ function calNextMonth(){ _calMonth++; if(_calMonth>11){_calMonth=0;_calYear++;} 
 
 function renderCalendar(){
   const y=_calYear, m=_calMonth;
-  document.getElementById('cal-title').textContent=`${y}年${m+1}月`;
+  // 配送/納品 統合後は dlv-cal-title を使う (旧 cal-title は互換用フォールバック)
+  var _t = document.getElementById('dlv-cal-title') || document.getElementById('cal-title');
+  if(_t) _t.textContent = `${y}年${m+1}月`;
 
   // 案件を納期でグループ化
   const byDate={};
@@ -22272,7 +22661,7 @@ function renderCalendar(){
   ).join('')}</tr></thead><tbody><tr>`;
 
   // 前月の空白
-  for(let i=0;i<firstDay;i++) html+=`<td style="background:#f4f3f0;border:1px solid #e0ddd6;height:90px;vertical-align:top;padding:4px"></td>`;
+  for(let i=0;i<firstDay;i++) html+=`<td style="background:#f4f3f0;border:1px solid #e0ddd6;height:70px;vertical-align:top;padding:4px"></td>`;
 
   let dayOfWeek=firstDay;
   for(let day=1;day<=daysInMonth;day++){
@@ -22281,7 +22670,7 @@ function renderCalendar(){
     const dayProjects=byDate[dateStr]||[];
     const isWeekend=dayOfWeek===0||dayOfWeek===6;
 
-    html+=`<td style="border:1px solid #e0ddd6;height:90px;vertical-align:top;padding:4px;background:${isToday?'#eff6ff':isWeekend?'#fafaf9':'#fff'}">
+    html+=`<td style="border:1px solid #e0ddd6;height:70px;vertical-align:top;padding:4px;background:${isToday?'#eff6ff':isWeekend?'#fafaf9':'#fff'}">
       <div style="font-size:12px;font-weight:${isToday?'700':'400'};color:${isToday?'#1e40af':dayOfWeek===0?'#ef4444':dayOfWeek===6?'#3b82f6':'#1a1a1a'};margin-bottom:3px">${day}</div>
       ${dayProjects.map(p=>{
         const isDone=p.status==='納品済'||p.status==='完了';
@@ -22297,37 +22686,72 @@ function renderCalendar(){
 
   // 後月の空白
   const remaining=dayOfWeek===0?0:(7-dayOfWeek);
-  for(let i=0;i<remaining;i++) html+=`<td style="background:#f4f3f0;border:1px solid #e0ddd6;height:90px;vertical-align:top;padding:4px"></td>`;
+  for(let i=0;i<remaining;i++) html+=`<td style="background:#f4f3f0;border:1px solid #e0ddd6;height:70px;vertical-align:top;padding:4px"></td>`;
 
   html+=`</tr></tbody></table>`;
 
-  // 今月の案件一覧（下部）
-  const thisMonthProjects=(DB.projects||[]).filter(p=>{
-    if(!p.dueDate) return false;
-    const d=new Date(p.dueDate);
-    return d.getFullYear()===y&&d.getMonth()===m;
-  }).sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
-
-  if(thisMonthProjects.length){
-    html+=`<div style="margin-top:1rem">
-      <div style="font-size:11px;font-weight:700;color:#aaa;letter-spacing:.08em;margin-bottom:.5rem">今月の納期案件（${thisMonthProjects.length}件）</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px">
-      ${thisMonthProjects.map(p=>{
-        const oi=(DB.projects||[]).indexOf(p);
-        const isDone=p.status==='納品済'||p.status==='完了';
-        const isPast=p.dueDate&&new Date(p.dueDate)<today&&!isDone;
-        const borderColor=isDone?'#065f46':isPast?'#78350f':'#1e40af';
-        return `<div style="border-left:3px solid ${borderColor};background:#fff;border-radius:5px;padding:.6rem .9rem;border:1px solid #e0ddd6;border-left-width:3px;cursor:pointer" onclick="editProjDetail(${oi})">
-          <div style="font-size:12px;font-weight:700">${p.item||'（品名未入力）'}</div>
-          <div style="font-size:11px;color:#666;margin-top:2px">${p.cust||''} ${p.dueDate?'/ 納期: '+p.dueDate:''}</div>
-          <div style="font-size:11px;color:${borderColor};margin-top:2px">${p.status||'制作中'}</div>
-        </div>`;
-      }).join('')}
-      </div>
-    </div>`;
+  // ── 期間別 納期案件一覧 (下部) — 今週 / 今月 切替対応 ──
+  var period = _calListPeriod || 'week';
+  var listProjects = [];
+  var listLabel = '';
+  if(period === 'week'){
+    // 今週 (今日含む 月曜〜日曜)
+    var now = new Date(); now.setHours(0,0,0,0);
+    var dow = now.getDay(); // 0=Sun..6=Sat
+    var diffToMon = (dow === 0) ? -6 : (1 - dow);
+    var weekStart = new Date(now); weekStart.setDate(now.getDate() + diffToMon);
+    var weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6); weekEnd.setHours(23,59,59,999);
+    listProjects = (DB.projects||[]).filter(function(p){
+      if(!p.dueDate) return false;
+      var d = new Date(p.dueDate);
+      return d >= weekStart && d <= weekEnd;
+    }).sort(function(a,b){ return a.dueDate.localeCompare(b.dueDate); });
+    listLabel = '今週の納期案件 (' +
+      (weekStart.getMonth()+1) + '/' + weekStart.getDate() + ' 〜 ' +
+      (weekEnd.getMonth()+1) + '/' + weekEnd.getDate() + ')';
+  } else {
+    listProjects = (DB.projects||[]).filter(function(p){
+      if(!p.dueDate) return false;
+      var d = new Date(p.dueDate);
+      return d.getFullYear()===y && d.getMonth()===m;
+    }).sort(function(a,b){ return a.dueDate.localeCompare(b.dueDate); });
+    listLabel = '今月の納期案件';
   }
 
-  document.getElementById('cal-grid').innerHTML=html;
+  // ヘッダー (期間切替ボタン付き)
+  var weekActive  = period === 'week';
+  var monthActive = period === 'month';
+  html += '<div style="margin-top:1rem">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:.5rem">' +
+      '<div style="font-size:12px;font-weight:700;color:#1a1a1a;letter-spacing:.04em">' + listLabel + '（' + listProjects.length + '件）</div>' +
+      '<div style="display:flex;gap:4px">' +
+        '<button class="btn" style="font-size:11px;padding:3px 10px;background:' + (weekActive?'#1e40af':'#fff') + ';color:' + (weekActive?'#fff':'#1e40af') + ';border-color:#1e40af;font-weight:' + (weekActive?'700':'400') + '" onclick="setCalListPeriod(\'week\')">📅 今週</button>' +
+        '<button class="btn" style="font-size:11px;padding:3px 10px;background:' + (monthActive?'#1e40af':'#fff') + ';color:' + (monthActive?'#fff':'#1e40af') + ';border-color:#1e40af;font-weight:' + (monthActive?'700':'400') + '" onclick="setCalListPeriod(\'month\')">📅 今月</button>' +
+      '</div>' +
+    '</div>';
+
+  if(listProjects.length){
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px">' +
+      listProjects.map(function(p){
+        var oi = (DB.projects||[]).indexOf(p);
+        var isDone = p.status==='納品済' || p.status==='完了';
+        var isPast = p.dueDate && new Date(p.dueDate) < today && !isDone;
+        var borderColor = isDone ? '#065f46' : isPast ? '#78350f' : '#1e40af';
+        return '<div style="border-left:3px solid ' + borderColor + ';background:#fff;border-radius:5px;padding:.6rem .9rem;border:1px solid #e0ddd6;border-left-width:3px;cursor:pointer" onclick="editProjDetail(' + oi + ')">' +
+          '<div style="font-size:12px;font-weight:700">' + (p.item || '（品名未入力）') + '</div>' +
+          '<div style="font-size:11px;color:#666;margin-top:2px">' + (p.cust||'') + (p.dueDate ? ' / 納期: ' + p.dueDate : '') + '</div>' +
+          '<div style="font-size:11px;color:' + borderColor + ';margin-top:2px">' + (p.status||'制作中') + '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  } else {
+    html += '<div style="padding:1rem;text-align:center;color:#888;font-size:12px;background:#fafaf9;border:1px dashed #ddd;border-radius:6px">' +
+      '該当する案件はありません</div>';
+  }
+  html += '</div>';
+
+  var _g = document.getElementById('dlv-cal-grid') || document.getElementById('cal-grid');
+  if(_g) _g.innerHTML = html;
 }
 
 function renderProjects(){
@@ -25239,11 +25663,12 @@ function renderInquiryList() {
     let extraStyle = '';
     if(isUnread){
       // 未読: 周囲を太い赤枠 (背景は会社色を保持)
-      extraStyle = ';border:3px solid #dc2626 !important;box-shadow:0 0 0 1px rgba(220,38,38,0.3),0 2px 8px rgba(220,38,38,0.2)';
+      // outline は border-left と独立し、box-shadow より確実
+      extraStyle = ';outline:3px solid #dc2626;outline-offset:-3px;box-shadow:0 2px 8px rgba(220,38,38,0.25)';
       stateIndicator = '<span style="background:#dc2626;color:#fff;font-size:10px;padding:2px 8px;border-radius:8px;font-weight:800;margin-right:4px;letter-spacing:.04em" title="未開封">🔴 未読</span>';
     } else if(isUnhandled){
       // 未対応: 周囲を太い黄枠 (背景は会社色を保持)
-      extraStyle = ';border:3px solid #f59e0b !important;box-shadow:0 0 0 1px rgba(245,158,11,0.3),0 2px 8px rgba(245,158,11,0.2)';
+      extraStyle = ';outline:3px solid #f59e0b;outline-offset:-3px;box-shadow:0 2px 8px rgba(245,158,11,0.25)';
       stateIndicator = '<span style="background:#f59e0b;color:#fff;font-size:10px;padding:2px 8px;border-radius:8px;font-weight:800;margin-right:4px;letter-spacing:.04em" title="未対応">🟡 未対応</span>';
     }
     return `<div class="inq-card ${inq.priority}${isUnread ? ' inq-unread' : ''}" style="${cardStyle}${extraStyle}" onclick="openInquiryDetail('${inq.id}')">
@@ -25586,8 +26011,10 @@ function openInquiryDetail(id) {
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem;padding:10px;background:#f0f9ff;border-radius:6px">
       <span style="font-size:11px;color:#0369a1;align-self:center">この問い合わせから:</span>
       ${!linkedProject ? `<button class="btn btn-p" style="font-size:11px;background:#1e40af;border-color:#1e40af" onclick="convertInquiryToProject('${inq.id}')">📋 案件作成</button>` : ''}
-      <button class="btn" style="font-size:11px;background:#fef3c7;border-color:#fcd34d" onclick="convertInquiryToEstimate('${inq.id}')">📝 見積に反映</button>
+      <button class="btn" style="font-size:11px;background:#fef3c7;border-color:#fcd34d" onclick="convertInquiryToEstimate('${inq.id}')">📝 見積作成</button>
       <button class="btn" style="font-size:11px;background:#dcfce7;border-color:#86efac;color:#14532d;font-weight:700" onclick="showForwardInquiryModal('${inq.id}')">📤 転送 (匿名化)</button>
+      <button class="btn" style="font-size:11px;background:#dbeafe;border-color:#93c5fd;color:#1e3a8a" onclick="forwardInquiryToProofing('${inq.id}')" title="この連絡内容を校正BOXへ転送 (新規校正セッション作成)">📐 校正BOX へ送る</button>
+      <button class="btn" style="font-size:11px;background:#fef3c7;border-color:#fbbf24;color:#78350f" onclick="showOutsourceQuoteModal('${inq.id}')" title="この内容を元に外注先に見積依頼 (顧客名は自動匿名化)">🤝 外注見積依頼</button>
       ${linkedProject ? `<button class="btn" style="font-size:11px" onclick="unlinkInquiryFromProject('${inq.id}')">🔗 案件リンク解除</button>` : `<button class="btn" style="font-size:11px" onclick="linkInquiryToExistingProject('${inq.id}')">🔗 既存案件にリンク</button>`}
     </div>
 
@@ -25650,9 +26077,25 @@ function openInquiryDetail(id) {
         <button class="btn btn-p" onclick="addInquiryReply('${inq.id}')">送信</button>
       </div>
     </div>`;
-  
+
   panel.classList.add('show');
   overlay.style.display = 'block';
+
+  // 🆕 返信窓に AI 下書き (+ 署名) を自動挿入
+  setTimeout(function(){
+    var ta = document.getElementById('inq-reply-text');
+    if(!ta || ta.value) return;  // 既に何か入力されていればスキップ
+    var drafts = (inq.timeline || []).filter(function(t){ return t.type === 'ai_draft_reply'; });
+    if(drafts.length > 0){
+      var latest = drafts[drafts.length - 1];
+      var draftText = (typeof _appendSignature_ === 'function') ? _appendSignature_(latest.text || '') : (latest.text || '');
+      ta.value = draftText;
+    } else if(typeof _appendSignature_ === 'function'){
+      // AI 下書きが無くても署名のみは入れておく
+      var sig = _appendSignature_('');
+      if(sig) ta.value = sig;
+    }
+  }, 100);
 }
 
 let inqReplyType = 'reply';
@@ -26180,73 +26623,102 @@ function deleteInquiry(id) {
 async function convertInquiryToProject(inqId){
   const inq = (DB.inquiries||[]).find(i => i.id === inqId);
   if(!inq) return;
-  if(!confirm(`「${inq.subject || '無題'}」から案件を作成しますか?`)) return;
-
-  const proj = {
-    id: (typeof nextProjNo === 'function') ? nextProjNo() : ('PRJ' + Date.now()),
-    companyId: currentAuth?.companyId || 'COMP001',
-    companyCode: (typeof getCurrentCompanyCode === 'function') ? getCurrentCompanyCode() : 'MU',
-    orderDate: new Date().toISOString().slice(0,10),
-    dueDate: '',
-    cust: inq.from_company || inq.company || inq.custName || inq.from_name || '',
-    item: inq.subject || '',
-    spec: '',
-    qty: 0,
-    unit: '部',
-    exTax: 0,
-    grand: 0,
-    status: '制作中',
-    assignee: inq.assignee || '',
-    memo: `問い合わせ ${inq.id} より作成\n\n${inq.body || ''}`.substring(0, 2000),
-    steps: { 版下:'─', 校了:'─', 印刷:'─', 加工:'─', 納品:'─' },
-    stepDates: {},
-    createdAt: new Date().toISOString(),
-    sourceInquiryId: inq.id
-  };
-  if(!DB.projects) DB.projects = [];
-  DB.projects.push(proj);
-
-  // 問い合わせ側にも紐付け
-  inq.linked_project_id = proj.id;
-  saveDB();
-
-  // バックエンドにも反映 (case では linkCommunication 経由)
-  try {
-    if(typeof callCloudAPI === 'function'){
-      await callCloudAPI('linkCommunication', { id: inq.id, links: { project_id: proj.id } });
-    }
-  } catch(e){ console.warn('linkCommunication failed:', e); }
 
   closeInquiryDetail();
-  alert(`案件 ${proj.id} を作成しました`);
-  jumpToProject(proj.id);
+
+  // 案件登録モーダルを開いて、問合せ内容で自動プリフィル
+  if(typeof showAddProjectModal === 'function') showAddProjectModal();
+
+  // モーダルが描画されるのを待ってから値をセット
+  setTimeout(() => {
+    const set = (id, val) => { const el = document.getElementById(id); if(el && val) el.value = val; };
+    var ex = inq.extracted_data || {};
+    set('add-proj-cust', ex.cust || inq.from_company || inq.company || inq.custName || inq.from_name || '');
+    set('add-proj-item', ex.item || inq.subject || '');
+    if(ex.spec) set('add-proj-spec', ex.spec);
+    if(ex.qty){ const q = document.getElementById('add-proj-qty'); if(q) q.value = parseInt(ex.qty) || 0; }
+    if(ex.unit) set('add-proj-unit', ex.unit);
+    if(ex.dueDate) set('add-proj-due', ex.dueDate);
+    if(inq.assignee) set('add-proj-assignee', inq.assignee);
+    // 詳細メモ (依頼内容を全文転記 + 元連絡 ID リンク)
+    var detailMemo = '【お客様依頼メモ】(自動転記)\n' +
+      '受付日: ' + (inq.received_at ? new Date(inq.received_at).toLocaleString('ja-JP') : '-') + '\n' +
+      'チャネル: ' + (inq.source_type || '不明') + '\n' +
+      '送信元: ' + (inq.from_name || '') + (inq.from_company ? ' (' + inq.from_company + ')' : '') + '\n' +
+      (inq.subject ? '件名: ' + inq.subject + '\n' : '') +
+      '──────────────\n' +
+      (inq.body || '(本文なし)') + '\n' +
+      '──────────────\n' +
+      '🔗 元の問合せ: ' + inq.id;
+    var memoEl = document.getElementById('add-proj-memo');
+    if(memoEl) memoEl.value = detailMemo;
+    // モーダル内に元問合せIDを保持 (登録時に linkCommunication で紐付ける用)
+    var modal = document.querySelector('.proof-modal');
+    if(modal) modal.dataset.fromInquiryId = inq.id;
+    if(typeof _toastMsg === 'function') _toastMsg('✅ 依頼内容を案件登録フォームに反映しました。確認して登録してください');
+  }, 200);
 }
 
-// 問い合わせから見積に反映 (見積タブを開いて値を入れる)
+// 問い合わせから見積作成 (新規タブを作って値を入れる)
 function convertInquiryToEstimate(inqId){
   const inq = (DB.inquiries||[]).find(i => i.id === inqId);
   if(!inq) return;
 
   closeInquiryDetail();
 
-  const btn = document.querySelector('.tb-btn[onclick*="est"]');
-  if(btn) swPage('est', btn);
+  const btn = document.querySelector('.tb-btn[data-page="est"]');
+  if(btn && typeof swPage === 'function') swPage('est', btn);
 
-  // 見積タブが無ければ新規追加 (addTab の戻り値で確実に id を取得)
-  let activeTabId = (typeof activeTab !== 'undefined' && activeTab > 0) ? activeTab : null;
-  if(!activeTabId && typeof addTab === 'function'){
-    activeTabId = addTab();
+  // est-tabbar が表示されるまで待ってから新規タブ作成
+  function _waitForEstTabbar_(retries){
+    retries = retries || 0;
+    var bar = document.getElementById('est-tabbar');
+    if(!bar || bar.style.display === 'none'){
+      if(retries > 30){ alert('見積タブの初期化に失敗しました'); return; }
+      setTimeout(function(){ _waitForEstTabbar_(retries + 1); }, 50);
+      return;
+    }
+    if(typeof addTab !== 'function'){ alert('見積タブ機能が読み込まれていません'); return; }
+    var newTabId = addTab();  // 必ず新規タブ
+    if(!newTabId){ alert('見積タブの作成に失敗しました'); return; }
+    // パネル描画を待ってから値をセット
+    setTimeout(function(){
+      const set = (id, val) => { const el = document.getElementById(id); if(el && val) el.value = val; };
+      set(`cust-${newTabId}`, inq.from_company || inq.company || inq.custName || inq.from_name || '');
+      set(`prod-${newTabId}`, inq.subject || '');
+      // AI 抽出済データがあればそれを使う
+      var ex = inq.extracted_data || {};
+      if(ex.spec)  set(`spec-${newTabId}`, ex.spec);
+      if(ex.unit)  set(`unit-${newTabId}`, ex.unit);
+      if(ex.qty){
+        const qtyEl = document.getElementById(`qty-${newTabId}`);
+        if(qtyEl) qtyEl.value = parseInt(ex.qty) || 0;
+      }
+      if(ex.dueDate){
+        const dueEl = document.getElementById(`due-${newTabId}`);
+        if(dueEl) dueEl.value = ex.dueDate;
+      }
+      // 詳細メモ (依頼内容を全文転記 + 元連絡 ID リンク)
+      var detailMemo = '【お客様依頼メモ】(自動転記)\n' +
+        '受付日: ' + (inq.received_at ? new Date(inq.received_at).toLocaleString('ja-JP') : '-') + '\n' +
+        'チャネル: ' + (inq.source_type || '不明') + '\n' +
+        '送信元: ' + (inq.from_name || '') + (inq.from_company ? ' (' + inq.from_company + ')' : '') + '\n' +
+        (inq.subject ? '件名: ' + inq.subject + '\n' : '') +
+        '──────────────\n' +
+        (inq.body || '(本文なし)') + '\n' +
+        '──────────────\n' +
+        '🔗 元の問合せ: ' + inq.id;
+      set(`memo-${newTabId}`, detailMemo);
+      // タブ状態に紐付け情報を保存
+      if(typeof ts === 'function'){
+        var s = ts(newTabId);
+        if(s) s._fromInquiryId = inq.id;
+      }
+      if(typeof calc === 'function') calc(newTabId);
+      if(typeof _toastMsg === 'function') _toastMsg('✅ 見積タブに依頼内容を反映しました');
+    }, 200);
   }
-  if(!activeTabId){ alert('見積タブが見つかりません。手動でタブを作成してから再度お試しください。'); return; }
-
-  setTimeout(() => {
-    const set = (id, val) => { const el = document.getElementById(id); if(el && val) el.value = val; };
-    set(`cust-${activeTabId}`, inq.from_company || inq.company || inq.custName || inq.from_name || '');
-    set(`prod-${activeTabId}`, inq.subject || '');
-    set(`memo-${activeTabId}`, `問い合わせ ${inq.id} より\n\n${inq.body || ''}`.substring(0, 1500));
-    if(typeof calc === 'function') calc(activeTabId);
-    if(typeof _toastMsg === 'function') _toastMsg('✅ 見積タブに反映しました');
-  }, 200);
+  setTimeout(function(){ _waitForEstTabbar_(0); }, 100);
 }
 
 // 既存案件にリンク
@@ -26256,23 +26728,87 @@ async function linkInquiryToExistingProject(inqId){
   const projects = DB.projects || [];
   if(!projects.length){ alert('案件がありません'); return; }
 
-  const choices = projects.slice().reverse().slice(0, 30).map(p =>
-    `${p.id} | ${p.cust || '─'} | ${p.item || ''}`
-  );
-  const target = prompt('リンクする案件 ID を入力 (最近30件):\n\n' + choices.join('\n') + '\n\n案件 ID:', '');
-  if(!target) return;
-  const project = projects.find(p => p.id === target.trim());
-  if(!project){ alert('案件が見つかりません'); return; }
+  // 🆕 類似案件 AI 提案: スコアリングで近い案件を上位に表示
+  const inqText = ((inq.subject||'') + ' ' + (inq.body||'') + ' ' + (inq.from_company||'') + ' ' + (inq.from_name||'')).toLowerCase();
+  const inqCust = (inq.from_company || inq.custName || inq.from_name || '').replace(/[\s　]/g, '').toLowerCase();
+  function _similarityScore_(p){
+    var score = 0;
+    var pCust = (p.cust || '').replace(/[\s　]/g, '').toLowerCase();
+    // 顧客名一致は最強
+    if(pCust && inqCust && (pCust === inqCust || pCust.indexOf(inqCust) >= 0 || inqCust.indexOf(pCust) >= 0)) score += 100;
+    // 品名・仕様の単語マッチ
+    var pText = ((p.item||'') + ' ' + (p.spec||'') + ' ' + (p.memo||'')).toLowerCase();
+    var keywords = ['名刺','チラシ','カタログ','パンフレット','封筒','ポスター','ハガキ','冊子','伝票','シール','ラベル','カレンダー'];
+    keywords.forEach(function(kw){ if(inqText.indexOf(kw) >= 0 && pText.indexOf(kw) >= 0) score += 20; });
+    // 数字 (数量) のマッチ
+    var inqNums = (inq.body || '').match(/\d{2,6}/g) || [];
+    if(inqNums.length && p.qty && inqNums.indexOf(String(p.qty)) >= 0) score += 15;
+    // 直近の案件ほど加点 (古いと減点)
+    if(p.orderDate){
+      var daysAgo = (Date.now() - new Date(p.orderDate).getTime()) / (1000*60*60*24);
+      if(daysAgo < 30) score += 10;
+      else if(daysAgo < 90) score += 5;
+    }
+    return score;
+  }
+  const scored = projects.map(function(p){ return { p: p, score: _similarityScore_(p) }; })
+    .sort(function(a,b){ return b.score - a.score; });
+  const topMatches = scored.filter(function(x){ return x.score > 0; }).slice(0, 8);
+  const recent = scored.slice(0, 30).map(function(x){ return x.p; });
 
+  // モーダル表示 (検索 + 候補一覧)
+  var modal = document.createElement('div');
+  modal.className = 'proof-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  var topMatchesHtml = topMatches.length === 0
+    ? '<div style="color:#888;padding:10px;font-size:12px">類似案件は見つかりませんでした (顧客名・品名・数量から判定)</div>'
+    : '<div style="font-size:12px;font-weight:700;color:#5b21b6;margin-bottom:6px">🤖 AI が推奨する類似案件 (上位 ' + topMatches.length + ' 件)</div>' +
+      topMatches.map(function(x){
+        var p = x.p;
+        return '<div style="padding:8px 10px;border:1px solid #c4b5fd;background:#faf5ff;border-radius:6px;margin-bottom:4px;cursor:pointer" onclick="_doLinkInquiryToProject_(\'' + inqId + '\',\'' + p.id + '\')">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center">' +
+            '<div><strong>' + p.id + '</strong> · ' + (p.cust||'-') + ' · ' + (p.item||'-') + '</div>' +
+            '<span style="background:#7c3aed;color:#fff;font-size:10px;padding:2px 8px;border-radius:8px;font-weight:700">スコア ' + x.score + '</span>' +
+          '</div>' +
+          '<div style="font-size:10px;color:#888;margin-top:2px">📅 ' + (p.orderDate||'') + ' / 数量: ' + (p.qty||0) + (p.unit||'') + ' / ステータス: ' + (p.status||'') + '</div>' +
+        '</div>';
+      }).join('');
+  var recentHtml = '<div style="font-size:12px;font-weight:700;color:#374151;margin:14px 0 6px">📋 直近の案件 (検索 or クリックで選択)</div>' +
+    '<input id="link-proj-search" placeholder="🔍 案件 ID / 顧客名 / 品名で検索..." style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:6px;font-size:12px;margin-bottom:6px" oninput="_filterLinkProjList_(this.value)">' +
+    '<div id="link-proj-list" style="max-height:280px;overflow-y:auto">' +
+    recent.map(function(p){
+      return '<div class="link-proj-item" data-text="' + ((p.id||'') + ' ' + (p.cust||'') + ' ' + (p.item||'')).toLowerCase() + '" style="padding:6px 10px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:12px" onclick="_doLinkInquiryToProject_(\'' + inqId + '\',\'' + p.id + '\')" onmouseover="this.style.background=\'#eff6ff\'" onmouseout="this.style.background=\'\'">'
+        + '<strong>' + p.id + '</strong> · ' + (p.cust||'-') + ' · ' + (p.item||'-')
+        + '<span style="float:right;color:#888;font-size:10px">' + (p.orderDate||'') + ' / ' + (p.status||'') + '</span>'
+        + '</div>';
+    }).join('') + '</div>';
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:680px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#1e40af;color:#fff;display:flex;justify-content:space-between;align-items:center"><strong>🔗 既存案件にリンク</strong><button onclick="this.closest(\'.proof-modal\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button></div>' +
+      '<div style="overflow-y:auto;flex:1;padding:14px 20px">' + topMatchesHtml + recentHtml + '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+function _filterLinkProjList_(q){
+  q = (q || '').toLowerCase();
+  document.querySelectorAll('.link-proj-item').forEach(function(el){
+    el.style.display = (!q || el.dataset.text.indexOf(q) >= 0) ? '' : 'none';
+  });
+}
+
+async function _doLinkInquiryToProject_(inqId, projId){
+  const inq = (DB.inquiries||[]).find(i => i.id === inqId);
+  const project = (DB.projects||[]).find(p => p.id === projId);
+  if(!inq || !project) return;
   inq.linked_project_id = project.id;
-  saveDB();
-
+  if(typeof saveDB === 'function') saveDB();
   try {
     if(typeof callCloudAPI === 'function'){
       await callCloudAPI('linkCommunication', { id: inq.id, links: { project_id: project.id } });
     }
   } catch(e){}
-
+  document.querySelector('.proof-modal')?.remove();
   closeInquiryDetail();
   openInquiryDetail(inqId);
   if(typeof _toastMsg === 'function') _toastMsg('✅ 案件 ' + project.id + ' にリンクしました');
@@ -26721,736 +27257,4 @@ function showWikiHome() {
       <div>左のメニューから記事を選択、または「＋」で新規作成</div>
       <div style="margin-top:1.5rem;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="btn" onclick="wikiOpenTool('mentu')">🖨 面付計算ツール</button>
-        <button class="btn" onclick="wikiOpenTool('calc')">🔢 電卓</button>
-        <button class="btn" onclick="wikiOpenTool('hiragana')">📝 ひらがな変換ツール</button>
-      </div>
-      <div style="margin-top:2rem;text-align:left;max-width:500px;margin-left:auto;margin-right:auto">
-        <div style="font-size:12px;font-weight:700;color:#aaa;margin-bottom:8px">📊 Wiki統計</div>
-        <div style="font-size:12px;color:#555">記事数: ${(DB.wikiArticles||[]).filter(a=>a.type==='article').length}件</div>
-      </div>
-    </div>`;
-  renderWikiSidebar();
-}
-
-function wikiOpenArticle(id) {
-  const article = (DB.wikiArticles||[]).find(a => a.id === id);
-  if(!article) return;
-  wikiCurrentId = id;
-  wikiEditMode = false;
-  
-  if(article.type === 'tool-mentu') { renderMentuTool(); renderWikiSidebar(); return; }
-  if(article.type === 'tool-calc') { renderCalcTool(); renderWikiSidebar(); return; }
-  if(article.type === 'tool-hiragana') { renderHiraganaTool(); renderWikiSidebar(); return; }
-
-  renderWikiArticle(article);
-  renderWikiSidebar();
-}
-
-function wikiOpenTool(tool) {
-  if(tool === 'mentu') wikiOpenArticle('WIKI_TOOL_MENTU');
-  if(tool === 'calc') wikiOpenArticle('WIKI_TOOL_CALC');
-  if(tool === 'hiragana') wikiOpenArticle('WIKI_TOOL_HIRAGANA');
-}
-
-function renderWikiArticle(article) {
-  const content = document.getElementById('wiki-content');
-  const html = wikiMarkdownToHTML(article.body || '');
-  
-  content.innerHTML = `
-    <div class="wiki-toolbar">
-      <button class="btn" onclick="showWikiHome()">← 一覧</button>
-      <button class="btn" onclick="wikiStartEdit('${article.id}')">✏ 編集</button>
-      <button class="btn" onclick="wikiDeleteArticle('${article.id}')">🗑 削除</button>
-      <span style="margin-left:auto;font-size:10px;color:#aaa">
-        ${article.category||''} | 更新: ${article.updatedAt||''} | ${article.author||''}
-      </span>
-    </div>
-    <div>${html}</div>`;
-}
-
-// 簡易Markdownパーサー
-function wikiMarkdownToHTML(md) {
-  let html = md
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`(.+?)`/g, '<code>$1</code>');
-  
-  // テーブル
-  html = html.replace(/((?:\|.+\|\n)+)/g, (match) => {
-    const rows = match.trim().split('\n');
-    let table = '<table>';
-    rows.forEach((row, i) => {
-      if(row.match(/^\|[\s\-\|]+$/)) return; // セパレータ行スキップ
-      const cells = row.split('|').filter(c => c.trim());
-      const tag = i === 0 ? 'th' : 'td';
-      table += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
-    });
-    table += '</table>';
-    return table;
-  });
-  
-  // リスト
-  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-  
-  // 段落
-  html = html.split('\n\n').map(block => {
-    if(block.match(/^<[hultbo]/)) return block;
-    if(block.trim()) return '<p>' + block.replace(/\n/g, '<br>') + '</p>';
-    return '';
-  }).join('\n');
-  
-  return html;
-}
-
-// 記事の編集
-function wikiStartEdit(id) {
-  const article = (DB.wikiArticles||[]).find(a => a.id === id);
-  if(!article) return;
-  wikiEditMode = true;
-  
-  const cats = [...new Set((DB.wikiArticles||[]).map(a=>a.category).filter(Boolean))];
-  
-  const content = document.getElementById('wiki-content');
-  content.innerHTML = `
-    <div class="wiki-toolbar">
-      <button class="btn" onclick="wikiOpenArticle('${id}')">← 戻る</button>
-      <button class="btn btn-p" onclick="wikiSaveEdit('${id}')">💾 保存</button>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      <div class="f"><label>タイトル</label><input id="wiki-edit-title" value="${article.title||''}"></div>
-      <div class="f"><label>カテゴリ</label><input id="wiki-edit-cat" value="${article.category||''}" list="wiki-cat-list">
-        <datalist id="wiki-cat-list">${cats.map(c=>`<option value="${c}">`).join('')}</datalist>
-      </div>
-    </div>
-    <div class="f" style="margin-bottom:6px">
-      <label>本文（Markdown対応: # 見出し, **太字**, \`コード\`, | テーブル |, - リスト, > 引用）</label>
-    </div>
-    <textarea class="wiki-edit-area" id="wiki-edit-body">${article.body||''}</textarea>`;
-}
-
-function wikiSaveEdit(id) {
-  const article = (DB.wikiArticles||[]).find(a => a.id === id);
-  if(!article) return;
-  article.title = document.getElementById('wiki-edit-title')?.value?.trim() || article.title;
-  article.category = document.getElementById('wiki-edit-cat')?.value?.trim() || article.category;
-  article.body = document.getElementById('wiki-edit-body')?.value || '';
-  article.updatedAt = new Date().toISOString().split('T')[0];
-  article.author = currentAuth?.userName || '編集者';
-  saveDB();
-  wikiOpenArticle(id);
-}
-
-function wikiNewArticle() {
-  const title = prompt('記事タイトル:');
-  if(!title) return;
-  const id = 'WIKI' + Date.now();
-  const article = {
-    id, category:'📁 未分類', title, type:'article', pinned:false,
-    body: '# ' + title + '\n\nここに内容を記入してください。',
-    createdAt: new Date().toISOString().split('T')[0],
-    updatedAt: new Date().toISOString().split('T')[0],
-    author: currentAuth?.userName || '作成者'
-  };
-  if(!DB.wikiArticles) DB.wikiArticles = [];
-  DB.wikiArticles.push(article);
-  saveDB();
-  wikiOpenArticle(id);
-}
-
-function wikiDeleteArticle(id) {
-  const article = (DB.wikiArticles||[]).find(a => a.id === id);
-  if(!article || article.type !== 'article') { alert('ツールは削除できません'); return; }
-  if(!confirm(`「${article.title}」を削除しますか？`)) return;
-  DB.wikiArticles = DB.wikiArticles.filter(a => a.id !== id);
-  saveDB();
-  showWikiHome();
-}
-
-// ═══════════════════ 面付計算ツール（Wiki埋込版）═══════════════════
-
-function renderMentuTool() {
-  const content = document.getElementById('wiki-content');
-  content.innerHTML = `
-    <div class="wiki-toolbar">
-      <button class="btn" onclick="showWikiHome()">← 一覧</button>
-      <span style="font-size:14px;font-weight:700">🖨 面付計算ツール</span>
-    </div>
-    <div class="mentu-embed">
-      <div class="me-result-bar" id="me-results">
-        <div class="me-result-item"><span>合計面数</span><strong id="me-total">—</strong></div>
-        <div class="me-result-item"><span>列 × 行</span><strong id="me-grid">—</strong></div>
-        <div class="me-result-item"><span>回転</span><strong id="me-rotate">—</strong></div>
-        <div class="me-result-item"><span>有効エリア</span><strong id="me-area">—</strong></div>
-        <div id="me-note" style="margin-left:auto;font-size:11px;color:#aaa"></div>
-      </div>
-      <div class="me-top">
-        <div class="me-inputs">
-          <div style="font-size:11px;font-weight:700;color:#888;margin-bottom:2px">📄 用紙プリセット</div>
-          <div class="me-preset-row" id="me-paper-presets">
-            <button class="me-preset act" onclick="mePaperPreset(this,625,880)">四六全</button>
-            <button class="me-preset" onclick="mePaperPreset(this,636,939)">菊全</button>
-            <button class="me-preset" onclick="mePaperPreset(this,594,841)">A1</button>
-            <button class="me-preset" onclick="mePaperPreset(this,420,594)">A2</button>
-            <button class="me-preset" onclick="mePaperPreset(this,297,420)">A3</button>
-            <button class="me-preset" onclick="mePaperPreset(this,545,788)">B1</button>
-            <button class="me-preset" onclick="mePaperPreset(this,364,515)">B2</button>
-            <button class="me-preset" onclick="mePaperPreset(this,257,364)">B3</button>
-          </div>
-          <div class="me-field"><label>用紙</label>
-            <input type="number" id="me-pw" value="625" oninput="meCalc()"><input type="number" id="me-ph" value="880" oninput="meCalc()">
-          </div>
-          <div style="font-size:11px;font-weight:700;color:#888;margin:4px 0 2px">📋 仕上がりプリセット</div>
-          <div class="me-preset-row" id="me-page-presets">
-            <button class="me-preset" onclick="mePagePreset(this,210,297)">A4</button>
-            <button class="me-preset act" onclick="mePagePreset(this,148,210)">A5</button>
-            <button class="me-preset" onclick="mePagePreset(this,182,257)">B5</button>
-            <button class="me-preset" onclick="mePagePreset(this,91,55)">名刺</button>
-            <button class="me-preset" onclick="mePagePreset(this,100,148)">はがき</button>
-          </div>
-          <div class="me-field"><label>仕上がり</label>
-            <input type="number" id="me-pgw" value="148" oninput="meCalc()"><input type="number" id="me-pgh" value="210" oninput="meCalc()">
-          </div>
-          <div style="font-size:11px;font-weight:700;color:#888;margin:4px 0 2px">📐 余白・ドブ</div>
-          <div class="me-field"><label>クワエ</label><input type="number" id="me-kw" value="10" oninput="meCalc()"><input type="number" id="me-sh" value="10" oninput="meCalc()" placeholder="尻"></div>
-          <div class="me-field"><label>左右余白</label><input type="number" id="me-ml" value="10" oninput="meCalc()"><input type="number" id="me-mr" value="10" oninput="meCalc()"></div>
-          <div class="me-field"><label>ドブ天地</label><input type="number" id="me-dv" value="3" oninput="meCalc()"><input type="number" id="me-dh" value="3" oninput="meCalc()" placeholder="ドブ左右"></div>
-          <div style="margin-top:4px"><label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px"><input type="checkbox" id="me-rot" onchange="meCalc()"> 回転配置も試す</label></div>
-          <button class="btn btn-p" style="margin-top:8px;width:100%" onclick="meCalc()">▶ 計算する</button>
-          <!-- 実 PDF 面付出力 -->
-          <div style="margin-top:12px;padding:10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px">
-            <div style="font-size:11px;font-weight:700;color:#1e3a8a;margin-bottom:6px">📄 実 PDF 面付出力</div>
-            <input type="file" id="me-pdf-file" accept="application/pdf" style="font-size:11px;width:100%">
-            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#374151;margin-top:6px;cursor:pointer">
-              <input type="checkbox" id="me-trim-marks" checked> トンボ (トリムマーク) を入れる
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#374151;margin-top:4px;cursor:pointer">
-              <input type="checkbox" id="me-page-numbers"> ページ番号を入れる
-            </label>
-            <button class="btn btn-p" id="me-impose-btn" style="margin-top:8px;width:100%;background:#1e40af;border-color:#1e40af" onclick="meExecuteImposition()">📄 面付した PDF をダウンロード</button>
-            <div id="me-impose-status" style="font-size:10px;color:#666;margin-top:4px;text-align:center"></div>
-          </div>
-        </div>
-        <div class="me-preview" id="me-canvas-area">
-          <canvas id="me-canvas"></canvas>
-        </div>
-      </div>
-    </div>`;
-  meCalc();
-}
-
-function mePaperPreset(btn,w,h) {
-  document.querySelectorAll('#me-paper-presets .me-preset').forEach(b=>b.classList.remove('act'));
-  btn.classList.add('act');
-  document.getElementById('me-pw').value=w;
-  document.getElementById('me-ph').value=h;
-  meCalc();
-}
-function mePagePreset(btn,w,h) {
-  document.querySelectorAll('#me-page-presets .me-preset').forEach(b=>b.classList.remove('act'));
-  btn.classList.add('act');
-  document.getElementById('me-pgw').value=w;
-  document.getElementById('me-pgh').value=h;
-  meCalc();
-}
-
-function meCalc() {
-  const pw=parseFloat(document.getElementById('me-pw')?.value)||0;
-  const ph=parseFloat(document.getElementById('me-ph')?.value)||0;
-  const pgw=parseFloat(document.getElementById('me-pgw')?.value)||0;
-  const pgh=parseFloat(document.getElementById('me-pgh')?.value)||0;
-  const kw=parseFloat(document.getElementById('me-kw')?.value)||0;
-  const sh=parseFloat(document.getElementById('me-sh')?.value)||0;
-  const ml=parseFloat(document.getElementById('me-ml')?.value)||0;
-  const mr=parseFloat(document.getElementById('me-mr')?.value)||0;
-  const dv=parseFloat(document.getElementById('me-dv')?.value)||0;
-  const dh=parseFloat(document.getElementById('me-dh')?.value)||0;
-  const tryRot=document.getElementById('me-rot')?.checked;
-  
-  if(!pw||!ph||!pgw||!pgh) return;
-  
-  const aW=pw-ml-mr, aH=ph-kw-sh;
-  if(aW<=0||aH<=0) return;
-  
-  function fit(aw,ah,w,h,dbh,dbv){
-    const cols=Math.max(0,Math.floor((aw+dbh)/(w+dbh)));
-    const rows=Math.max(0,Math.floor((ah+dbv)/(h+dbv)));
-    return {cols,rows,total:cols*rows};
-  }
-  
-  const normal=fit(aW,aH,pgw,pgh,dh,dv);
-  normal.rotated=false;
-  let best=normal;
-  if(tryRot){
-    const rotated=fit(aW,aH,pgh,pgw,dv,dh);
-    rotated.rotated=true;
-    if(rotated.total>normal.total) best=rotated;
-  }
-  
-  document.getElementById('me-total').textContent=best.total;
-  document.getElementById('me-grid').textContent=best.cols+'×'+best.rows;
-  document.getElementById('me-rotate').textContent=best.rotated?'90°回転':'なし';
-  document.getElementById('me-area').textContent=aW.toFixed(1)+'×'+aH.toFixed(1)+'mm';
-  
-  if(best.total>0){
-    const usedPw=best.rotated?pgh:pgw, usedPh=best.rotated?pgw:pgh;
-    const usedW=best.cols*usedPw+(best.cols-1)*(best.rotated?dv:dh);
-    const usedH=best.rows*usedPh+(best.rows-1)*(best.rotated?dh:dv);
-    const rateW=((usedW/aW)*100).toFixed(1);
-    const rateH=((usedH/aH)*100).toFixed(1);
-    document.getElementById('me-note').innerHTML='使用率: 横'+rateW+'% / 縦'+rateH+'%';
-  }
-  
-  // Canvas描画
-  meDrawPreview({pw,ph,aW,aH,pgw,pgh,kw,sh,ml,mr,dv,dh,cols:best.cols,rows:best.rows,rotated:best.rotated,total:best.total});
-}
-
-function meDrawPreview(p){
-  const canvas=document.getElementById('me-canvas');
-  const area=document.getElementById('me-canvas-area');
-  if(!canvas||!area||!p.total) return;
-  
-  const PAD=24;
-  const maxW=area.clientWidth-PAD*2;
-  const maxH=area.clientHeight-PAD*2;
-  if(maxW<=0||maxH<=0) return;
-  const scale=Math.min(maxW/p.pw,maxH/p.ph,2);
-  
-  const cw=Math.round(p.pw*scale+PAD*2);
-  const ch=Math.round(p.ph*scale+PAD*2);
-  canvas.width=cw; canvas.height=ch;
-  
-  const ctx=canvas.getContext('2d');
-  ctx.clearRect(0,0,cw,ch);
-  const ox=PAD, oy=PAD;
-  const spw=p.pw*scale, sph=p.ph*scale;
-  
-  // 紙影
-  ctx.fillStyle='rgba(0,0,0,0.1)'; ctx.fillRect(ox+3,oy+3,spw,sph);
-  // 紙
-  ctx.fillStyle='#fff'; ctx.fillRect(ox,oy,spw,sph);
-  // グリッド
-  ctx.strokeStyle='rgba(200,200,200,0.3)'; ctx.lineWidth=0.5;
-  const gs=10*scale;
-  for(let x=0;x<=spw;x+=gs){ctx.beginPath();ctx.moveTo(ox+x,oy);ctx.lineTo(ox+x,oy+sph);ctx.stroke();}
-  for(let y=0;y<=sph;y+=gs){ctx.beginPath();ctx.moveTo(ox,oy+y);ctx.lineTo(ox+spw,oy+y);ctx.stroke();}
-  
-  // 余白
-  const smL=p.ml*scale,smR=p.mr*scale,smT=p.kw*scale,smB=p.sh*scale;
-  ctx.fillStyle='rgba(255,165,0,0.08)';
-  ctx.fillRect(ox,oy,spw,smT);
-  ctx.fillRect(ox,oy+sph-smB,spw,smB);
-  ctx.fillRect(ox,oy+smT,smL,sph-smT-smB);
-  ctx.fillRect(ox+spw-smR,oy+smT,smR,sph-smT-smB);
-  
-  ctx.strokeStyle='rgba(255,165,0,0.5)'; ctx.lineWidth=1; ctx.setLineDash([4,3]);
-  ctx.strokeRect(ox+smL,oy+smT,spw-smL-smR,sph-smT-smB);
-  ctx.setLineDash([]);
-  
-  // 面配置
-  const rpw=p.rotated?p.pgh:p.pgw, rph=p.rotated?p.pgw:p.pgh;
-  const rdh=p.rotated?p.dv:p.dh, rdv=p.rotated?p.dh:p.dv;
-  const spgw=rpw*scale, spgh=rph*scale, sdh=rdh*scale, sdv=rdv*scale;
-  
-  let idx=0;
-  for(let r=0;r<p.rows;r++){
-    for(let c=0;c<p.cols;c++){
-      const x=ox+smL+c*(spgw+sdh);
-      const y=oy+smT+r*(spgh+sdv);
-      const hue=(c+r*p.cols)*37%360;
-      ctx.fillStyle=`hsla(${hue},45%,82%,0.85)`;
-      ctx.fillRect(x,y,spgw,spgh);
-      ctx.strokeStyle='rgba(30,30,60,0.4)';ctx.lineWidth=0.8;ctx.strokeRect(x,y,spgw,spgh);
-      idx++;
-      if(spgw>16&&spgh>12){
-        ctx.fillStyle='rgba(20,20,50,0.7)';
-        ctx.font=`bold ${Math.min(11,spgh*0.2)}px monospace`;
-        ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.fillText(idx,x+spgw/2,y+spgh/2);
-      }
-    }
-  }
-  
-  // 寸法表示
-  ctx.fillStyle='#999';ctx.font='10px monospace';ctx.textAlign='center';ctx.textBaseline='top';
-  ctx.fillText(p.pw+'mm',ox+spw/2,oy+sph+4);
-  ctx.strokeStyle='#e0ddd6';ctx.lineWidth=1.5;ctx.strokeRect(ox,oy,spw,sph);
-}
-
-// ═══════════════════ ひらがな変換ツール (Wiki埋込版) ═══════════════════
-function renderHiraganaTool() {
-  const content = document.getElementById('wiki-content');
-  // iframe で完全分離 (JSZip + kuromoji + 自前 localStorage を別 origin context で隔離)
-  // tools/hiragana_v10.html を埋込
-  content.innerHTML = `
-    <div class="wiki-toolbar" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f9fafb;border-bottom:1px solid #e5e7eb">
-      <button class="btn" onclick="showWikiHome()">← 一覧</button>
-      <span style="font-size:14px;font-weight:700">📝 ひらがな変換ツール (Excel)</span>
-      <span style="margin-left:auto;font-size:11px;color:#888">Excel(.xlsx) の漢字を一括ひらがな化 (書式保持)</span>
-      <a href="tools/hiragana_v10.html" target="_blank" class="btn" style="font-size:11px;padding:3px 10px" title="新しいタブで開く">↗ 別タブで開く</a>
-    </div>
-    <iframe src="tools/hiragana_v10.html"
-            style="width:100%;height:calc(100vh - 220px);min-height:600px;border:none;display:block"
-            title="ひらがな変換ツール v10"></iframe>`;
-}
-
-// ═══════════════════ 実 PDF 面付出力 (pdf-lib) ═══════════════════
-// pdf-lib を遅延ロード
-async function _loadPdfLib_(){
-  if(window.PDFLib) return window.PDFLib;
-  return new Promise(function(resolve, reject){
-    var s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
-    s.onload = function(){ resolve(window.PDFLib); };
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
-}
-
-async function meExecuteImposition(){
-  var status = document.getElementById('me-impose-status');
-  var btn = document.getElementById('me-impose-btn');
-  var fileInput = document.getElementById('me-pdf-file');
-  if(!fileInput || !fileInput.files || !fileInput.files[0]){
-    alert('面付する PDF ファイルを選択してください');
-    return;
-  }
-  var file = fileInput.files[0];
-
-  // 計算結果を取得
-  var pw = parseFloat(document.getElementById('me-pw')?.value) || 0;
-  var ph = parseFloat(document.getElementById('me-ph')?.value) || 0;
-  var pgw = parseFloat(document.getElementById('me-pgw')?.value) || 0;
-  var pgh = parseFloat(document.getElementById('me-pgh')?.value) || 0;
-  var kw = parseFloat(document.getElementById('me-kw')?.value) || 0;
-  var sh = parseFloat(document.getElementById('me-sh')?.value) || 0;
-  var ml = parseFloat(document.getElementById('me-ml')?.value) || 0;
-  var mr = parseFloat(document.getElementById('me-mr')?.value) || 0;
-  var dv = parseFloat(document.getElementById('me-dv')?.value) || 0;
-  var dh = parseFloat(document.getElementById('me-dh')?.value) || 0;
-  var tryRot = document.getElementById('me-rot')?.checked;
-  var trimMarks = document.getElementById('me-trim-marks')?.checked;
-  var pageNumbers = document.getElementById('me-page-numbers')?.checked;
-
-  if(!pw || !ph || !pgw || !pgh){ alert('用紙・仕上がりサイズを入力してください'); return; }
-
-  if(btn){ btn.disabled = true; btn.textContent = '⏳ 処理中...'; }
-  if(status) status.textContent = 'pdf-lib を読込中...';
-
-  try {
-    var PDFLib = await _loadPdfLib_();
-    if(status) status.textContent = '入力 PDF を解析中...';
-    var inputBytes = await file.arrayBuffer();
-    var srcDoc = await PDFLib.PDFDocument.load(inputBytes);
-    var srcPages = srcDoc.getPages();
-
-    // 面付グリッド計算 (mm → pt 変換: 1mm ≈ 2.83465pt)
-    var MM = 2.83465;
-    var aW = pw - ml - mr, aH = ph - kw - sh;
-
-    function fit(aw, ah, w, h, dbh, dbv){
-      var cols = Math.max(0, Math.floor((aw + dbh) / (w + dbh)));
-      var rows = Math.max(0, Math.floor((ah + dbv) / (h + dbv)));
-      return { cols: cols, rows: rows, total: cols * rows };
-    }
-    var normal = fit(aW, aH, pgw, pgh, dh, dv); normal.rotated = false;
-    var best = normal;
-    if(tryRot){
-      var rotated = fit(aW, aH, pgh, pgw, dv, dh); rotated.rotated = true;
-      if(rotated.total > normal.total) best = rotated;
-    }
-    if(best.total === 0){
-      alert('面付できません (用紙に対して仕上がりサイズが大きすぎる可能性)');
-      throw new Error('no_fit');
-    }
-    if(status) status.textContent = best.total + ' 面を配置中...';
-
-    // 出力 PDF: ソース PDF の各ページを 1 シート分の面付として出力
-    var outDoc = await PDFLib.PDFDocument.create();
-    var sheetW = pw * MM, sheetH = ph * MM;
-    var pgUsedW = (best.rotated ? pgh : pgw) * MM;
-    var pgUsedH = (best.rotated ? pgw : pgh) * MM;
-    var dhUsed = (best.rotated ? dv : dh) * MM;
-    var dvUsed = (best.rotated ? dh : dv) * MM;
-    var marginL = ml * MM, marginT = kw * MM;
-
-    // ソース PDF をコピー
-    var copiedPages = await outDoc.copyPages(srcDoc, srcPages.map(function(_, i){ return i; }));
-
-    // 各ソースページを 1 シートに面付 (= 入力1ページ → 出力1シート)
-    for(var pageIdx = 0; pageIdx < copiedPages.length; pageIdx++){
-      var sheet = outDoc.addPage([sheetW, sheetH]);
-      var srcPage = copiedPages[pageIdx];
-      var srcW = srcPage.getWidth(), srcH = srcPage.getHeight();
-      var embedded = await outDoc.embedPage(srcPage);
-
-      // スケール: ソースを pgUsedW × pgUsedH に収める
-      var scale = Math.min(pgUsedW / srcW, pgUsedH / srcH);
-      var drawW = srcW * scale, drawH = srcH * scale;
-
-      // 面ごとに配置 (PDF は左下原点なので Y を反転)
-      for(var r = 0; r < best.rows; r++){
-        for(var c = 0; c < best.cols; c++){
-          var x = marginL + c * (pgUsedW + dhUsed);
-          // Y は PDF 座標系 (左下原点) — 上から r 行目を計算
-          var yTop = sheetH - marginT - r * (pgUsedH + dvUsed);
-          var y = yTop - pgUsedH;
-          // 中央配置
-          var ox = x + (pgUsedW - drawW) / 2;
-          var oy = y + (pgUsedH - drawH) / 2;
-          if(best.rotated){
-            sheet.drawPage(embedded, {
-              x: ox + drawW, y: oy,
-              xScale: scale, yScale: scale,
-              rotate: PDFLib.degrees(90)
-            });
-          } else {
-            sheet.drawPage(embedded, { x: ox, y: oy, xScale: scale, yScale: scale });
-          }
-
-          // ページ番号
-          if(pageNumbers){
-            var num = (r * best.cols + c + 1).toString();
-            sheet.drawText(num, {
-              x: x + pgUsedW / 2 - 4,
-              y: y + pgUsedH / 2,
-              size: 10,
-              opacity: 0.4
-            });
-          }
-
-          // トンボ (各面の四隅に短い線)
-          if(trimMarks){
-            var ml_ = 8; // トンボ長 (pt)
-            var off = 3; // 仕上がりからの距離 (pt)
-            // 面の四隅
-            [
-              { x1: x - off - ml_, y1: y, x2: x - off, y2: y },         // 左下水平
-              { x1: x, y1: y - off - ml_, x2: x, y2: y - off },         // 左下垂直
-              { x1: x + pgUsedW + off, y1: y, x2: x + pgUsedW + off + ml_, y2: y }, // 右下水平
-              { x1: x + pgUsedW, y1: y - off - ml_, x2: x + pgUsedW, y2: y - off }, // 右下垂直
-              { x1: x - off - ml_, y1: y + pgUsedH, x2: x - off, y2: y + pgUsedH }, // 左上水平
-              { x1: x, y1: y + pgUsedH + off, x2: x, y2: y + pgUsedH + off + ml_ }, // 左上垂直
-              { x1: x + pgUsedW + off, y1: y + pgUsedH, x2: x + pgUsedW + off + ml_, y2: y + pgUsedH }, // 右上水平
-              { x1: x + pgUsedW, y1: y + pgUsedH + off, x2: x + pgUsedW, y2: y + pgUsedH + off + ml_ }  // 右上垂直
-            ].forEach(function(L){
-              sheet.drawLine({
-                start: { x: L.x1, y: L.y1 }, end: { x: L.x2, y: L.y2 },
-                thickness: 0.3, color: PDFLib.rgb(0,0,0)
-              });
-            });
-          }
-        }
-      }
-    }
-
-    if(status) status.textContent = 'PDF を生成中...';
-    var outBytes = await outDoc.save();
-    var blob = new Blob([outBytes], { type: 'application/pdf' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = file.name.replace(/\.pdf$/i, '') + '_面付_' + best.cols + 'x' + best.rows + '_' + best.total + '面.pdf';
-    a.click();
-    setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
-
-    if(status) status.textContent = '✅ 完了 (' + copiedPages.length + ' ページ × ' + best.total + ' 面)';
-  } catch(e){
-    console.error(e);
-    if(status) status.textContent = '⚠ エラー: ' + e.message;
-    alert('面付に失敗しました: ' + e.message);
-  } finally {
-    if(btn){ btn.disabled = false; btn.textContent = '📄 面付した PDF をダウンロード'; }
-  }
-}
-
-// ═══════════════════ 電卓（Wiki埋込版）═══════════════════
-
-let calcExpr='', calcDisplay='0', calcHistory=[];
-
-function renderCalcTool() {
-  const content = document.getElementById('wiki-content');
-  content.innerHTML = `
-    <div class="wiki-toolbar">
-      <button class="btn" onclick="showWikiHome()">← 一覧</button>
-      <span style="font-size:14px;font-weight:700">🔢 電卓</span>
-      <span style="margin-left:auto;font-size:11px;color:#888">印刷見積用 — 税込・用紙枚数計算対応</span>
-    </div>
-    <div style="display:flex;gap:1rem;flex-wrap:wrap">
-      <div style="width:320px">
-        <div class="calc-display" id="calc-disp">
-          <div class="calc-expr" id="calc-expr"></div>
-          <div id="calc-val">0</div>
-        </div>
-        <div class="calc-grid">
-          <button class="calc-key clear" onclick="calcClear()">AC</button>
-          <button class="calc-key fn" onclick="calcBackspace()">⌫</button>
-          <button class="calc-key fn" onclick="calcPercent()">%</button>
-          <button class="calc-key op" onclick="calcOp('/')">÷</button>
-          <button class="calc-key num" onclick="calcNum('7')">7</button>
-          <button class="calc-key num" onclick="calcNum('8')">8</button>
-          <button class="calc-key num" onclick="calcNum('9')">9</button>
-          <button class="calc-key op" onclick="calcOp('*')">×</button>
-          <button class="calc-key num" onclick="calcNum('4')">4</button>
-          <button class="calc-key num" onclick="calcNum('5')">5</button>
-          <button class="calc-key num" onclick="calcNum('6')">6</button>
-          <button class="calc-key op" onclick="calcOp('-')">−</button>
-          <button class="calc-key num" onclick="calcNum('1')">1</button>
-          <button class="calc-key num" onclick="calcNum('2')">2</button>
-          <button class="calc-key num" onclick="calcNum('3')">3</button>
-          <button class="calc-key op" onclick="calcOp('+')">+</button>
-          <button class="calc-key num" onclick="calcNum('00')">00</button>
-          <button class="calc-key num" onclick="calcNum('0')">0</button>
-          <button class="calc-key num" onclick="calcNum('.')">.</button>
-          <button class="calc-key eq" onclick="calcEqual()">=</button>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:2px">
-          <button class="calc-key fn" onclick="calcTax(1.10)" style="border-radius:0 0 0 8px">税込(10%)</button>
-          <button class="calc-key fn" onclick="calcTax(1.08)" style="border-radius:0 0 8px 0">税込(8%)</button>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;margin-top:2px">
-          <button class="calc-key fn" onclick="calcSheets()">用紙枚数</button>
-          <button class="calc-key fn" onclick="calcRoundUp()">切上げ</button>
-          <button class="calc-key fn" onclick="calcMemory()">M+</button>
-        </div>
-      </div>
-      <div style="flex:1;min-width:200px">
-        <div class="sec">
-          <div class="st">📋 計算履歴</div>
-          <div id="calc-history" style="max-height:350px;overflow-y:auto;font-size:12px"></div>
-        </div>
-        <div class="sec" style="margin-top:.65rem">
-          <div class="st">📐 クイック計算</div>
-          <div style="display:flex;flex-direction:column;gap:6px;font-size:12px">
-            <div style="display:flex;gap:6px;align-items:center">
-              <label style="width:80px">印刷部数</label>
-              <input type="number" id="qc-copies" value="1000" style="width:80px;font-size:12px;padding:4px">
-              <label style="width:60px">面付数</label>
-              <input type="number" id="qc-faces" value="4" style="width:60px;font-size:12px;padding:4px">
-              <button class="btn" style="font-size:11px;padding:3px 10px" onclick="quickCalcSheets()">= 用紙枚数</button>
-            </div>
-            <div id="qc-result" style="font-weight:700;color:#065f46"></div>
-            <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
-              <label style="width:80px">金額</label>
-              <input type="number" id="qc-amount" value="" style="width:120px;font-size:12px;padding:4px" placeholder="税抜金額">
-              <button class="btn" style="font-size:11px;padding:3px 10px" onclick="quickCalcTax()">= 税込</button>
-            </div>
-            <div id="qc-tax-result" style="font-weight:700;color:#065f46"></div>
-          </div>
-        </div>
-      </div>
-    </div>`;
-  calcExpr=''; calcDisplay='0';
-  renderCalcDisplay();
-  renderCalcHistory();
-}
-
-function renderCalcDisplay(){
-  const valEl=document.getElementById('calc-val');
-  const exprEl=document.getElementById('calc-expr');
-  if(valEl) valEl.textContent=formatCalcNum(calcDisplay);
-  if(exprEl) exprEl.textContent=calcExpr;
-}
-function formatCalcNum(n){
-  const num=parseFloat(n);
-  if(isNaN(num)) return n;
-  if(n.toString().includes('.') && n.toString().endsWith('.')) return n;
-  if(Math.abs(num)>=1) return num.toLocaleString('ja-JP',{maximumFractionDigits:10});
-  return n;
-}
-
-function calcNum(n){
-  if(calcDisplay==='0' && n!=='.') calcDisplay=n;
-  else calcDisplay+=n;
-  renderCalcDisplay();
-}
-function calcOp(op){
-  calcExpr+=calcDisplay+' '+({'/':'÷','*':'×','+':'+','-':'−'}[op]||op)+' ';
-  calcDisplay='0';
-  renderCalcDisplay();
-}
-function calcEqual(){
-  const fullExpr=calcExpr+calcDisplay;
-  try{
-    const evalExpr=fullExpr.replace(/÷/g,'/').replace(/×/g,'*').replace(/−/g,'-');
-    const result=Function('"use strict";return('+evalExpr+')')();
-    const resultStr=parseFloat(result.toFixed(10)).toString();
-    calcHistory.unshift({expr:fullExpr, result:resultStr, time:new Date().toLocaleTimeString('ja-JP')});
-    if(calcHistory.length>50) calcHistory.pop();
-    calcExpr='';
-    calcDisplay=resultStr;
-    renderCalcDisplay();
-    renderCalcHistory();
-  }catch(e){
-    calcDisplay='Error'; renderCalcDisplay();
-  }
-}
-function calcClear(){ calcExpr=''; calcDisplay='0'; renderCalcDisplay(); }
-function calcBackspace(){ calcDisplay=calcDisplay.slice(0,-1)||'0'; renderCalcDisplay(); }
-function calcPercent(){
-  const v=parseFloat(calcDisplay)||0;
-  calcDisplay=(v/100).toString();
-  renderCalcDisplay();
-}
-function calcTax(rate){
-  const v=parseFloat(calcDisplay)||0;
-  const result=Math.ceil(v*rate);
-  calcHistory.unshift({expr:v+' × '+rate, result:result.toString(), time:new Date().toLocaleTimeString('ja-JP')});
-  calcDisplay=result.toString();
-  calcExpr='';
-  renderCalcDisplay(); renderCalcHistory();
-}
-function calcSheets(){
-  const copies=parseInt(prompt('印刷部数:','1000'))||0;
-  const faces=parseInt(prompt('面付数:','4'))||1;
-  const waste=parseInt(prompt('予備枚数:','50'))||0;
-  const sheets=Math.ceil(copies/faces)+waste;
-  calcHistory.unshift({expr:copies+'部÷'+faces+'面+予備'+waste, result:sheets+'枚', time:new Date().toLocaleTimeString('ja-JP')});
-  calcDisplay=sheets.toString();
-  calcExpr='';
-  renderCalcDisplay(); renderCalcHistory();
-}
-function calcRoundUp(){
-  const v=parseFloat(calcDisplay)||0;
-  calcDisplay=Math.ceil(v).toString();
-  renderCalcDisplay();
-}
-function calcMemory(){
-  calcHistory.unshift({expr:'M+', result:calcDisplay, time:new Date().toLocaleTimeString('ja-JP')});
-  renderCalcHistory();
-}
-function renderCalcHistory(){
-  const el=document.getElementById('calc-history');
-  if(!el) return;
-  if(calcHistory.length===0){ el.innerHTML='<div style="color:#aaa;padding:8px">履歴なし</div>'; return; }
-  el.innerHTML=calcHistory.map((h,i)=>`
-    <div style="display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #f0f0f0;cursor:pointer" onclick="calcUseHistory(${i})">
-      <div><span style="color:#888">${h.expr}</span> = <strong>${h.result}</strong></div>
-      <span style="color:#ccc;font-size:10px">${h.time}</span>
-    </div>
-  `).join('');
-}
-function calcUseHistory(idx){
-  const h=calcHistory[idx];
-  if(!h) return;
-  const num=h.result.replace(/[^0-9.\-]/g,'');
-  if(num) { calcDisplay=num; renderCalcDisplay(); }
-}
-function quickCalcSheets(){
-  const copies=parseInt(document.getElementById('qc-copies')?.value)||0;
-  const faces=parseInt(document.getElementById('qc-faces')?.value)||1;
-  const sheets=Math.ceil(copies/faces);
-  document.getElementById('qc-result').textContent=`→ ${sheets.toLocaleString()}枚（予備なし）/ ${(sheets+Math.ceil(sheets*0.05)).toLocaleString()}枚（予備5%込）`;
-}
-function quickCalcTax(){
-  const amt=parseFloat(document.getElementById('qc-amount')?.value)||0;
-  const t10=Math.ceil(amt*1.10);
-  const t8=Math.ceil(amt*1.08);
-  document.getElementById('qc-tax-result').textContent=`→ 10%税込: ¥${t10.toLocaleString()} / 8%税込: ¥${t8.toLocaleString()}`;
-}
-</script>
-</body>
-</html>
+        <button class="btn" onclick="wikiOpenTool('calc')">🔢 電卓</but
