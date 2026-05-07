@@ -70,21 +70,20 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;font-size:13px;
 /* 🆕 確定的 2 段レイアウト
    1段目 (固定高さ): nav・タイトル・タブ群 (横スクロール対応)
    2段目 (画面幅 ≥1200 ではタイトル横、<1200 では下段に回る): 右側コントロール群 */
-.topbar{background:#1a1a1a;color:#fff;display:flex;align-items:center;padding:4px .75rem;min-height:50px;flex-shrink:0;gap:0;flex-wrap:wrap;row-gap:4px;width:100%;box-sizing:border-box}
+/* 左固定: ⬅➡+TOKIWA-HUB を縦中央 + 全行をまたぐ高さ
+   右エリア: タブ・検索が内部で折返し */
+.topbar{background:#1a1a1a;color:#fff;display:flex;align-items:stretch;padding:4px .75rem;min-height:50px;flex-shrink:0;gap:0;flex-wrap:nowrap;width:100%;box-sizing:border-box}
+.tb-left-fixed{display:flex;align-items:center;flex-shrink:0;padding-right:8px;gap:0;align-self:stretch}
+.tb-right-area{display:flex;flex-wrap:wrap;flex:1;min-width:0;align-content:center;row-gap:4px}
 .topbar-title{font-size:14px;font-weight:700;margin-right:14px;margin-left:6px;white-space:nowrap;letter-spacing:.02em;flex-shrink:0;align-self:center}
 .tb-nav-btn{flex-shrink:0;width:32px;height:32px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:6px;cursor:pointer;font-size:14px;font-family:inherit;display:flex;align-items:center;justify-content:center;transition:all .15s;align-self:center;margin-right:4px}
 .tb-nav-btn:hover:not(:disabled){background:rgba(96,165,250,.4);border-color:rgba(96,165,250,.6)}
 .tb-nav-btn:disabled{opacity:0.3;cursor:not-allowed}
-/* タブ群: 横折返し可 — 1〜2 行目に全タブが見える */
-.tb-scroll{display:flex;align-items:stretch;flex:1 1 400px;flex-wrap:wrap;gap:2px;min-width:0;align-content:flex-start;padding:2px 0}
-/* 右側コントロール群: 常に最終行 (タブの下) — どんな画面幅でも
-   インデントはタブ列の開始位置 (= ⬅ ➡ ナビ + TOKIWA-HUB タイトル分) と揃える */
-.tb-right{order:99 !important;width:100% !important;justify-content:flex-start !important;flex-wrap:wrap !important;margin-left:0 !important;padding-left:172px !important;border-top:1px solid rgba(255,255,255,0.1) !important;padding-top:4px !important;margin-top:2px !important;box-sizing:border-box !important}
+/* タブ群: 横折返し可 — 全タブが見える */
+.tb-scroll{display:flex;align-items:center;flex:1 1 100%;flex-wrap:wrap;gap:2px;min-width:0;align-content:flex-start;padding:2px 0}
+/* 右側コントロール群: tb-right-area 内で必ず次の行へ */
+.tb-right{order:99 !important;width:100% !important;justify-content:flex-start !important;flex-wrap:wrap !important;margin-left:0 !important;padding-left:0 !important;border-top:1px solid rgba(255,255,255,0.1) !important;padding-top:4px !important;margin-top:2px !important;box-sizing:border-box !important;display:flex !important;align-items:center !important;gap:8px !important}
 .tb-right > *{flex-shrink:0}
-@media (max-width:600px){
-  /* 超狭画面ではインデント不要 */
-  .tb-right{padding-left:0 !important}
-}
 .tb-arrow{display:none}
 .tb-btn{padding:0 11px;height:34px;background:rgba(255,255,255,.04);border:none;color:rgba(255,255,255,.75);font-size:12.5px;cursor:pointer;font-family:inherit;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;border-radius:6px;display:inline-flex;align-items:center;letter-spacing:.01em;line-height:34px;position:relative}
 /* 連絡管理 社外/社内 切替タブ */
@@ -610,9 +609,12 @@ window.addEventListener('load', function(){
 
 <div class="layout" id="main-layout" style="display:none">
 <div class="topbar no-print">
-  <button class="tb-nav-btn" id="tb-nav-back" onclick="navBack()" title="前のタブに戻る (Alt+←)" disabled>⬅</button>
-  <button class="tb-nav-btn" id="tb-nav-forward" onclick="navForward()" title="次のタブに進む (Alt+→)" disabled>➡</button>
-  <span class="topbar-title" id="app-title" onclick="_goHome_()" style="cursor:pointer" title="クリックでホームへ">TOKIWA-HUB</span>
+  <div class="tb-left-fixed">
+    <button class="tb-nav-btn" id="tb-nav-back" onclick="navBack()" title="前のタブに戻る (Alt+←)" disabled>⬅</button>
+    <button class="tb-nav-btn" id="tb-nav-forward" onclick="navForward()" title="次のタブに進む (Alt+→)" disabled>➡</button>
+    <span class="topbar-title" id="app-title" onclick="_goHome_()" style="cursor:pointer" title="クリックでホームへ">TOKIWA-HUB</span>
+  </div>
+  <div class="tb-right-area">
   <div class="tb-scroll" id="tb-scroll">
     <button class="tb-btn act" data-page="realtime" onclick="swPage('realtime',this)" draggable="true" title="🏠 ホーム — 業務フロー図 + KPI・売上グラフ・案件一覧などをウィジェット形式でカスタマイズ表示 (30秒自動更新)">🏠 ホーム</button>
     <button class="tb-btn" data-page="inquiry" onclick="swPage('inquiry',this)" draggable="true" title="📨 連絡管理 — 社外 (Gmail / LINE WORKS / Web フォーム / 顧客問い合わせ) と 社内 (社内連絡 / 社間依頼) の統合受信トレイ。AI 返信下書き・自動見積抽出">📨 連絡管理</button>
@@ -684,6 +686,7 @@ window.addEventListener('load', function(){
     <button class="tb-icon-btn" onclick="document.getElementById('imp').click()">読み込み</button>
     <input type="file" id="imp" accept=".json" style="display:none" onchange="importJSON(event)">
   </div>
+  </div><!-- /tb-right-area -->
 </div>
 <div class="est-tabbar no-print" id="est-tabbar">
   <button class="tab-add-btn" onclick="addTab()">＋ 新規見積</button>
