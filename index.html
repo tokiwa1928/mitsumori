@@ -18303,6 +18303,19 @@ function renderRealtimeView(){
 // 🎯 トップバータブの D&D 並び替え + 永続化
 // ─────────────────────────────────────────────────────
 var _tbOrderKey = 'tokiwa_topbar_order_v1';
+// HTML 順序を変更したらこのバージョンを上げる → 古い保存を自動破棄
+var _tbOrderHtmlVersion = '2026-05-06-v2-purchase-after-proofing';
+(function _tbOrderVersionCheck_(){
+  try {
+    var savedVer = localStorage.getItem('tokiwa_topbar_order_html_ver');
+    if(savedVer !== _tbOrderHtmlVersion){
+      // 古い順序を破棄
+      localStorage.removeItem('tokiwa_topbar_order_v1');
+      localStorage.setItem('tokiwa_topbar_order_html_ver', _tbOrderHtmlVersion);
+      console.log('🔄 トップバー並び順を HTML デフォルトにリセット (バージョン更新)');
+    }
+  } catch(e){}
+})();
 
 function _saveTopbarOrder_(){
   try {
