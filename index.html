@@ -25141,10 +25141,25 @@ function renderInquiryList() {
     // 案件チェーン (エンドユーザー → 元請け → 自社 → 再委託先)
     const handoffChain = _renderHandoffChain_(inq);
 
-    // 一覧密度: 件名 + 主要バッジ + 顧客名 を 2行に収める
-    return `<div class="inq-card ${inq.priority}" style="${cardStyle}" onclick="openInquiryDetail('${inq.id}')">
+    // 🆕 状態別の視覚装飾
+    //   - 未開封 (readAt 無し) → 太い左ボーダー + 背景強調
+    //   - 未対応 (status='new') → 🔴 ドットバッジ
+    const isUnread = !inq.readAt;
+    const isUnhandled = (inq.status === 'new' || !inq.status);
+    let stateIndicator = '';
+    let extraStyle = '';
+    if(isUnread){
+      // 未開封: 左に太い赤ボーダー + 薄い赤背景
+      extraStyle = ';box-shadow:inset 4px 0 0 #dc2626;background:linear-gradient(90deg,rgba(254,226,226,0.45) 0px,rgba(254,226,226,0.15) 60px,transparent 200px),' + (cardStyle.match(/background:\s*([^;]+)/)?.[1] || '#fff');
+      stateIndicator = '<span style="background:#dc2626;color:#fff;font-size:9px;padding:1px 6px;border-radius:8px;font-weight:700;margin-right:4px" title="未開封">🔴 未読</span>';
+    } else if(isUnhandled){
+      // 未対応: 🟡 オレンジバッジ
+      stateIndicator = '<span style="background:#f59e0b;color:#fff;font-size:9px;padding:1px 6px;border-radius:8px;font-weight:700;margin-right:4px" title="未対応">🟡 未対応</span>';
+    }
+    return `<div class="inq-card ${inq.priority}${isUnread ? ' inq-unread' : ''}" style="${cardStyle}${extraStyle}" onclick="openInquiryDetail('${inq.id}')">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;flex:1;min-width:0">
+          ${stateIndicator}
           ${groupBadge}
           ${sourceBadge}
           ${kindBadge}
@@ -25153,17 +25168,20 @@ function renderInquiryList() {
           ${inq.category ? `<span class="inq-cat">${inq.category}</span>` : ''}
           <span class="inq-prio ${inq.priority||'normal'}">${prioLabels[inq.priority]||'通常'}</span>
           <span class="inq-status ${inq.status||'new'}">${statusLabels[inq.status]||'新規'}</span>
-          <span style="font-weight:700;font-size:12px;margin-left:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%" title="${_escDiff(inq.subject||'')}">${inq.subject||'（件名なし）'}</span>
+          <span style="font-weight:${isUnread ? '800' : '700'};font-size:12px;margin-left:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;${isUnread ? 'color:#1a1a1a' : ''}" title="${_escDiff(inq.subject||'')}">${inq.subject||'（件名なし）'}</span>
         </div>
         <span style="font-size:10px;color:#aaa;white-space:nowrap">${elapsed}</span>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:2px">
-        <div style="font-size:11px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-top:3px">
+        <div style="font-size:11px;color:#555;flex:1;min-width:0;line-height:1.5">
           ${(inq.custName || inq.from_name) ? '<span style="font-weight:600">' + (inq.custName || inq.from_name) + '</span>' : ''}
           ${(inq.from_company || inq.company) ? '<span style="color:#888"> · ' + (inq.from_company || inq.company) + '</span>' : ''}
-          ${inq.summary ? '<span style="color:#888;margin-left:6px">— ' + _escDiff(inq.summary.substring(0, 60)) + '</span>' : (inq.body ? '<span style="color:#aaa;margin-left:6px">— ' + _escDiff(inq.body.substring(0, 60)) + '</span>' : '')}
+          ${inq.summary
+            ? '<div style="color:#374151;margin-top:2px;white-space:pre-wrap;word-break:break-word">🤖 ' + _escDiff(inq.summary) + '</div>'
+            : (inq.body ? '<div style="color:#666;margin-top:2px;white-space:pre-wrap;word-break:break-word">' + _escDiff(inq.body.length > 200 ? inq.body.substring(0, 200) + '…' : inq.body) + '</div>' : '')
+          }
         </div>
-        <div style="display:flex;gap:6px;font-size:10px;color:#888;align-items:center;flex-wrap:nowrap;white-space:nowrap">
+        <div style="display:flex;gap:6px;font-size:10px;color:#888;align-items:center;flex-wrap:nowrap;white-space:nowrap;flex-shrink:0">
           ${sourceLink}
           ${attBadge}
           ${estimateUI}
@@ -25384,7 +25402,16 @@ function saveNewInquiry() {
 function openInquiryDetail(id) {
   const inq = (DB.inquiries||[]).find(i => i.id === id);
   if(!inq) return;
-  
+
+  // 🆕 既読マーク (開封日時を記録 → カードの色変化に使用)
+  if(!inq.readAt){
+    inq.readAt = new Date().toISOString();
+    inq.readBy = (currentAuth && currentAuth.userName) || '';
+    if(typeof saveDB === 'function') try { saveDB(); } catch(e){}
+    // 一覧側を再描画して色変化を反映
+    if(typeof renderInquiryList === 'function') setTimeout(renderInquiryList, 100);
+  }
+
   const panel = document.getElementById('inq-detail-panel');
   const overlay = document.getElementById('inq-detail-overlay');
   
