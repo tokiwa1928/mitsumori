@@ -77,10 +77,14 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;font-size:13px;
 .tb-nav-btn:disabled{opacity:0.3;cursor:not-allowed}
 /* タブ群: 横折返し可 — 1〜2 行目に全タブが見える */
 .tb-scroll{display:flex;align-items:stretch;flex:1 1 400px;flex-wrap:wrap;gap:2px;min-width:0;align-content:flex-start;padding:2px 0}
-/* 右側コントロール群: 常に 3 行目 (タブの下) — どんな画面幅でも
-   インデントはページ本文 (ホーム見出し) と同じ位置 (左端) */
-.tb-right{order:99;width:100%;justify-content:flex-start;flex-wrap:wrap;margin-left:0 !important;padding-left:0;border-top:1px solid rgba(255,255,255,0.1);padding-top:4px;margin-top:2px;box-sizing:border-box}
+/* 右側コントロール群: 常に最終行 (タブの下) — どんな画面幅でも
+   インデントはタブ列の開始位置 (= ⬅ ➡ ナビ + TOKIWA-HUB タイトル分) と揃える */
+.tb-right{order:99;width:100%;justify-content:flex-start;flex-wrap:wrap;margin-left:0 !important;padding-left:172px;border-top:1px solid rgba(255,255,255,0.1);padding-top:4px;margin-top:2px;box-sizing:border-box}
 .tb-right > *{flex-shrink:0}
+@media (max-width:600px){
+  /* 超狭画面ではインデント不要 */
+  .tb-right{padding-left:0}
+}
 .tb-arrow{display:none}
 .tb-btn{padding:0 11px;height:34px;background:rgba(255,255,255,.04);border:none;color:rgba(255,255,255,.75);font-size:12.5px;cursor:pointer;font-family:inherit;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;border-radius:6px;display:inline-flex;align-items:center;letter-spacing:.01em;line-height:34px;position:relative}
 /* 連絡管理 社外/社内 切替タブ */
