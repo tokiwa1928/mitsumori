@@ -3298,7 +3298,65 @@ function loadDB(){try{const s=localStorage.getItem(DBKEY);if(s){const d=JSON.par
   if(!d.wikiArticles) d.wikiArticles=[];
   if(!d.templates) d.templates=[];
   DB=Object.assign({master:{paper:[],envelope:[],print:[],printOption:[],plate:[],data:[],bind:[],cust:[],prod:[]},history:[],projects:[],users:[],companies:[],systemUsers:[],intercoRequests:[],intercoOrders:[],quotations:[],outsourceOrders:[],inquiries:[],deliveryItems:[],drivers:[],inquirySettings:{},wikiArticles:[],templates:[],conf:{name:'',rep:'',addr:'',tel:'',appName:''}},d);
+  // AAAA-1: マスター番号 backfill (起動時に既存データに割り当て)
+  if(typeof _backfillMasterNos_ === 'function') _backfillMasterNos_();
 }}catch(e){}}
+
+// AAAA-1/2: 既存データにマスター番号を後付けで一括割り当て (全書類)
+function _backfillMasterNos_(){
+  try {
+    if(!DB.conf) DB.conf = {};
+    var changed = false;
+
+    // 案件 → 紐付く各書類を順番に継承 (案件 ID で照合)
+    (DB.projects || []).forEach(function(p){
+      if(!p.master_no){ p.master_no = _nextMasterNo_(); changed = true; }
+      var pid = p.id;
+      [
+        {arr: DB.estimates,              key:'projectId'},
+        {arr: DB.history,                key:'projectId'},
+        {arr: DB.outsourceQuoteRequests, key:'projectId'},
+        {arr: DB.proofings,              key:'projectId'},
+        {arr: DB.purchases,              key:'projectId'},
+        {arr: DB.outsource,              key:'projectId'},
+        {arr: DB.deliveryItems,          key:'projectId'},
+        {arr: DB.invoices,               key:'projectId'},
+        {arr: DB.receipts,               key:'projectId'},
+        {arr: DB.payments,               key:'projectId'},
+        {arr: DB.payouts,                key:'projectId'}
+      ].forEach(function(s){
+        (s.arr || []).forEach(function(item){
+          if(item && item[s.key] === pid && !item.master_no){
+            item.master_no = p.master_no;
+            changed = true;
+          }
+        });
+      });
+
+      // 連絡 → 案件にリンクされていれば継承
+      (DB.inquiries || []).forEach(function(inq){
+        if(inq && inq.linked_project_id === pid && !inq.master_no){
+          inq.master_no = p.master_no;
+          changed = true;
+        }
+      });
+    });
+
+    // 案件未紐付けの単独書類にも個別に番号を割り当て
+    ['inquiries','estimates','history','outsourceQuoteRequests','proofings','purchases','outsource','deliveryItems','invoices','receipts','payments','payouts'].forEach(function(k){
+      (DB[k] || []).forEach(function(item){
+        if(item && !item.master_no){ item.master_no = _nextMasterNo_(); changed = true; }
+      });
+    });
+
+    if(changed){
+      console.log('🔢 マスター番号 backfill 完了 (counter=' + (DB.conf._masterNoCounter||0) + ')');
+      try { localStorage.setItem(DBKEY, JSON.stringify(DB)); } catch(e){}
+    }
+  } catch(e){
+    console.warn('master_no backfill failed:', e);
+  }
+}
 
 function saveDB(){
   // ローカルに保存
@@ -4487,10 +4545,23 @@ function onGlobalSearchInput(){
   }
 
   var hits = [];
+  // 🔢 マスター番号検索: "P0042" / "0042" / "M0042" 等で関連書類を一発表示
+  var mnoMatch = q.match(/^[a-z]?0*(\d{1,4})$/i);
+  if(mnoMatch){
+    var mno = String(parseInt(mnoMatch[1], 10)).padStart(4, '0');
+    var related = (typeof _findRelatedDocs_ === 'function') ? _findRelatedDocs_(mno) : null;
+    if(related){
+      var totalRelated = ['project','estimate','history','outsource_quote','purchase','outsource_partial','outsource_full','invoice']
+        .reduce(function(sum,k){ return sum + (related[k]||[]).length; }, 0);
+      if(totalRelated > 0){
+        hits.push({ type:'🔗 関連書類', icon:'🔢', color:'#7c3aed', id:'master:'+mno, label:'マスター番号 #'+mno+' の関連書類 ('+totalRelated+'件)', sub:'クリックで一覧表示', action:'showRelatedDocsModal', actionArg:mno });
+      }
+    }
+  }
   // 案件
   (DB.projects || []).forEach(function(p){
-    var hay = ((p.id||'')+' '+(p.cust||'')+' '+(p.item||'')+' '+(p.spec||'')+' '+(p.end_user||'')).toLowerCase();
-    if(hay.indexOf(q) >= 0) hits.push({ type:'案件', icon:'📁', color:'#16a34a', id:p.id, label:(p.cust||'')+' / '+(p.item||''), sub:p.id+' · '+(p.status||''), action:'jumpToProject', actionArg:p.id });
+    var hay = ((p.id||'')+' '+(p.cust||'')+' '+(p.item||'')+' '+(p.spec||'')+' '+(p.end_user||'')+' '+(p.master_no?'P'+p.master_no:'')).toLowerCase();
+    if(hay.indexOf(q) >= 0) hits.push({ type:'案件', icon:'📁', color:'#16a34a', id:p.id, label:(p.cust||'')+' / '+(p.item||''), sub:(p.master_no?'P'+p.master_no+' · ':'')+p.id+' · '+(p.status||''), action:'jumpToProject', actionArg:p.id });
   });
   // 見積依頼
   (DB.estimates || []).forEach(function(e){
@@ -4565,6 +4636,8 @@ function _globalSearchClick_(idx){
       }, 150);
     } else if(h.action === '_navAdmin_' && typeof _navAdmin_ === 'function'){
       _navAdmin_(h.actionArg);
+    } else if(h.action === 'showRelatedDocsModal' && typeof showRelatedDocsModal === 'function'){
+      showRelatedDocsModal(h.actionArg);
     } else {
       console.warn('Unknown global search action:', h.action);
     }
@@ -22569,6 +22642,185 @@ function nextProjNo(){
   return generateProjectId();
 }
 
+// ═══════════════════════════════════════════════════
+// AAAA-1/2: 案件横断マスター番号システム (全書類対応)
+// ═══════════════════════════════════════════════════
+// 業務フロー順:
+//   I(連絡) → M(見積) → P(案件) → G(外注見積) → K(校正) →
+//   B(部分外注)/F(フル外注) → S(仕入) → D(納品/配送) →
+//   V(請求) → R(領収) → N(入金) → H(支払)
+const MASTER_NO_PREFIX = {
+  inquiry:           'I',  // 連絡 / 問合せ (Inquiry)
+  estimate:          'M',  // 見積書 (Mitsumori)
+  history:           'M',  // 過去見積 (同じ M)
+  project:           'P',  // 案件 (Project)
+  outsource_quote:   'G',  // 外注見積依頼 (Gaichu mitsumori)
+  proofing:          'K',  // 校正セッション (Kousei)
+  outsource_partial: 'B',  // 部分外注 (Bubun gaichu)
+  outsource_full:    'F',  // フル外注 (Full gaichu)
+  purchase:          'S',  // 仕入発注 (Shiire)
+  delivery:          'D',  // 納品書 / 配送 (Delivery / Nouhinsho)
+  invoice:           'V',  // 請求書 (Voucher / 請求)
+  receipt:           'R',  // 領収書 (Receipt / Ryoushuusho)
+  payment:           'N',  // 入金 (Nyuukin)
+  payout:            'H'   // 支払 (Haraikomi / Shiharai)
+};
+const MASTER_NO_TYPE_LABEL = {
+  inquiry:           '📨 連絡',
+  estimate:          '📝 見積書',
+  history:           '📜 過去見積',
+  project:           '📁 案件',
+  outsource_quote:   '🤝 外注見積依頼',
+  proofing:          '📐 校正',
+  outsource_partial: '🤝 部分外注',
+  outsource_full:    '🤝 フル外注',
+  purchase:          '📦 仕入発注',
+  delivery:          '🚚 納品/配送',
+  invoice:           '📄 請求書',
+  receipt:           '🧾 領収書',
+  payment:           '💰 入金',
+  payout:            '💸 支払'
+};
+
+// 次のマスター番号を発行 (4桁ゼロパディング) — 全書類の最大値+1
+function _nextMasterNo_(){
+  if(!DB.conf) DB.conf = {};
+  var maxFromData = 0;
+  ['inquiries','estimates','history','projects','outsourceQuoteRequests','proofings','purchases','outsource','deliveryItems','invoices','receipts','payments','payouts'].forEach(function(k){
+    (DB[k] || []).forEach(function(e){
+      if(e && e.master_no){
+        var n = parseInt(e.master_no, 10);
+        if(!isNaN(n) && n > maxFromData) maxFromData = n;
+      }
+    });
+  });
+  var counter = (DB.conf._masterNoCounter || 0);
+  var next = Math.max(maxFromData, counter) + 1;
+  DB.conf._masterNoCounter = next;
+  return String(next).padStart(4, '0');
+}
+
+// entity に master_no が無ければ新規割り当て (entity を mutate)
+function _ensureMasterNo_(entity){
+  if(!entity) return '';
+  if(!entity.master_no) entity.master_no = _nextMasterNo_();
+  return entity.master_no;
+}
+
+// source から master_no を継承 (source に無ければ source に新規割り当てしてから継承)
+function _inheritMasterNo_(target, source){
+  if(!target) return '';
+  if(source){
+    target.master_no = _ensureMasterNo_(source);
+  } else {
+    target.master_no = _nextMasterNo_();
+  }
+  return target.master_no;
+}
+
+// 表示用 ID 生成 (例: "P0042")
+function _displayMasterId_(entity, type){
+  if(!entity || !entity.master_no) return '';
+  var prefix = MASTER_NO_PREFIX[type] || '#';
+  return prefix + entity.master_no;
+}
+
+// 4桁番号 (or M0042 のような ID) から関連書類を全部探す
+function _findRelatedDocs_(masterNoOrId){
+  var no = String(masterNoOrId || '').trim();
+  // M0042 / P0042 → "0042" を抽出
+  no = no.replace(/^[A-Za-z]+/, '').padStart(4, '0');
+  var f = function(arr){ return (arr || []).filter(function(e){ return e && e.master_no === no; }); };
+  // 外注は kind === 'full' でフル/部分を分ける
+  var outsource = f(DB.outsource);
+  return {
+    masterNo:          no,
+    inquiry:           f(DB.inquiries),
+    estimate:          f(DB.estimates),
+    history:           f(DB.history),
+    project:           f(DB.projects),
+    outsource_quote:   f(DB.outsourceQuoteRequests),
+    proofing:          f(DB.proofings),
+    outsource_partial: outsource.filter(function(o){ return o && o.kind !== 'full'; }),
+    outsource_full:    outsource.filter(function(o){ return o && o.kind === 'full'; }),
+    purchase:          f(DB.purchases),
+    delivery:          f(DB.deliveryItems),
+    invoice:           f(DB.invoices),
+    receipt:           f(DB.receipts),
+    payment:           f(DB.payments),
+    payout:            f(DB.payouts)
+  };
+}
+
+// 関連書類モーダル表示
+function showRelatedDocsModal(masterNoOrId){
+  var docs = _findRelatedDocs_(masterNoOrId);
+  var no = docs.masterNo;
+  var totalCount = 0;
+  var sectionsHtml = '';
+
+  // 業務フロー順に並べる
+  var sections = [
+    {key:'inquiry',           type:'inquiry'},
+    {key:'estimate',          type:'estimate'},
+    {key:'history',           type:'history'},
+    {key:'project',           type:'project'},
+    {key:'outsource_quote',   type:'outsource_quote'},
+    {key:'proofing',          type:'proofing'},
+    {key:'outsource_partial', type:'outsource_partial'},
+    {key:'outsource_full',    type:'outsource_full'},
+    {key:'purchase',          type:'purchase'},
+    {key:'delivery',          type:'delivery'},
+    {key:'invoice',           type:'invoice'},
+    {key:'receipt',           type:'receipt'},
+    {key:'payment',           type:'payment'},
+    {key:'payout',            type:'payout'}
+  ];
+
+  sections.forEach(function(s){
+    var arr = docs[s.key];
+    if(!arr || arr.length === 0) return;
+    totalCount += arr.length;
+    var prefix = MASTER_NO_PREFIX[s.type];
+    sectionsHtml +=
+      '<div style="margin-bottom:10px">' +
+        '<div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:4px">' +
+          MASTER_NO_TYPE_LABEL[s.type] + ' (' + arr.length + '件)' +
+        '</div>' +
+        arr.map(function(item){
+          var lbl1 = item.cust || item.from_company || item.from_name || item.custName || item.prodName || '';
+          var lbl2 = item.item || item.subject || item.fileName || ('¥' + (item.amount || item.total || 0).toLocaleString());
+          var dateStr = item.date || item.orderDate || item.received_at || item.createdAt || '';
+          if(dateStr) dateStr = String(dateStr).slice(0, 10);
+          return '<div style="background:#fff;border:1px solid #e0ddd6;border-radius:6px;padding:8px 12px;margin-bottom:4px;font-size:11px">' +
+            '<strong style="color:#1e40af">' + prefix + no + '</strong> · ' +
+            '<span style="color:#888;font-size:10px">' + (item.id || '') + '</span>' +
+            (dateStr ? ' · <span style="color:#888;font-size:10px">' + dateStr + '</span>' : '') +
+            '<br>' +
+            _escDiff(String(lbl1 + ' / ' + lbl2).substring(0, 80)) +
+          '</div>';
+        }).join('') +
+      '</div>';
+  });
+
+  var existing = document.getElementById('related-docs-modal');
+  if(existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'related-docs-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:680px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#1e40af;color:#fff;display:flex;justify-content:space-between;align-items:center">' +
+        '<div><strong>🔗 関連書類: #' + no + '</strong><div style="font-size:11px;opacity:.85;margin-top:2px">マスター番号で紐付く書類: ' + totalCount + '件</div></div>' +
+        '<button onclick="document.getElementById(\'related-docs-modal\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button>' +
+      '</div>' +
+      '<div style="overflow-y:auto;flex:1;padding:14px 20px;background:#f9fafb">' +
+        (totalCount === 0 ? '<div style="padding:30px;text-align:center;color:#888">この番号に紐付く書類はありません</div>' : sectionsHtml) +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
 // 見積から受注確定
 function confirmOrder(tabId){
   const s=ts(tabId);
@@ -23245,6 +23497,7 @@ function createProofingFromProject(project, openAfterCreate){
 function addProjectManual(){
   const proj={
     id: nextProjNo(),
+    master_no: _nextMasterNo_(),  // AAAA-1: 横断マスター番号
     companyId: currentAuth.companyId || 'COMP001',  // 会社IDを付与
     companyCode: getCurrentCompanyCode(),           // 会社コードも保存
     orderDate: new Date().toISOString().slice(0,10),
@@ -23569,6 +23822,7 @@ function renderProjects(){
       <td style="font-size:11px;font-family:monospace;white-space:nowrap">
         ${hasDetail?`<span style="font-size:10px;color:#aaa;margin-right:3px" id="proj-acc-arrow-${oi}">▶</span>`:''}
         ${r.id}
+        ${r.master_no ? `<button class="use-btn" style="background:#1e40af;color:#fff;border-color:#1e40af;font-size:10px;padding:1px 6px;margin-left:4px;border-radius:4px;font-weight:700" onclick="event.stopPropagation();showRelatedDocsModal('${r.master_no}')" title="関連書類 (見積書/外注/仕入/請求書) を表示">P${r.master_no} 🔗</button>` : ''}
       </td>
       <td style="font-size:11px;white-space:nowrap">${r.orderDate||''}</td>
       <td onclick="event.stopPropagation()">
