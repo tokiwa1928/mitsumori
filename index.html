@@ -533,15 +533,22 @@ function loadGoogleMapsAPI() {
   <style>@keyframes bootspin{from{transform:rotate(0)}to{transform:rotate(360deg)}}</style>
 </div>
 <script>
-window.addEventListener('load', function(){
-  setTimeout(function(){
-    var b = document.getElementById('boot-loader');
-    if(b){ b.style.transition='opacity 0.3s'; b.style.opacity='0'; setTimeout(function(){ b.remove(); }, 300); }
-    // 左上のシステム名を常に TOKIWA-HUB に固定
-    var t = document.getElementById('app-title');
-    if(t) t.textContent = 'TOKIWA-HUB';
-  }, 100);
-});
+// 🔧 QQQ-1: 白画面対策 — boot-loader を確実に消す (load + DOMContentLoaded + 強制タイムアウト の3重保証)
+function _removeBootLoader_(){
+  var b = document.getElementById('boot-loader');
+  if(b){ b.style.transition='opacity 0.3s'; b.style.opacity='0'; setTimeout(function(){ if(b && b.parentNode) b.remove(); }, 300); }
+  var t = document.getElementById('app-title');
+  if(t) t.textContent = 'TOKIWA-HUB';
+}
+window.addEventListener('load', function(){ setTimeout(_removeBootLoader_, 100); });
+// CDN 遅延などで load が来ない場合の保険 (DOMContentLoaded 後 1.5 秒で強制除去)
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(_removeBootLoader_, 1500); });
+} else {
+  setTimeout(_removeBootLoader_, 1500);
+}
+// 最終保険: ロード状況に関わらず 5 秒で必ず除去
+setTimeout(_removeBootLoader_, 5000);
 </script>
 <!-- DIC番号サジェスト -->
 <datalist id="dic-suggestions">
@@ -9847,7 +9854,15 @@ function renderProofingList(){
   const q = (document.getElementById('proof-q')?.value || '').toLowerCase();
   const filter = document.getElementById('proof-filter')?.value || '';
   
+  // PPP-2: 自社作成 OR 自社にシェアされている proofing のみ表示
+  var myCompany = (typeof getCurrentCompanyCode === 'function') ? getCurrentCompanyCode() : '';
   const proofings = (DB.proofings || []).filter(p => {
+    // 会社フィルタ (グループ会社共有対応)
+    if(myCompany){
+      var owner = p.companyCode || '';
+      var sharedWith = p.sharedWithCompanies || [];
+      if(owner && owner !== myCompany && sharedWith.indexOf(myCompany) < 0) return false;
+    }
     // 検索
     if(q){
       const searchStr = `${p.custName||''} ${p.prodName||''} ${p.projectId||''}`.toLowerCase();
@@ -9871,14 +9886,32 @@ function renderProofingList(){
     const bgColor = statusColors[p.status] || '#fff';
     const statusLabel = statusLabels[p.status] || p.status;
     const versionCount = (p.versions || []).length;
-    
+    // PPP-2: 共有バッジ
+    var owner = p.companyCode || '';
+    var isShared = (p.sharedWithCompanies || []).length > 0;
+    var isFromOther = myCompany && owner && owner !== myCompany;
+    var shareBadge = '';
+    if(isFromOther){
+      shareBadge = '<span style="font-size:9px;background:#f3e8ff;color:#581c87;padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:600">📥 ' + owner + 'から共有</span>';
+    } else if(isShared){
+      shareBadge = '<span style="font-size:9px;background:#dbeafe;color:#1e3a8a;padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:600">🤝 共有中(' + p.sharedWithCompanies.length + '社)</span>';
+    }
+    // PPP-1: 最新 round/v 表示
+    var latest = (p.versions || [])[((p.versions || []).length) - 1];
+    var roundDisp = '';
+    if(latest && latest.round){
+      var lbl = _proofRoundLabel_(latest.round, latest.kind);
+      var vlbl = (latest.kind === 'proof' || latest.kind === 'final') && latest.subVersion ? ' v' + latest.subVersion : '';
+      roundDisp = ' / 最新: ' + lbl + vlbl;
+    }
+
     html += `<div style="background:${bgColor};border:1px solid #e0ddd6;border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer" onclick="showProofingDetail('${p.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
-          <div style="font-weight:700;font-size:13px">${p.custName || '─'}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:13px">${p.custName || '─'}${shareBadge}</div>
           <div style="font-size:12px;color:#555">${p.prodName || ''}</div>
           <div style="font-size:11px;color:#888;margin-top:4px">
-            版数: ${versionCount} / 作成: ${p.createdAt?.split('T')[0] || '─'}
+            版数: ${versionCount}${roundDisp} / 作成: ${p.createdAt?.split('T')[0] || '─'}
           </div>
         </div>
         <div style="text-align:right">
@@ -9916,9 +9949,12 @@ function showProofingDetail(proofingId){
     const kindLabel = kindLabels[v.kind] || '校正';
     const kindColor = kindColors[v.kind] || '#dbeafe';
     const annoCount = (v.annotations || []).length;
+    // PPP-1: round/v ラベル (第○校 v?)
+    var roundDisp = v.round ? _proofRoundLabel_(v.round, v.kind) : ('第' + (i+1) + '校');
+    var vDisp = (v.kind === 'proof' || v.kind === 'final') && v.subVersion ? ' <span style="color:#0369a1;font-weight:600">v' + v.subVersion + '</span>' : '';
     versionsHtml += `<div style="background:#fff;border:1px solid #e0ddd6;border-radius:6px;padding:10px;margin-bottom:6px">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <strong style="font-size:12px">第${i+1}校 <span style="font-weight:normal;background:${kindColor};padding:1px 6px;border-radius:8px;font-size:10px">${kindLabel}</span></strong>
+        <strong style="font-size:12px">${roundDisp}${vDisp} <span style="font-weight:normal;background:${kindColor};padding:1px 6px;border-radius:8px;font-size:10px">${kindLabel}</span></strong>
         <span style="font-size:10px;color:#888">${v.uploadedAt?.split('T')[0] || ''}</span>
       </div>
       <div style="font-size:11px;color:#555;margin-top:4px">${v.fileName || 'ファイル名不明'}</div>
@@ -9948,12 +9984,39 @@ function showProofingDetail(proofingId){
       </div>`
     : '';
 
+  // PPP-2: グループ会社共有 UI
+  var allCompanyCodes = ['トキワ','村山','北上','アート','津島','中尾'];
+  var sharedSet = (p.sharedWithCompanies || []);
+  var ownerCompany = p.companyCode || (typeof getCurrentCompanyCode === 'function' ? getCurrentCompanyCode() : '');
+  var sharedHtml =
+    '<div style="margin-bottom:.75rem;padding:8px 10px;background:#f3e8ff;border:1px solid #d8b4fe;border-radius:6px">' +
+      '<div style="font-size:11px;font-weight:700;color:#581c87;margin-bottom:6px">🤝 グループ会社間共有</div>' +
+      '<div style="font-size:10px;color:#581c87;margin-bottom:6px">作成元: ' + (ownerCompany || '─') + '。チェックした会社からも校正BOX で同じデータが見えます。</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        allCompanyCodes.filter(function(c){ return c !== ownerCompany; }).map(function(c){
+          var checked = sharedSet.indexOf(c) >= 0 ? 'checked' : '';
+          return '<label style="font-size:11px;display:inline-flex;align-items:center;gap:4px;background:#fff;padding:2px 8px;border-radius:4px;border:1px solid #d8b4fe;cursor:pointer">' +
+            '<input type="checkbox" ' + checked + ' onchange="toggleProofingShare(\'' + p.id + '\', \'' + c + '\', this.checked)"> ' + c + '</label>';
+        }).join('') +
+      '</div>' +
+      '<div style="font-size:10px;color:#581c87;margin-top:6px;display:flex;align-items:center;gap:8px">' +
+        '<label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" ' + (p.notifyOnUpdate !== false ? 'checked' : '') + ' onchange="toggleProofingNotify(\'' + p.id + '\', this.checked)"> 📲 担当者へ LW通知</label>' +
+      '</div>' +
+    '</div>';
+
+  // PPP-4: お客様送信ボタン (連絡管理経由) — 校正データがある時のみ
+  var hasProof = (p.versions || []).some(function(v){ return v.kind === 'proof' || v.kind === 'final'; });
+  var sendCustomerBtn = hasProof
+    ? '<button class="btn btn-p" style="background:#0e7490;border-color:#0e7490" onclick="showSendProofToCustomerModal(\'' + p.id + '\')" title="連絡管理経由でメール/LINE/LINE WORKS 送信">📧 お客様送信</button>'
+    : '';
+
   container.innerHTML = `
     <div style="margin-bottom:1rem">
       <div style="font-weight:700;font-size:14px">${p.custName || '─'}</div>
       <div style="font-size:12px;color:#555">${p.prodName || ''}</div>
     </div>
     ${projectLinkHtml}
+    ${sharedHtml}
     <div class="f" style="margin-bottom:.75rem">
       <label>ステータス</label>
       <select style="font-size:12px" onchange="updateProofingStatus('${p.id}',this.value)">
@@ -9966,12 +10029,35 @@ function showProofingDetail(proofingId){
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-p" onclick="uploadProofVersion('${p.id}')">📤 校正アップロード</button>
+      ${sendCustomerBtn}
       ${canCompare ? `<button class="btn" style="background:#dbeafe;border-color:#93c5fd" onclick="startProofComparison('${p.id}')">📐 検版開始</button>` : ''}
       ${canCompare ? `<button class="btn" style="background:#fef3c7;border-color:#fcd34d" onclick="startTextDiff('${p.id}')">📝 テキスト差分</button>` : ''}
-      <button class="btn" onclick="sendProofLink('${p.id}')">📧 リンク送信</button>
       <button class="btn" style="color:#991b1b;border-color:#fca5a5" onclick="deleteProofing('${p.id}')">🗑 削除</button>
     </div>
   `;
+}
+
+// PPP-2: グループ会社共有 toggle
+function toggleProofingShare(proofingId, companyCode, on){
+  var p = (DB.proofings || []).find(function(x){ return x.id === proofingId; });
+  if(!p) return;
+  if(!p.sharedWithCompanies) p.sharedWithCompanies = [];
+  var idx = p.sharedWithCompanies.indexOf(companyCode);
+  if(on){
+    if(idx < 0) p.sharedWithCompanies.push(companyCode);
+  } else {
+    if(idx >= 0) p.sharedWithCompanies.splice(idx, 1);
+  }
+  saveDB();
+  if(typeof _addAuditLog_ === 'function') _addAuditLog_('proofing', proofingId, '共有: ' + companyCode + ' → ' + (on ? 'ON' : 'OFF'));
+}
+
+// PPP-3: 通知 ON/OFF toggle
+function toggleProofingNotify(proofingId, on){
+  var p = (DB.proofings || []).find(function(x){ return x.id === proofingId; });
+  if(!p) return;
+  p.notifyOnUpdate = !!on;
+  saveDB();
 }
 
 // 新規校正を作成
@@ -9988,9 +10074,13 @@ function createProofing(){
     projectId: null,
     status: 'waiting',
     versions: [],
+    // PPP-2/3: グループ会社共有 + 通知
+    companyCode: (typeof getCurrentCompanyCode === 'function') ? getCurrentCompanyCode() : '',
+    sharedWithCompanies: [],
+    notifyOnUpdate: true,
     createdAt: new Date().toISOString()
   };
-  
+
   if(!DB.proofings) DB.proofings = [];
   DB.proofings.push(proofing);
   saveDB();
@@ -10031,13 +10121,19 @@ async function uploadProofVersion(proofingId){
     return;
   }
 
-  const fileName = prompt('ファイル名 (任意):', '') || ('PDF_' + new Date().toISOString().split('T')[0]);
   const versionKind = prompt('種類を選んでください:\nmanuscript = 原稿\ninstruction = 修正指示\nproof = 校正データ (デフォルト)\nfinal = 校了データ', 'proof') || 'proof';
+
+  // PPP-1: 自動命名 (案件番号_社名御中_案件名_初校_v1)
+  var rv = _calcCurrentProofRound_(p, versionKind);
+  var defaultFileName = _buildProofFileName_(p, versionKind, rv.round, rv.subVersion, 'pdf');
+  const fileName = prompt('ファイル名 (推奨形式: 案件番号_社名御中_案件名_初校_v1.pdf):', defaultFileName) || defaultFileName;
 
   const version = {
     id: 'VER' + Date.now(),
     fileName: fileName,
     kind: versionKind,
+    round: rv.round,           // PPP-1: 何校目か
+    subVersion: rv.subVersion, // PPP-1: 同 round 内の更新版 (内校で繰り上げ)
     driveFileId: fileId,
     driveUrl: driveUrl,
     drivePreviewUrl: 'https://drive.google.com/file/d/' + fileId + '/preview',
@@ -10078,6 +10174,13 @@ async function uploadProofVersion(proofingId){
 
   showProofingDetail(proofingId);
   renderProofingList();
+
+  // PPP-3: LINE WORKS 通知 (校正アップロード)
+  if(p.notifyOnUpdate !== false){
+    var roundLabel = _proofRoundLabel_(version.round, version.kind);
+    var vLabel = (version.kind === 'proof' || version.kind === 'final') ? ' v' + version.subVersion : '';
+    _notifyLwOnProofUpdate_(p, '🆕 ' + roundLabel + vLabel + ' をアップロードしました\nファイル: ' + version.fileName);
+  }
 }
 
 // 校正データ (バージョン全体) を Drive サブフォルダに格納
@@ -10112,6 +10215,112 @@ async function _routeProofToDriveSubfolderById_(fileId, fileName, project, subfo
   }
 }
 
+// ═══════════════════════════════════════════════════
+// PPP: 校正BOX 全面再設計 — ヘルパー関数群
+// ═══════════════════════════════════════════════════
+
+// 校 round ラベル: 1=初校, 2=2校, 3=3校, ... / final=校了
+function _proofRoundLabel_(round, kind){
+  if(kind === 'final') return '校了';
+  if(kind === 'manuscript') return '原稿';
+  if(kind === 'instruction') return '修正指示';
+  if(round === 1) return '初校';
+  return round + '校';
+}
+
+// 現在の校 round / subVersion を proofing.versions から算出
+//   - 同じ round 内で kind='instruction' が入った後の proof は subVersion +1
+//   - 校了で確定
+function _calcCurrentProofRound_(proofing, forKind){
+  var versions = (proofing && proofing.versions) || [];
+  var round = 1;        // 何校目か (初校=1)
+  var subVersion = 1;   // 同じ round 内のデータ更新版 (内校で繰り上げ)
+  var lastProofIdx = -1;
+
+  for(var i = 0; i < versions.length; i++){
+    var v = versions[i];
+    if(v.kind === 'final'){
+      // 校了済 → これ以上 round 進めない (新規 proof は校了後の再校扱い)
+      round = (v.round || round);
+      subVersion = (v.subVersion || subVersion);
+    } else if(v.kind === 'proof'){
+      lastProofIdx = i;
+      round = v.round || round;
+      subVersion = v.subVersion || subVersion;
+    } else if(v.kind === 'instruction'){
+      // 修正指示: 次の proof は subVersion +1
+      if(lastProofIdx >= 0) subVersion += 1;
+    }
+  }
+
+  if(forKind === 'instruction'){
+    // 修正指示は現状の round/v に紐付け表示用 (新規 round/v は割らない)
+    return { round: round, subVersion: subVersion };
+  }
+  if(forKind === 'proof'){
+    // 新しい proof アップロード: 同じ round 内なら subVersion を維持/繰り上げ済
+    // 直前に instruction があれば既に subVersion が +1 されている
+    // 直前に proof があってその後 instruction なしなら 次の round (例: 初校→2校)
+    if(lastProofIdx >= 0){
+      var hasInstrAfter = false;
+      for(var j = lastProofIdx + 1; j < versions.length; j++){
+        if(versions[j].kind === 'instruction'){ hasInstrAfter = true; break; }
+      }
+      if(!hasInstrAfter){
+        // round を進める (初校→2校)
+        round += 1;
+        subVersion = 1;
+      }
+    }
+  }
+  if(forKind === 'final'){
+    return { round: round, subVersion: subVersion };
+  }
+  return { round: round, subVersion: subVersion };
+}
+
+// ファイル名生成: 案件番号_社名御中_案件名_初校_v1
+function _buildProofFileName_(proofing, kind, round, subVersion, ext){
+  var project = (DB.projects || []).find(function(p){ return p.id === proofing.projectId; });
+  var projNo  = project ? project.id : (proofing.projectId || 'PRJ');
+  var custName = (project && project.cust) || proofing.custName || '';
+  var itemName = (project && project.item) || proofing.prodName || '案件';
+  // ファイル名で使えない文字を除去
+  var safe = function(s){ return String(s || '').replace(/[\\\/:*?"<>|]/g, '_').replace(/\s+/g, '').slice(0, 40); };
+  var roundLabel = _proofRoundLabel_(round, kind);
+  var vLabel = (kind === 'proof' || kind === 'final') ? '_v' + subVersion : '';
+  var custPart = custName ? safe(custName) + '御中' : '';
+  var parts = [safe(projNo), custPart, safe(itemName), roundLabel].filter(function(x){ return !!x; });
+  var fileName = parts.join('_') + vLabel;
+  return ext ? (fileName + '.' + String(ext).replace(/^\./, '')) : fileName;
+}
+
+// LINE WORKS 通知: 担当者 (案件 assignee) の LW userId に push
+async function _notifyLwOnProofUpdate_(proofing, summary){
+  try {
+    var project = (DB.projects || []).find(function(p){ return p.id === proofing.projectId; });
+    if(!project || !project.assignee) return;
+    // ユーザーマスタ から LW userId を解決
+    var users = (DB.systemUsers || DB.users || []);
+    var u = users.find(function(x){ return (x.name === project.assignee || x.id === project.assignee); });
+    var lwUserId = u && (u.lwUserId || u.lineworks_user_id);
+    if(!lwUserId) return;
+    var msg = '📐 [校正BOX 通知]\n' +
+      (project.id || '') + ' / ' + (project.item || proofing.prodName || '') + '\n' +
+      (proofing.custName || project.cust || '') + ' 様\n\n' +
+      summary;
+    if(typeof callCloudAPI === 'function'){
+      await callCloudAPI('forwardInquiryToLineworks', {}, {
+        target: 'user',
+        targetId: lwUserId,
+        message: msg
+      });
+    }
+  } catch(e){
+    console.warn('LW notify failed:', e);
+  }
+}
+
 // Drive URL からファイル ID を抽出
 function extractDriveFileId(url){
   if(!url) return '';
@@ -10125,26 +10334,136 @@ function extractDriveFileId(url){
 
 // 校正リンクを送信
 function sendProofLink(proofingId){
-  const p = (DB.proofings || []).find(x => x.id === proofingId);
+  // 既存呼び出しは新モーダルへリダイレクト (PPP-4)
+  showSendProofToCustomerModal(proofingId);
+}
+
+// PPP-4: 校正→お客様送信モーダル (連絡管理経由でメール/LINE/LINE WORKS)
+function showSendProofToCustomerModal(proofingId){
+  var p = (DB.proofings || []).find(function(x){ return x.id === proofingId; });
+  if(!p){ alert('校正データが見つかりません'); return; }
+  // 校正データ (proof or final) のうち最新を選ぶ
+  var proofVers = (p.versions || []).filter(function(v){ return v.kind === 'proof' || v.kind === 'final'; });
+  if(proofVers.length === 0){
+    alert('送信できる校正データがありません。先に「📤 校正アップロード」してください。');
+    return;
+  }
+  var latest = proofVers[proofVers.length - 1];
+  var roundLabel = _proofRoundLabel_(latest.round || 1, latest.kind);
+  var vLabel = (latest.kind === 'proof' || latest.kind === 'final') && latest.subVersion ? ' v' + latest.subVersion : '';
+
+  var project = (DB.projects || []).find(function(pr){ return pr.id === p.projectId; });
+  var defaultBody =
+    p.custName + ' 様\n\n' +
+    'いつもお世話になっております。\n' +
+    '下記案件の' + roundLabel + 'をお送りいたします。\n\n' +
+    '【案件番号】' + (project ? project.id : (p.projectId || '─')) + '\n' +
+    '【件名】' + (project ? (project.item || p.prodName) : p.prodName) + '\n' +
+    '【種別】' + roundLabel + vLabel + '\n' +
+    '【ファイル】' + (latest.fileName || '─') + '\n' +
+    (latest.driveUrl ? '【確認リンク】' + latest.driveUrl + '\n' : '') +
+    '\n' +
+    'ご確認の上、修正点等ございましたらご連絡ください。\n' +
+    '問題なければ「校了」のご返信をお願いいたします。\n\n' +
+    '何卒よろしくお願い申し上げます。';
+
+  var defaultSubject = '【' + roundLabel + 'のご確認】' + (project ? (project.item || p.prodName) : p.prodName);
+
+  // モーダル
+  var existing = document.getElementById('send-proof-customer-modal');
+  if(existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'send-proof-customer-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
+  modal.innerHTML =
+    '<div style="background:#fff;border-radius:10px;padding:1.25rem;width:90%;max-width:640px;max-height:88vh;overflow-y:auto">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">' +
+        '<div style="font-weight:700;font-size:14px;color:#0e7490">📧 お客様へ ' + roundLabel + vLabel + ' を送信</div>' +
+        '<button onclick="document.getElementById(\'send-proof-customer-modal\').remove()" style="background:none;border:none;font-size:18px;cursor:pointer">×</button>' +
+      '</div>' +
+      '<div style="font-size:11px;color:#666;margin-bottom:8px;background:#f0f9ff;padding:8px;border-radius:6px;border:1px solid #bae6fd">' +
+        '送信は連絡管理経由で行います。送信内容はタイムラインに自動記録されます。<br>' +
+        '初校/2校等の文言は自動で件名・本文に挿入されています。' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">' +
+        '<label style="font-size:11px;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#dbeafe;border-radius:6px;cursor:pointer;border:1px solid #93c5fd"><input type="radio" name="send-channel" value="email" checked> 📧 メール</label>' +
+        '<label style="font-size:11px;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#dcfce7;border-radius:6px;cursor:pointer;border:1px solid #86efac"><input type="radio" name="send-channel" value="lineworks"> 💼 LINE WORKS</label>' +
+        '<label style="font-size:11px;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#fef3c7;border-radius:6px;cursor:pointer;border:1px solid #fde047"><input type="radio" name="send-channel" value="line"> 💚 LINE Notify</label>' +
+      '</div>' +
+      '<div class="f"><label style="font-size:11px">宛先 (メール) / LWユーザーID / LINE token key</label>' +
+        '<input id="proof-send-to" placeholder="email@example.com / lwuser123 / default" value="' + ((project && project.contactEmail) || '') + '" style="font-size:12px"></div>' +
+      '<div class="f"><label style="font-size:11px">件名 (メールのみ)</label>' +
+        '<input id="proof-send-subject" value="' + defaultSubject.replace(/"/g, '&quot;') + '" style="font-size:12px"></div>' +
+      '<div class="f"><label style="font-size:11px">本文</label>' +
+        '<textarea id="proof-send-body" rows="14" style="font-size:12px;font-family:monospace">' + defaultBody + '</textarea></div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">' +
+        '<button class="btn" onclick="document.getElementById(\'send-proof-customer-modal\').remove()">キャンセル</button>' +
+        '<button class="btn btn-p" style="background:#0e7490;border-color:#0e7490" onclick="submitSendProofToCustomer(\'' + proofingId + '\')">📤 送信</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+// PPP-4: 送信実行
+async function submitSendProofToCustomer(proofingId){
+  var p = (DB.proofings || []).find(function(x){ return x.id === proofingId; });
   if(!p) return;
-  
-  const latestVersion = p.versions?.[p.versions.length - 1];
-  
-  const msg = `校正確認のご依頼
+  var channelEl = document.querySelector('#send-proof-customer-modal input[name="send-channel"]:checked');
+  var channel = channelEl ? channelEl.value : 'email';
+  var to = (document.getElementById('proof-send-to') || {}).value || '';
+  var subject = (document.getElementById('proof-send-subject') || {}).value || '';
+  var body = (document.getElementById('proof-send-body') || {}).value || '';
+  if(!to.trim()){ alert('宛先を入力してください'); return; }
+  if(!body.trim()){ alert('本文を入力してください'); return; }
 
-${p.custName} 様
+  var btn = document.querySelector('#send-proof-customer-modal button.btn-p');
+  if(btn){ btn.disabled = true; btn.textContent = '送信中…'; }
 
-お世話になっております。
-下記案件の校正をお送りいたします。
-
-【案件】${p.prodName}
-【版数】第${p.versions?.length || 0}校
-${latestVersion?.shareLink ? `【確認リンク】${latestVersion.shareLink}` : ''}
-
-ご確認の上、修正点等ございましたらご連絡ください。
-問題なければ「校了」のご返信をお願いいたします。`;
-  
-  alert(`以下の内容でメール送信（実装予定）:\n\n${msg}`);
+  try {
+    var apiResult;
+    if(channel === 'email'){
+      apiResult = await callCloudAPI('forwardInquiryToEmail', {}, {
+        replyTo: to,
+        subject: subject,
+        body: body,
+        by: (typeof currentAuth !== 'undefined' && currentAuth && currentAuth.userName) || 'user'
+      });
+    } else if(channel === 'lineworks'){
+      apiResult = await callCloudAPI('forwardInquiryToLineworks', {}, {
+        target: 'user',
+        targetId: to,
+        message: body
+      });
+    } else if(channel === 'line'){
+      apiResult = await callCloudAPI('forwardInquiryToLine', {}, {
+        tokenKey: to || 'default',
+        message: body
+      });
+    }
+    if(apiResult && apiResult.success){
+      // 校正タイムラインに記録
+      if(!p.customerSentLog) p.customerSentLog = [];
+      p.customerSentLog.push({
+        at: new Date().toISOString(),
+        channel: channel,
+        to: to,
+        subject: subject,
+        body: body,
+        by: (typeof currentAuth !== 'undefined' && currentAuth && currentAuth.userName) || 'user'
+      });
+      saveDB();
+      if(typeof _addAuditLog_ === 'function') _addAuditLog_('proofing', proofingId, '校正を ' + channel + ' でお客様送信: ' + to);
+      alert('✅ 送信が完了しました');
+      document.getElementById('send-proof-customer-modal').remove();
+      showProofingDetail(proofingId);
+    } else {
+      alert('⚠ 送信失敗: ' + ((apiResult && apiResult.error) || 'unknown'));
+      if(btn){ btn.disabled = false; btn.textContent = '📤 送信'; }
+    }
+  } catch(e){
+    alert('⚠ ' + e.message);
+    if(btn){ btn.disabled = false; btn.textContent = '📤 送信'; }
+  }
 }
 
 // 校正を削除
@@ -23333,9 +23652,26 @@ function showMainScreen(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('company-select-screen').style.display='none';
   document.getElementById('main-layout').style.display='flex';
-  
+
   // 会社名・ユーザー名を表示
   updateUserDisplay();
+
+  // 🔧 QQQ-1: ページが1つもアクティブでなければ home (realtime) を強制 active 化
+  setTimeout(function(){
+    try {
+      if(!document.querySelector('.page.act')){
+        var rtBtn = document.querySelector('.tb-btn[data-page="realtime"]');
+        if(rtBtn && typeof swPage === 'function'){
+          swPage('realtime', rtBtn);
+        } else {
+          // swPage がまだ無い時は CSS だけ手動で
+          var pageEl = document.getElementById('page-realtime');
+          if(pageEl) pageEl.classList.add('act');
+          if(rtBtn) rtBtn.classList.add('act');
+        }
+      }
+    } catch(e){ console.warn('initial page activation failed:', e); }
+  }, 100);
 }
 
 // 会社名表示を更新（互換性のため残す）
@@ -25279,6 +25615,15 @@ if(currentAuth.loggedIn && currentAuth.companyId){
   loadInboxItems();
   // 自動メール取得開始（1分ごと）
   startAutoFetchEmails();
+  // 🔧 QQQ-1: 初期表示で home (realtime) を必ず active 化 (白画面対策)
+  setTimeout(function(){
+    try {
+      var rtBtn = document.querySelector('.tb-btn[data-page="realtime"]');
+      if(rtBtn && typeof swPage === 'function' && !document.querySelector('.page.act')){
+        swPage('realtime', rtBtn);
+      }
+    } catch(e){ console.warn('initial swPage failed:', e); }
+  }, 200);
 } else {
   // 未ログイン → ログイン画面
   showLoginScreen();
@@ -27257,4 +27602,808 @@ function showWikiHome() {
       <div>左のメニューから記事を選択、または「＋」で新規作成</div>
       <div style="margin-top:1.5rem;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="btn" onclick="wikiOpenTool('mentu')">🖨 面付計算ツール</button>
-        <button class="btn" onclick="wikiOpenTool('calc')">🔢 電卓</but
+        <button class="btn" onclick="wikiOpenTool('calc')">🔢 電卓</button>
+        <button class="btn" onclick="wikiOpenTool('hiragana')">📝 ひらがな変換ツール</button>
+      </div>
+      <div style="margin-top:2rem;text-align:left;max-width:500px;margin-left:auto;margin-right:auto">
+        <div style="font-size:12px;font-weight:700;color:#aaa;margin-bottom:8px">📊 Wiki統計</div>
+        <div style="font-size:12px;color:#555">記事数: ${(DB.wikiArticles||[]).filter(a=>a.type==='article').length}件</div>
+      </div>
+    </div>`;
+  renderWikiSidebar();
+}
+
+function wikiOpenArticle(id) {
+  const article = (DB.wikiArticles||[]).find(a => a.id === id);
+  if(!article) return;
+  wikiCurrentId = id;
+  wikiEditMode = false;
+  
+  if(article.type === 'tool-mentu') { renderMentuTool(); renderWikiSidebar(); return; }
+  if(article.type === 'tool-calc') { renderCalcTool(); renderWikiSidebar(); return; }
+  if(article.type === 'tool-hiragana') { renderHiraganaTool(); renderWikiSidebar(); return; }
+
+  renderWikiArticle(article);
+  renderWikiSidebar();
+}
+
+function wikiOpenTool(tool) {
+  if(tool === 'mentu') wikiOpenArticle('WIKI_TOOL_MENTU');
+  if(tool === 'calc') wikiOpenArticle('WIKI_TOOL_CALC');
+  if(tool === 'hiragana') wikiOpenArticle('WIKI_TOOL_HIRAGANA');
+}
+
+function renderWikiArticle(article) {
+  const content = document.getElementById('wiki-content');
+  const html = wikiMarkdownToHTML(article.body || '');
+  
+  content.innerHTML = `
+    <div class="wiki-toolbar">
+      <button class="btn" onclick="showWikiHome()">← 一覧</button>
+      <button class="btn" onclick="wikiStartEdit('${article.id}')">✏ 編集</button>
+      <button class="btn" onclick="wikiDeleteArticle('${article.id}')">🗑 削除</button>
+      <span style="margin-left:auto;font-size:10px;color:#aaa">
+        ${article.category||''} | 更新: ${article.updatedAt||''} | ${article.author||''}
+      </span>
+    </div>
+    <div>${html}</div>`;
+}
+
+// 簡易Markdownパーサー
+function wikiMarkdownToHTML(md) {
+  let html = md
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.+?)`/g, '<code>$1</code>');
+  
+  // テーブル
+  html = html.replace(/((?:\|.+\|\n)+)/g, (match) => {
+    const rows = match.trim().split('\n');
+    let table = '<table>';
+    rows.forEach((row, i) => {
+      if(row.match(/^\|[\s\-\|]+$/)) return; // セパレータ行スキップ
+      const cells = row.split('|').filter(c => c.trim());
+      const tag = i === 0 ? 'th' : 'td';
+      table += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+    });
+    table += '</table>';
+    return table;
+  });
+  
+  // リスト
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+  
+  // 段落
+  html = html.split('\n\n').map(block => {
+    if(block.match(/^<[hultbo]/)) return block;
+    if(block.trim()) return '<p>' + block.replace(/\n/g, '<br>') + '</p>';
+    return '';
+  }).join('\n');
+  
+  return html;
+}
+
+// 記事の編集
+function wikiStartEdit(id) {
+  const article = (DB.wikiArticles||[]).find(a => a.id === id);
+  if(!article) return;
+  wikiEditMode = true;
+  
+  const cats = [...new Set((DB.wikiArticles||[]).map(a=>a.category).filter(Boolean))];
+  
+  const content = document.getElementById('wiki-content');
+  content.innerHTML = `
+    <div class="wiki-toolbar">
+      <button class="btn" onclick="wikiOpenArticle('${id}')">← 戻る</button>
+      <button class="btn btn-p" onclick="wikiSaveEdit('${id}')">💾 保存</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div class="f"><label>タイトル</label><input id="wiki-edit-title" value="${article.title||''}"></div>
+      <div class="f"><label>カテゴリ</label><input id="wiki-edit-cat" value="${article.category||''}" list="wiki-cat-list">
+        <datalist id="wiki-cat-list">${cats.map(c=>`<option value="${c}">`).join('')}</datalist>
+      </div>
+    </div>
+    <div class="f" style="margin-bottom:6px">
+      <label>本文（Markdown対応: # 見出し, **太字**, \`コード\`, | テーブル |, - リスト, > 引用）</label>
+    </div>
+    <textarea class="wiki-edit-area" id="wiki-edit-body">${article.body||''}</textarea>`;
+}
+
+function wikiSaveEdit(id) {
+  const article = (DB.wikiArticles||[]).find(a => a.id === id);
+  if(!article) return;
+  article.title = document.getElementById('wiki-edit-title')?.value?.trim() || article.title;
+  article.category = document.getElementById('wiki-edit-cat')?.value?.trim() || article.category;
+  article.body = document.getElementById('wiki-edit-body')?.value || '';
+  article.updatedAt = new Date().toISOString().split('T')[0];
+  article.author = currentAuth?.userName || '編集者';
+  saveDB();
+  wikiOpenArticle(id);
+}
+
+function wikiNewArticle() {
+  const title = prompt('記事タイトル:');
+  if(!title) return;
+  const id = 'WIKI' + Date.now();
+  const article = {
+    id, category:'📁 未分類', title, type:'article', pinned:false,
+    body: '# ' + title + '\n\nここに内容を記入してください。',
+    createdAt: new Date().toISOString().split('T')[0],
+    updatedAt: new Date().toISOString().split('T')[0],
+    author: currentAuth?.userName || '作成者'
+  };
+  if(!DB.wikiArticles) DB.wikiArticles = [];
+  DB.wikiArticles.push(article);
+  saveDB();
+  wikiOpenArticle(id);
+}
+
+function wikiDeleteArticle(id) {
+  const article = (DB.wikiArticles||[]).find(a => a.id === id);
+  if(!article || article.type !== 'article') { alert('ツールは削除できません'); return; }
+  if(!confirm(`「${article.title}」を削除しますか？`)) return;
+  DB.wikiArticles = DB.wikiArticles.filter(a => a.id !== id);
+  saveDB();
+  showWikiHome();
+}
+
+// ═══════════════════ 面付計算ツール（Wiki埋込版）═══════════════════
+
+function renderMentuTool() {
+  const content = document.getElementById('wiki-content');
+  content.innerHTML = `
+    <div class="wiki-toolbar">
+      <button class="btn" onclick="showWikiHome()">← 一覧</button>
+      <span style="font-size:14px;font-weight:700">🖨 面付計算ツール</span>
+    </div>
+    <div class="mentu-embed">
+      <div class="me-result-bar" id="me-results">
+        <div class="me-result-item"><span>合計面数</span><strong id="me-total">—</strong></div>
+        <div class="me-result-item"><span>列 × 行</span><strong id="me-grid">—</strong></div>
+        <div class="me-result-item"><span>回転</span><strong id="me-rotate">—</strong></div>
+        <div class="me-result-item"><span>有効エリア</span><strong id="me-area">—</strong></div>
+        <div id="me-note" style="margin-left:auto;font-size:11px;color:#aaa"></div>
+      </div>
+      <div class="me-top">
+        <div class="me-inputs">
+          <div style="font-size:11px;font-weight:700;color:#888;margin-bottom:2px">📄 用紙プリセット</div>
+          <div class="me-preset-row" id="me-paper-presets">
+            <button class="me-preset act" onclick="mePaperPreset(this,625,880)">四六全</button>
+            <button class="me-preset" onclick="mePaperPreset(this,636,939)">菊全</button>
+            <button class="me-preset" onclick="mePaperPreset(this,594,841)">A1</button>
+            <button class="me-preset" onclick="mePaperPreset(this,420,594)">A2</button>
+            <button class="me-preset" onclick="mePaperPreset(this,297,420)">A3</button>
+            <button class="me-preset" onclick="mePaperPreset(this,545,788)">B1</button>
+            <button class="me-preset" onclick="mePaperPreset(this,364,515)">B2</button>
+            <button class="me-preset" onclick="mePaperPreset(this,257,364)">B3</button>
+          </div>
+          <div class="me-field"><label>用紙</label>
+            <input type="number" id="me-pw" value="625" oninput="meCalc()"><input type="number" id="me-ph" value="880" oninput="meCalc()">
+          </div>
+          <div style="font-size:11px;font-weight:700;color:#888;margin:4px 0 2px">📋 仕上がりプリセット</div>
+          <div class="me-preset-row" id="me-page-presets">
+            <button class="me-preset" onclick="mePagePreset(this,210,297)">A4</button>
+            <button class="me-preset act" onclick="mePagePreset(this,148,210)">A5</button>
+            <button class="me-preset" onclick="mePagePreset(this,182,257)">B5</button>
+            <button class="me-preset" onclick="mePagePreset(this,91,55)">名刺</button>
+            <button class="me-preset" onclick="mePagePreset(this,100,148)">はがき</button>
+          </div>
+          <div class="me-field"><label>仕上がり</label>
+            <input type="number" id="me-pgw" value="148" oninput="meCalc()"><input type="number" id="me-pgh" value="210" oninput="meCalc()">
+          </div>
+          <div style="font-size:11px;font-weight:700;color:#888;margin:4px 0 2px">📐 余白・ドブ</div>
+          <div class="me-field"><label>クワエ</label><input type="number" id="me-kw" value="10" oninput="meCalc()"><input type="number" id="me-sh" value="10" oninput="meCalc()" placeholder="尻"></div>
+          <div class="me-field"><label>左右余白</label><input type="number" id="me-ml" value="10" oninput="meCalc()"><input type="number" id="me-mr" value="10" oninput="meCalc()"></div>
+          <div class="me-field"><label>ドブ天地</label><input type="number" id="me-dv" value="3" oninput="meCalc()"><input type="number" id="me-dh" value="3" oninput="meCalc()" placeholder="ドブ左右"></div>
+          <div style="margin-top:4px"><label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px"><input type="checkbox" id="me-rot" onchange="meCalc()"> 回転配置も試す</label></div>
+          <button class="btn btn-p" style="margin-top:8px;width:100%" onclick="meCalc()">▶ 計算する</button>
+          <!-- 実 PDF 面付出力 -->
+          <div style="margin-top:12px;padding:10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px">
+            <div style="font-size:11px;font-weight:700;color:#1e3a8a;margin-bottom:6px">📄 実 PDF 面付出力</div>
+            <input type="file" id="me-pdf-file" accept="application/pdf" style="font-size:11px;width:100%">
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#374151;margin-top:6px;cursor:pointer">
+              <input type="checkbox" id="me-trim-marks" checked> トンボ (トリムマーク) を入れる
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#374151;margin-top:4px;cursor:pointer">
+              <input type="checkbox" id="me-page-numbers"> ページ番号を入れる
+            </label>
+            <button class="btn btn-p" id="me-impose-btn" style="margin-top:8px;width:100%;background:#1e40af;border-color:#1e40af" onclick="meExecuteImposition()">📄 面付した PDF をダウンロード</button>
+            <div id="me-impose-status" style="font-size:10px;color:#666;margin-top:4px;text-align:center"></div>
+          </div>
+        </div>
+        <div class="me-preview" id="me-canvas-area">
+          <canvas id="me-canvas"></canvas>
+        </div>
+      </div>
+    </div>`;
+  meCalc();
+}
+
+function mePaperPreset(btn,w,h) {
+  document.querySelectorAll('#me-paper-presets .me-preset').forEach(b=>b.classList.remove('act'));
+  btn.classList.add('act');
+  document.getElementById('me-pw').value=w;
+  document.getElementById('me-ph').value=h;
+  meCalc();
+}
+function mePagePreset(btn,w,h) {
+  document.querySelectorAll('#me-page-presets .me-preset').forEach(b=>b.classList.remove('act'));
+  btn.classList.add('act');
+  document.getElementById('me-pgw').value=w;
+  document.getElementById('me-pgh').value=h;
+  meCalc();
+}
+
+function meCalc() {
+  const pw=parseFloat(document.getElementById('me-pw')?.value)||0;
+  const ph=parseFloat(document.getElementById('me-ph')?.value)||0;
+  const pgw=parseFloat(document.getElementById('me-pgw')?.value)||0;
+  const pgh=parseFloat(document.getElementById('me-pgh')?.value)||0;
+  const kw=parseFloat(document.getElementById('me-kw')?.value)||0;
+  const sh=parseFloat(document.getElementById('me-sh')?.value)||0;
+  const ml=parseFloat(document.getElementById('me-ml')?.value)||0;
+  const mr=parseFloat(document.getElementById('me-mr')?.value)||0;
+  const dv=parseFloat(document.getElementById('me-dv')?.value)||0;
+  const dh=parseFloat(document.getElementById('me-dh')?.value)||0;
+  const tryRot=document.getElementById('me-rot')?.checked;
+  
+  if(!pw||!ph||!pgw||!pgh) return;
+  
+  const aW=pw-ml-mr, aH=ph-kw-sh;
+  if(aW<=0||aH<=0) return;
+  
+  function fit(aw,ah,w,h,dbh,dbv){
+    const cols=Math.max(0,Math.floor((aw+dbh)/(w+dbh)));
+    const rows=Math.max(0,Math.floor((ah+dbv)/(h+dbv)));
+    return {cols,rows,total:cols*rows};
+  }
+  
+  const normal=fit(aW,aH,pgw,pgh,dh,dv);
+  normal.rotated=false;
+  let best=normal;
+  if(tryRot){
+    const rotated=fit(aW,aH,pgh,pgw,dv,dh);
+    rotated.rotated=true;
+    if(rotated.total>normal.total) best=rotated;
+  }
+  
+  document.getElementById('me-total').textContent=best.total;
+  document.getElementById('me-grid').textContent=best.cols+'×'+best.rows;
+  document.getElementById('me-rotate').textContent=best.rotated?'90°回転':'なし';
+  document.getElementById('me-area').textContent=aW.toFixed(1)+'×'+aH.toFixed(1)+'mm';
+  
+  if(best.total>0){
+    const usedPw=best.rotated?pgh:pgw, usedPh=best.rotated?pgw:pgh;
+    const usedW=best.cols*usedPw+(best.cols-1)*(best.rotated?dv:dh);
+    const usedH=best.rows*usedPh+(best.rows-1)*(best.rotated?dh:dv);
+    const rateW=((usedW/aW)*100).toFixed(1);
+    const rateH=((usedH/aH)*100).toFixed(1);
+    document.getElementById('me-note').innerHTML='使用率: 横'+rateW+'% / 縦'+rateH+'%';
+  }
+  
+  // Canvas描画
+  meDrawPreview({pw,ph,aW,aH,pgw,pgh,kw,sh,ml,mr,dv,dh,cols:best.cols,rows:best.rows,rotated:best.rotated,total:best.total});
+}
+
+function meDrawPreview(p){
+  const canvas=document.getElementById('me-canvas');
+  const area=document.getElementById('me-canvas-area');
+  if(!canvas||!area||!p.total) return;
+  
+  const PAD=24;
+  const maxW=area.clientWidth-PAD*2;
+  const maxH=area.clientHeight-PAD*2;
+  if(maxW<=0||maxH<=0) return;
+  const scale=Math.min(maxW/p.pw,maxH/p.ph,2);
+  
+  const cw=Math.round(p.pw*scale+PAD*2);
+  const ch=Math.round(p.ph*scale+PAD*2);
+  canvas.width=cw; canvas.height=ch;
+  
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,cw,ch);
+  const ox=PAD, oy=PAD;
+  const spw=p.pw*scale, sph=p.ph*scale;
+  
+  // 紙影
+  ctx.fillStyle='rgba(0,0,0,0.1)'; ctx.fillRect(ox+3,oy+3,spw,sph);
+  // 紙
+  ctx.fillStyle='#fff'; ctx.fillRect(ox,oy,spw,sph);
+  // グリッド
+  ctx.strokeStyle='rgba(200,200,200,0.3)'; ctx.lineWidth=0.5;
+  const gs=10*scale;
+  for(let x=0;x<=spw;x+=gs){ctx.beginPath();ctx.moveTo(ox+x,oy);ctx.lineTo(ox+x,oy+sph);ctx.stroke();}
+  for(let y=0;y<=sph;y+=gs){ctx.beginPath();ctx.moveTo(ox,oy+y);ctx.lineTo(ox+spw,oy+y);ctx.stroke();}
+  
+  // 余白
+  const smL=p.ml*scale,smR=p.mr*scale,smT=p.kw*scale,smB=p.sh*scale;
+  ctx.fillStyle='rgba(255,165,0,0.08)';
+  ctx.fillRect(ox,oy,spw,smT);
+  ctx.fillRect(ox,oy+sph-smB,spw,smB);
+  ctx.fillRect(ox,oy+smT,smL,sph-smT-smB);
+  ctx.fillRect(ox+spw-smR,oy+smT,smR,sph-smT-smB);
+  
+  ctx.strokeStyle='rgba(255,165,0,0.5)'; ctx.lineWidth=1; ctx.setLineDash([4,3]);
+  ctx.strokeRect(ox+smL,oy+smT,spw-smL-smR,sph-smT-smB);
+  ctx.setLineDash([]);
+  
+  // 面配置
+  const rpw=p.rotated?p.pgh:p.pgw, rph=p.rotated?p.pgw:p.pgh;
+  const rdh=p.rotated?p.dv:p.dh, rdv=p.rotated?p.dh:p.dv;
+  const spgw=rpw*scale, spgh=rph*scale, sdh=rdh*scale, sdv=rdv*scale;
+  
+  let idx=0;
+  for(let r=0;r<p.rows;r++){
+    for(let c=0;c<p.cols;c++){
+      const x=ox+smL+c*(spgw+sdh);
+      const y=oy+smT+r*(spgh+sdv);
+      const hue=(c+r*p.cols)*37%360;
+      ctx.fillStyle=`hsla(${hue},45%,82%,0.85)`;
+      ctx.fillRect(x,y,spgw,spgh);
+      ctx.strokeStyle='rgba(30,30,60,0.4)';ctx.lineWidth=0.8;ctx.strokeRect(x,y,spgw,spgh);
+      idx++;
+      if(spgw>16&&spgh>12){
+        ctx.fillStyle='rgba(20,20,50,0.7)';
+        ctx.font=`bold ${Math.min(11,spgh*0.2)}px monospace`;
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(idx,x+spgw/2,y+spgh/2);
+      }
+    }
+  }
+  
+  // 寸法表示
+  ctx.fillStyle='#999';ctx.font='10px monospace';ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText(p.pw+'mm',ox+spw/2,oy+sph+4);
+  ctx.strokeStyle='#e0ddd6';ctx.lineWidth=1.5;ctx.strokeRect(ox,oy,spw,sph);
+}
+
+// ═══════════════════ ひらがな変換ツール (Wiki埋込版) ═══════════════════
+function renderHiraganaTool() {
+  const content = document.getElementById('wiki-content');
+  // iframe で完全分離 (JSZip + kuromoji + 自前 localStorage を別 origin context で隔離)
+  // tools/hiragana_v10.html を埋込
+  content.innerHTML = `
+    <div class="wiki-toolbar" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f9fafb;border-bottom:1px solid #e5e7eb">
+      <button class="btn" onclick="showWikiHome()">← 一覧</button>
+      <span style="font-size:14px;font-weight:700">📝 ひらがな変換ツール (Excel)</span>
+      <span style="margin-left:auto;font-size:11px;color:#888">Excel(.xlsx) の漢字を一括ひらがな化 (書式保持)</span>
+      <a href="tools/hiragana_v10.html" target="_blank" class="btn" style="font-size:11px;padding:3px 10px" title="新しいタブで開く">↗ 別タブで開く</a>
+    </div>
+    <iframe src="tools/hiragana_v10.html"
+            style="width:100%;height:calc(100vh - 220px);min-height:600px;border:none;display:block"
+            title="ひらがな変換ツール v10"></iframe>`;
+}
+
+// ═══════════════════ 実 PDF 面付出力 (pdf-lib) ═══════════════════
+// pdf-lib を遅延ロード
+async function _loadPdfLib_(){
+  if(window.PDFLib) return window.PDFLib;
+  return new Promise(function(resolve, reject){
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+    s.onload = function(){ resolve(window.PDFLib); };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+async function meExecuteImposition(){
+  var status = document.getElementById('me-impose-status');
+  var btn = document.getElementById('me-impose-btn');
+  var fileInput = document.getElementById('me-pdf-file');
+  if(!fileInput || !fileInput.files || !fileInput.files[0]){
+    alert('面付する PDF ファイルを選択してください');
+    return;
+  }
+  var file = fileInput.files[0];
+
+  // 計算結果を取得
+  var pw = parseFloat(document.getElementById('me-pw')?.value) || 0;
+  var ph = parseFloat(document.getElementById('me-ph')?.value) || 0;
+  var pgw = parseFloat(document.getElementById('me-pgw')?.value) || 0;
+  var pgh = parseFloat(document.getElementById('me-pgh')?.value) || 0;
+  var kw = parseFloat(document.getElementById('me-kw')?.value) || 0;
+  var sh = parseFloat(document.getElementById('me-sh')?.value) || 0;
+  var ml = parseFloat(document.getElementById('me-ml')?.value) || 0;
+  var mr = parseFloat(document.getElementById('me-mr')?.value) || 0;
+  var dv = parseFloat(document.getElementById('me-dv')?.value) || 0;
+  var dh = parseFloat(document.getElementById('me-dh')?.value) || 0;
+  var tryRot = document.getElementById('me-rot')?.checked;
+  var trimMarks = document.getElementById('me-trim-marks')?.checked;
+  var pageNumbers = document.getElementById('me-page-numbers')?.checked;
+
+  if(!pw || !ph || !pgw || !pgh){ alert('用紙・仕上がりサイズを入力してください'); return; }
+
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ 処理中...'; }
+  if(status) status.textContent = 'pdf-lib を読込中...';
+
+  try {
+    var PDFLib = await _loadPdfLib_();
+    if(status) status.textContent = '入力 PDF を解析中...';
+    var inputBytes = await file.arrayBuffer();
+    var srcDoc = await PDFLib.PDFDocument.load(inputBytes);
+    var srcPages = srcDoc.getPages();
+
+    // 面付グリッド計算 (mm → pt 変換: 1mm ≈ 2.83465pt)
+    var MM = 2.83465;
+    var aW = pw - ml - mr, aH = ph - kw - sh;
+
+    function fit(aw, ah, w, h, dbh, dbv){
+      var cols = Math.max(0, Math.floor((aw + dbh) / (w + dbh)));
+      var rows = Math.max(0, Math.floor((ah + dbv) / (h + dbv)));
+      return { cols: cols, rows: rows, total: cols * rows };
+    }
+    var normal = fit(aW, aH, pgw, pgh, dh, dv); normal.rotated = false;
+    var best = normal;
+    if(tryRot){
+      var rotated = fit(aW, aH, pgh, pgw, dv, dh); rotated.rotated = true;
+      if(rotated.total > normal.total) best = rotated;
+    }
+    if(best.total === 0){
+      alert('面付できません (用紙に対して仕上がりサイズが大きすぎる可能性)');
+      throw new Error('no_fit');
+    }
+    if(status) status.textContent = best.total + ' 面を配置中...';
+
+    // 出力 PDF: ソース PDF の各ページを 1 シート分の面付として出力
+    var outDoc = await PDFLib.PDFDocument.create();
+    var sheetW = pw * MM, sheetH = ph * MM;
+    var pgUsedW = (best.rotated ? pgh : pgw) * MM;
+    var pgUsedH = (best.rotated ? pgw : pgh) * MM;
+    var dhUsed = (best.rotated ? dv : dh) * MM;
+    var dvUsed = (best.rotated ? dh : dv) * MM;
+    var marginL = ml * MM, marginT = kw * MM;
+
+    // ソース PDF をコピー
+    var copiedPages = await outDoc.copyPages(srcDoc, srcPages.map(function(_, i){ return i; }));
+
+    // 各ソースページを 1 シートに面付 (= 入力1ページ → 出力1シート)
+    for(var pageIdx = 0; pageIdx < copiedPages.length; pageIdx++){
+      var sheet = outDoc.addPage([sheetW, sheetH]);
+      var srcPage = copiedPages[pageIdx];
+      var srcW = srcPage.getWidth(), srcH = srcPage.getHeight();
+      var embedded = await outDoc.embedPage(srcPage);
+
+      // スケール: ソースを pgUsedW × pgUsedH に収める
+      var scale = Math.min(pgUsedW / srcW, pgUsedH / srcH);
+      var drawW = srcW * scale, drawH = srcH * scale;
+
+      // 面ごとに配置 (PDF は左下原点なので Y を反転)
+      for(var r = 0; r < best.rows; r++){
+        for(var c = 0; c < best.cols; c++){
+          var x = marginL + c * (pgUsedW + dhUsed);
+          // Y は PDF 座標系 (左下原点) — 上から r 行目を計算
+          var yTop = sheetH - marginT - r * (pgUsedH + dvUsed);
+          var y = yTop - pgUsedH;
+          // 中央配置
+          var ox = x + (pgUsedW - drawW) / 2;
+          var oy = y + (pgUsedH - drawH) / 2;
+          if(best.rotated){
+            sheet.drawPage(embedded, {
+              x: ox + drawW, y: oy,
+              xScale: scale, yScale: scale,
+              rotate: PDFLib.degrees(90)
+            });
+          } else {
+            sheet.drawPage(embedded, { x: ox, y: oy, xScale: scale, yScale: scale });
+          }
+
+          // ページ番号
+          if(pageNumbers){
+            var num = (r * best.cols + c + 1).toString();
+            sheet.drawText(num, {
+              x: x + pgUsedW / 2 - 4,
+              y: y + pgUsedH / 2,
+              size: 10,
+              opacity: 0.4
+            });
+          }
+
+          // トンボ (各面の四隅に短い線)
+          if(trimMarks){
+            var ml_ = 8; // トンボ長 (pt)
+            var off = 3; // 仕上がりからの距離 (pt)
+            // 面の四隅
+            [
+              { x1: x - off - ml_, y1: y, x2: x - off, y2: y },         // 左下水平
+              { x1: x, y1: y - off - ml_, x2: x, y2: y - off },         // 左下垂直
+              { x1: x + pgUsedW + off, y1: y, x2: x + pgUsedW + off + ml_, y2: y }, // 右下水平
+              { x1: x + pgUsedW, y1: y - off - ml_, x2: x + pgUsedW, y2: y - off }, // 右下垂直
+              { x1: x - off - ml_, y1: y + pgUsedH, x2: x - off, y2: y + pgUsedH }, // 左上水平
+              { x1: x, y1: y + pgUsedH + off, x2: x, y2: y + pgUsedH + off + ml_ }, // 左上垂直
+              { x1: x + pgUsedW + off, y1: y + pgUsedH, x2: x + pgUsedW + off + ml_, y2: y + pgUsedH }, // 右上水平
+              { x1: x + pgUsedW, y1: y + pgUsedH + off, x2: x + pgUsedW, y2: y + pgUsedH + off + ml_ }  // 右上垂直
+            ].forEach(function(L){
+              sheet.drawLine({
+                start: { x: L.x1, y: L.y1 }, end: { x: L.x2, y: L.y2 },
+                thickness: 0.3, color: PDFLib.rgb(0,0,0)
+              });
+            });
+          }
+        }
+      }
+    }
+
+    if(status) status.textContent = 'PDF を生成中...';
+    var outBytes = await outDoc.save();
+    var blob = new Blob([outBytes], { type: 'application/pdf' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = file.name.replace(/\.pdf$/i, '') + '_面付_' + best.cols + 'x' + best.rows + '_' + best.total + '面.pdf';
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+
+    if(status) status.textContent = '✅ 完了 (' + copiedPages.length + ' ページ × ' + best.total + ' 面)';
+  } catch(e){
+    console.error(e);
+    if(status) status.textContent = '⚠ エラー: ' + e.message;
+    alert('面付に失敗しました: ' + e.message);
+  } finally {
+    if(btn){ btn.disabled = false; btn.textContent = '📄 面付した PDF をダウンロード'; }
+  }
+}
+
+// ═══════════════════ 電卓（Wiki埋込版）═══════════════════
+
+let calcExpr='', calcDisplay='0', calcHistory=[];
+
+function renderCalcTool() {
+  const content = document.getElementById('wiki-content');
+  content.innerHTML = `
+    <div class="wiki-toolbar">
+      <button class="btn" onclick="showWikiHome()">← 一覧</button>
+      <span style="font-size:14px;font-weight:700">🔢 電卓</span>
+      <span style="margin-left:auto;font-size:11px;color:#888">印刷見積用 — 税込・用紙枚数計算対応</span>
+    </div>
+    <div style="display:flex;gap:1rem;flex-wrap:wrap">
+      <div style="width:320px">
+        <div class="calc-display" id="calc-disp">
+          <div class="calc-expr" id="calc-expr"></div>
+          <div id="calc-val">0</div>
+        </div>
+        <div class="calc-grid">
+          <button class="calc-key clear" onclick="calcClear()">AC</button>
+          <button class="calc-key fn" onclick="calcBackspace()">⌫</button>
+          <button class="calc-key fn" onclick="calcPercent()">%</button>
+          <button class="calc-key op" onclick="calcOp('/')">÷</button>
+          <button class="calc-key num" onclick="calcNum('7')">7</button>
+          <button class="calc-key num" onclick="calcNum('8')">8</button>
+          <button class="calc-key num" onclick="calcNum('9')">9</button>
+          <button class="calc-key op" onclick="calcOp('*')">×</button>
+          <button class="calc-key num" onclick="calcNum('4')">4</button>
+          <button class="calc-key num" onclick="calcNum('5')">5</button>
+          <button class="calc-key num" onclick="calcNum('6')">6</button>
+          <button class="calc-key op" onclick="calcOp('-')">−</button>
+          <button class="calc-key num" onclick="calcNum('1')">1</button>
+          <button class="calc-key num" onclick="calcNum('2')">2</button>
+          <button class="calc-key num" onclick="calcNum('3')">3</button>
+          <button class="calc-key op" onclick="calcOp('+')">+</button>
+          <button class="calc-key num" onclick="calcNum('00')">00</button>
+          <button class="calc-key num" onclick="calcNum('0')">0</button>
+          <button class="calc-key num" onclick="calcNum('.')">.</button>
+          <button class="calc-key eq" onclick="calcEqual()">=</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:2px">
+          <button class="calc-key fn" onclick="calcTax(1.10)" style="border-radius:0 0 0 8px">税込(10%)</button>
+          <button class="calc-key fn" onclick="calcTax(1.08)" style="border-radius:0 0 8px 0">税込(8%)</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;margin-top:2px">
+          <button class="calc-key fn" onclick="calcSheets()">用紙枚数</button>
+          <button class="calc-key fn" onclick="calcRoundUp()">切上げ</button>
+          <button class="calc-key fn" onclick="calcMemory()">M+</button>
+        </div>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <div class="sec">
+          <div class="st">📋 計算履歴</div>
+          <div id="calc-history" style="max-height:350px;overflow-y:auto;font-size:12px"></div>
+        </div>
+        <div class="sec" style="margin-top:.65rem">
+          <div class="st">📐 クイック計算</div>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+            <div style="display:flex;gap:6px;align-items:center">
+              <label style="width:80px">印刷部数</label>
+              <input type="number" id="qc-copies" value="1000" style="width:80px;font-size:12px;padding:4px">
+              <label style="width:60px">面付数</label>
+              <input type="number" id="qc-faces" value="4" style="width:60px;font-size:12px;padding:4px">
+              <button class="btn" style="font-size:11px;padding:3px 10px" onclick="quickCalcSheets()">= 用紙枚数</button>
+            </div>
+            <div id="qc-result" style="font-weight:700;color:#065f46"></div>
+            <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+              <label style="width:80px">金額</label>
+              <input type="number" id="qc-amount" value="" style="width:120px;font-size:12px;padding:4px" placeholder="税抜金額">
+              <button class="btn" style="font-size:11px;padding:3px 10px" onclick="quickCalcTax()">= 税込</button>
+            </div>
+            <div id="qc-tax-result" style="font-weight:700;color:#065f46"></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  calcExpr=''; calcDisplay='0';
+  renderCalcDisplay();
+  renderCalcHistory();
+}
+
+function renderCalcDisplay(){
+  const valEl=document.getElementById('calc-val');
+  const exprEl=document.getElementById('calc-expr');
+  if(valEl) valEl.textContent=formatCalcNum(calcDisplay);
+  if(exprEl) exprEl.textContent=calcExpr;
+}
+function formatCalcNum(n){
+  const num=parseFloat(n);
+  if(isNaN(num)) return n;
+  if(n.toString().includes('.') && n.toString().endsWith('.')) return n;
+  if(Math.abs(num)>=1) return num.toLocaleString('ja-JP',{maximumFractionDigits:10});
+  return n;
+}
+
+function calcNum(n){
+  if(calcDisplay==='0' && n!=='.') calcDisplay=n;
+  else calcDisplay+=n;
+  renderCalcDisplay();
+}
+function calcOp(op){
+  calcExpr+=calcDisplay+' '+({'/':'÷','*':'×','+':'+','-':'−'}[op]||op)+' ';
+  calcDisplay='0';
+  renderCalcDisplay();
+}
+function calcEqual(){
+  const fullExpr=calcExpr+calcDisplay;
+  try{
+    const evalExpr=fullExpr.replace(/÷/g,'/').replace(/×/g,'*').replace(/−/g,'-');
+    const result=Function('"use strict";return('+evalExpr+')')();
+    const resultStr=parseFloat(result.toFixed(10)).toString();
+    calcHistory.unshift({expr:fullExpr, result:resultStr, time:new Date().toLocaleTimeString('ja-JP')});
+    if(calcHistory.length>50) calcHistory.pop();
+    calcExpr='';
+    calcDisplay=resultStr;
+    renderCalcDisplay();
+    renderCalcHistory();
+  }catch(e){
+    calcDisplay='Error'; renderCalcDisplay();
+  }
+}
+function calcClear(){ calcExpr=''; calcDisplay='0'; renderCalcDisplay(); }
+function calcBackspace(){ calcDisplay=calcDisplay.slice(0,-1)||'0'; renderCalcDisplay(); }
+function calcPercent(){
+  const v=parseFloat(calcDisplay)||0;
+  calcDisplay=(v/100).toString();
+  renderCalcDisplay();
+}
+function calcTax(rate){
+  const v=parseFloat(calcDisplay)||0;
+  const result=Math.ceil(v*rate);
+  calcHistory.unshift({expr:v+' × '+rate, result:result.toString(), time:new Date().toLocaleTimeString('ja-JP')});
+  calcDisplay=result.toString();
+  calcExpr='';
+  renderCalcDisplay(); renderCalcHistory();
+}
+function calcSheets(){
+  const copies=parseInt(prompt('印刷部数:','1000'))||0;
+  const faces=parseInt(prompt('面付数:','4'))||1;
+  const waste=parseInt(prompt('予備枚数:','50'))||0;
+  const sheets=Math.ceil(copies/faces)+waste;
+  calcHistory.unshift({expr:copies+'部÷'+faces+'面+予備'+waste, result:sheets+'枚', time:new Date().toLocaleTimeString('ja-JP')});
+  calcDisplay=sheets.toString();
+  calcExpr='';
+  renderCalcDisplay(); renderCalcHistory();
+}
+function calcRoundUp(){
+  const v=parseFloat(calcDisplay)||0;
+  calcDisplay=Math.ceil(v).toString();
+  renderCalcDisplay();
+}
+function calcMemory(){
+  calcHistory.unshift({expr:'M+', result:calcDisplay, time:new Date().toLocaleTimeString('ja-JP')});
+  renderCalcHistory();
+}
+function renderCalcHistory(){
+  const el=document.getElementById('calc-history');
+  if(!el) return;
+  if(calcHistory.length===0){ el.innerHTML='<div style="color:#aaa;padding:8px">履歴なし</div>'; return; }
+  el.innerHTML=calcHistory.map((h,i)=>`
+    <div style="display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #f0f0f0;cursor:pointer" onclick="calcUseHistory(${i})">
+      <div><span style="color:#888">${h.expr}</span> = <strong>${h.result}</strong></div>
+      <span style="color:#ccc;font-size:10px">${h.time}</span>
+    </div>
+  `).join('');
+}
+function calcUseHistory(idx){
+  const h=calcHistory[idx];
+  if(!h) return;
+  const num=h.result.replace(/[^0-9.\-]/g,'');
+  if(num) { calcDisplay=num; renderCalcDisplay(); }
+}
+function quickCalcSheets(){
+  const copies=parseInt(document.getElementById('qc-copies')?.value)||0;
+  const faces=parseInt(document.getElementById('qc-faces')?.value)||1;
+  const sheets=Math.ceil(copies/faces);
+  document.getElementById('qc-result').textContent=`→ ${sheets.toLocaleString()}枚（予備なし）/ ${(sheets+Math.ceil(sheets*0.05)).toLocaleString()}枚（予備5%込）`;
+}
+function quickCalcTax(){
+  const amt=parseFloat(document.getElementById('qc-amount')?.value)||0;
+  const t10=Math.ceil(amt*1.10);
+  const t8=Math.ceil(amt*1.08);
+  document.getElementById('qc-tax-result').textContent=`→ 10%税込: ¥${t10.toLocaleString()} / 8%税込: ¥${t8.toLocaleString()}`;
+}
+</script>
+</body>
+</html>
+ry(){
+  calcHistory.unshift({expr:'M+', result:calcDisplay, time:new Date().toLocaleTimeString('ja-JP')});
+  renderCalcHistory();
+}
+function renderCalcHistory(){
+  const el=document.getElementById('calc-history');
+  if(!el) return;
+  if(calcHistory.length===0){ el.innerHTML='<div style="color:#aaa;padding:8px">履歴なし</div>'; return; }
+  el.innerHTML=calcHistory.map((h,i)=>`
+    <div style="display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #f0f0f0;cursor:pointer" onclick="calcUseHistory(${i})">
+      <div><span style="color:#888">${h.expr}</span> = <strong>${h.result}</strong></div>
+      <span style="color:#ccc;font-size:10px">${h.time}</span>
+    </div>
+  `).join('');
+}
+function calcUseHistory(idx){
+  const h=calcHistory[idx];
+  if(!h) return;
+  const num=h.result.replace(/[^0-9.\-]/g,'');
+  if(num) { calcDisplay=num; renderCalcDisplay(); }
+}
+function quickCalcSheets(){
+  const copies=parseInt(document.getElementById('qc-copies')?.value)||0;
+  const faces=parseInt(document.getElementById('qc-faces')?.value)||1;
+  const sheets=Math.ceil(copies/faces);
+  document.getElementById('qc-result').textContent=`→ ${sheets.toLocaleString()}枚（予備なし）/ ${(sheets+Math.ceil(sheets*0.05)).toLocaleString()}枚（予備5%込）`;
+}
+function quickCalcTax(){
+  const amt=parseFloat(document.getElementById('qc-amount')?.value)||0;
+  const t10=Math.ceil(amt*1.10);
+  const t8=Math.ceil(amt*1.08);
+  document.getElementById('qc-tax-result').textContent=`→ 10%税込: ¥${t10.toLocaleString()} / 8%税込: ¥${t8.toLocaleString()}`;
+}
+</script>
+</body>
+</html>
+ry(){
+  calcHistory.unshift({expr:'M+', result:calcDisplay, time:new Date().toLocaleTimeString('ja-JP')});
+  renderCalcHistory();
+}
+function renderCalcHistory(){
+  const el=document.getElementById('calc-history');
+  if(!el) return;
+  if(calcHistory.length===0){ el.innerHTML='<div style="color:#aaa;padding:8px">履歴なし</div>'; return; }
+  el.innerHTML=calcHistory.map((h,i)=>`
+    <div style="display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #f0f0f0;cursor:pointer" onclick="calcUseHistory(${i})">
+      <div><span style="color:#888">${h.expr}</span> = <strong>${h.result}</strong></div>
+      <span style="color:#ccc;font-size:10px">${h.time}</span>
+    </div>
+  `).join('');
+}
+function calcUseHistory(idx){
+  const h=calcHistory[idx];
+  if(!h) return;
+  const num=h.result.replace(/[^0-9.\-]/g,'');
+  if(num) { calcDisplay=num; renderCalcDisplay(); }
+}
+function quickCalcSheets(){
+  const copies=parseInt(document.getElementById('qc-copies')?.value)||0;
+  const faces=parseInt(document.getElementById('qc-faces')?.value)||1;
+  const sheets=Math.ceil(copies/faces);
+  document.getElementById('qc-result').textContent=`→ ${sheets.toLocaleString()}枚（予備なし）/ ${(sheets+Math.ceil(sheets*0.05)).toLocaleString()}枚（予備5%込）`;
+}
+function quickCalcTax(){
+  const amt=parseFloat(document.getElementById('qc-amount')?.value)||0;
+  const t10=Math.ceil(amt*1.10);
+  const t8=Math.ceil(amt*1.08);
+  document.getElementById('qc-tax-result').textContent=`→ 10%税込: ¥${t10.toLocaleString()} / 8%税込: ¥${t8.toLocaleString()}`;
+}
+</script>
+</body>
+</html>
