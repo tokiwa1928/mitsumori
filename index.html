@@ -75,10 +75,18 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;font-size:13px;
 .topbar{background:#1a1a1a;color:#fff;display:flex;align-items:stretch;padding:4px .75rem;min-height:50px;flex-shrink:0;gap:0;flex-wrap:nowrap;width:100%;box-sizing:border-box}
 .tb-left-fixed{display:flex;align-items:center;flex-shrink:0;padding-right:8px;gap:0;align-self:stretch}
 .tb-right-area{display:flex;flex-wrap:wrap;flex:1;min-width:0;align-content:center;row-gap:4px}
-.topbar-title{font-size:14px;font-weight:700;margin-right:14px;margin-left:6px;white-space:nowrap;letter-spacing:.02em;flex-shrink:0;align-self:center}
-.tb-nav-btn{flex-shrink:0;width:32px;height:32px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:6px;cursor:pointer;font-size:14px;font-family:inherit;display:flex;align-items:center;justify-content:center;transition:all .15s;align-self:center;margin-right:4px}
-.tb-nav-btn:hover:not(:disabled){background:rgba(96,165,250,.4);border-color:rgba(96,165,250,.6)}
-.tb-nav-btn:disabled{opacity:0.3;cursor:not-allowed}
+.topbar-title{font-size:18px;font-weight:800;white-space:nowrap;letter-spacing:.04em;flex-shrink:0;line-height:1.1}
+.tb-title-stack{display:flex;flex-direction:column;justify-content:center;margin-left:8px;margin-right:14px;gap:2px;align-self:center}
+.tb-title-sub{display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,.85);white-space:nowrap}
+.tb-title-sub #tb-company-label{cursor:pointer;background:rgba(255,255,255,.18);padding:2px 8px;border-radius:4px;font-weight:600;transition:background .15s}
+.tb-title-sub #tb-company-label:hover{background:rgba(255,255,255,.3)}
+.tb-title-sub #tb-user-label{color:rgba(255,255,255,.7)}
+.tb-mini-btn{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:4px;padding:2px 8px;font-size:11px;font-family:inherit;cursor:pointer;transition:background .15s}
+.tb-mini-btn:hover{background:rgba(255,255,255,.25)}
+.tb-nav-btn{flex-shrink:0;width:44px;height:44px;background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:8px;cursor:pointer;font-size:20px;font-weight:700;font-family:inherit;display:flex;align-items:center;justify-content:center;transition:all .15s;align-self:center;margin-right:6px;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.tb-nav-btn:hover:not(:disabled){background:rgba(96,165,250,.55);border-color:rgba(96,165,250,.85);transform:scale(1.05)}
+.tb-nav-btn:active:not(:disabled){transform:scale(0.95)}
+.tb-nav-btn:disabled{opacity:0.25;cursor:not-allowed}
 /* タブ群: 横折返し可 — 全タブが見える */
 .tb-scroll{display:flex;align-items:center;flex:1 1 100%;flex-wrap:wrap;gap:2px;min-width:0;align-content:flex-start;padding:2px 0}
 /* 右側コントロール群: tb-right-area 内で必ず次の行へ */
@@ -342,23 +350,29 @@ textarea{resize:vertical;font-size:12px;line-height:1.5}
 .inbox-status-badge.done{background:#dcfce7;color:#15803d}
 .inbox-preview{max-width:200px;max-height:150px;object-fit:contain;border:1px solid #ddd;border-radius:4px;margin-top:8px}
 /* ═══ 問い合わせ窓口 ═══ */
-.inq-card{background:#fff;border:1px solid #e0ddd6;border-radius:6px;padding:6px 10px;margin-bottom:4px;cursor:pointer;transition:all .15s;position:relative;font-size:12px;line-height:1.4}
+.inq-card{background:#fff;border:1px solid #e0ddd6;border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;transition:all .15s;position:relative;font-size:14px;line-height:1.6}
 .inq-card:hover{border-color:#1a1a1a;box-shadow:0 2px 8px rgba(0,0,0,.10)}
-.inq-card.urgent{border-left:4px solid #dc2626}
-.inq-card.normal{border-left:4px solid #3b82f6}
-.inq-card.low{border-left:4px solid #10b981}
-.inq-prio{display:inline-block;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700}
-.inq-cat{display:inline-block;padding:1px 6px;border-radius:8px;font-size:10px;background:#eef2ff;color:#3730a3}
-.inq-status{display:inline-block;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700}
+.inq-card.urgent{border-left:5px solid #dc2626}
+.inq-card.normal{border-left:5px solid #3b82f6}
+.inq-card.low{border-left:5px solid #10b981}
+.inq-prio{display:inline-block;padding:2px 8px;border-radius:8px;font-size:12px;font-weight:700}
+.inq-cat{display:inline-block;padding:2px 8px;border-radius:8px;font-size:12px;background:#eef2ff;color:#3730a3}
+.inq-status{display:inline-block;padding:2px 8px;border-radius:8px;font-size:12px;font-weight:700}
 .inq-prio.urgent{background:#fee2e2;color:#991b1b}
 .inq-prio.normal{background:#dbeafe;color:#1d4ed8}
 .inq-prio.low{background:#dcfce7;color:#065f46}
-.inq-status{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700}
+.inq-status{display:inline-block;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:700}
 .inq-status.new{background:#fef3c7;color:#92400e}
 .inq-status.progress{background:#dbeafe;color:#1d4ed8}
 .inq-status.waiting{background:#f3e8ff;color:#7c3aed}
 .inq-status.done{background:#dcfce7;color:#065f46}
-.inq-cat{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;background:#f4f3f0;color:#555;font-weight:700}
+.inq-cat{display:inline-block;padding:3px 10px;border-radius:5px;font-size:12px;background:#f4f3f0;color:#555;font-weight:700}
+/* 連絡管理ページ全般の文字を大きく */
+#page-inquiry{font-size:14px}
+#page-inquiry .inq-card strong,#page-inquiry .inq-card b{font-size:14px}
+#page-inquiry .sec .st{font-size:15px}
+#page-inquiry select,#page-inquiry input[type="text"],#page-inquiry input[type="search"]{font-size:13px;padding:6px 10px}
+#page-inquiry button.btn{font-size:13px;padding:6px 12px}
 .inq-detail-panel{display:none;position:fixed;top:0;right:0;bottom:0;width:min(1200px,75vw);background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:250;overflow-y:auto;padding:1.5rem}
 .inq-detail-panel.show{display:block}
 .inq-timeline{margin-top:1rem;border-left:2px solid #e0ddd6;padding-left:1rem}
@@ -619,7 +633,15 @@ setTimeout(_removeBootLoader_, 5000);
   <div class="tb-left-fixed">
     <button class="tb-nav-btn" id="tb-nav-back" onclick="navBack()" title="前のタブに戻る (Alt+←)" disabled>⬅</button>
     <button class="tb-nav-btn" id="tb-nav-forward" onclick="navForward()" title="次のタブに進む (Alt+→)" disabled>➡</button>
-    <span class="topbar-title" id="app-title" onclick="_goHome_()" style="cursor:pointer" title="クリックでホームへ">TOKIWA-HUB</span>
+    <div class="tb-title-stack">
+      <span class="topbar-title" id="app-title" onclick="_goHome_()" style="cursor:pointer" title="クリックでホームへ">TOKIWA-HUB</span>
+      <div class="tb-title-sub" id="tb-title-sub">
+        <span id="tb-company-label" onclick="if(typeof showCompanySwitcher==='function')showCompanySwitcher()" title="クリックで会社切替">🏢 -</span>
+        <span id="tb-user-label"></span>
+        <button class="tb-mini-btn" id="tb-login-btn" onclick="if(typeof showLoginScreen==='function')showLoginScreen()" title="ログイン" style="display:none">🔓 ログイン</button>
+        <button class="tb-mini-btn" onclick="if(typeof doLogout==='function')doLogout()" title="ログアウト">🚪 ログアウト</button>
+      </div>
+    </div>
   </div>
   <div class="tb-right-area">
   <div class="tb-scroll" id="tb-scroll">
@@ -24020,6 +24042,23 @@ function updateUserDisplay(){
   if(companySpan){
     companySpan.textContent = currentAuth.companyName || '';
   }
+
+  // VVV-1: TOKIWA-HUB 下のサブ行 (会社名 + ユーザー + ログアウト)
+  var tbCompany = document.getElementById('tb-company-label');
+  var tbUser = document.getElementById('tb-user-label');
+  var tbLoginBtn = document.getElementById('tb-login-btn');
+  if(tbCompany){
+    tbCompany.textContent = '🏢 ' + (currentAuth.companyName || '未ログイン');
+  }
+  if(tbUser){
+    var dept2 = currentAuth.department ? '（' + currentAuth.department + '）' : '';
+    tbUser.textContent = currentAuth.userName ? '👤 ' + currentAuth.userName + dept2 : '';
+  }
+  if(tbLoginBtn){
+    // ログイン中はログインボタン非表示、未ログインは表示
+    tbLoginBtn.style.display = currentAuth.loggedIn ? 'none' : 'inline-block';
+  }
+
   // 会社別のヘッダー色を適用
   applyCompanyHeaderColor();
   // ロール別タブ絞り込み
