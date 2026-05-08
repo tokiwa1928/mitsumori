@@ -75,13 +75,15 @@ body{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;font-size:13px;
 .topbar{background:#1a1a1a;color:#fff;display:flex;align-items:stretch;padding:4px .75rem;min-height:50px;flex-shrink:0;gap:0;flex-wrap:nowrap;width:100%;box-sizing:border-box}
 .tb-left-fixed{display:flex;align-items:center;flex-shrink:0;padding-right:8px;gap:0;align-self:stretch}
 .tb-right-area{display:flex;flex-wrap:wrap;flex:1;min-width:0;align-content:center;row-gap:4px}
-.topbar-title{font-size:18px;font-weight:800;white-space:nowrap;letter-spacing:.04em;flex-shrink:0;line-height:1.1}
+.topbar-title{font-size:18px;font-weight:800;white-space:nowrap;letter-spacing:.04em;flex-shrink:0;line-height:1.1;margin-bottom:3px}
 .tb-title-stack{display:flex;flex-direction:column;justify-content:center;margin-left:8px;margin-right:14px;gap:2px;align-self:center}
-.tb-title-sub{display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,.85);white-space:nowrap}
-.tb-title-sub #tb-company-label{cursor:pointer;background:rgba(255,255,255,.18);padding:2px 8px;border-radius:4px;font-weight:600;transition:background .15s}
+/* 縦積みレイアウト: 会社名 / 担当者 / ログアウトボタン */
+.tb-title-sub{display:flex;flex-direction:column;align-items:flex-start;gap:3px;font-size:11px;color:rgba(255,255,255,.85);white-space:nowrap}
+.tb-title-sub #tb-company-label{cursor:pointer;background:rgba(255,255,255,.18);padding:2px 8px;border-radius:4px;font-weight:600;transition:background .15s;font-size:11px;line-height:1.3}
 .tb-title-sub #tb-company-label:hover{background:rgba(255,255,255,.3)}
-.tb-title-sub #tb-user-label{color:rgba(255,255,255,.7)}
-.tb-mini-btn{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:4px;padding:2px 8px;font-size:11px;font-family:inherit;cursor:pointer;transition:background .15s}
+.tb-title-sub #tb-user-label{color:rgba(255,255,255,.75);font-size:10px;line-height:1.2}
+.tb-title-sub #tb-user-label:empty{display:none}
+.tb-mini-btn{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:4px;padding:2px 8px;font-size:10px;font-family:inherit;cursor:pointer;transition:background .15s;width:100%;text-align:left}
 .tb-mini-btn:hover{background:rgba(255,255,255,.25)}
 .tb-nav-btn{flex-shrink:0;width:44px;height:44px;background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:8px;cursor:pointer;font-size:20px;font-weight:700;font-family:inherit;display:flex;align-items:center;justify-content:center;transition:all .15s;align-self:center;margin-right:6px;box-shadow:0 1px 2px rgba(0,0,0,.15)}
 .tb-nav-btn:hover:not(:disabled){background:rgba(96,165,250,.55);border-color:rgba(96,165,250,.85);transform:scale(1.05)}
@@ -643,6 +645,7 @@ setTimeout(_removeBootLoader_, 5000);
       </div>
     </div>
   </div>
+
   <div class="tb-right-area">
   <div class="tb-scroll" id="tb-scroll">
     <button class="tb-btn act" data-page="realtime" onclick="swPage('realtime',this)" draggable="true" title="🏠 ホーム — 業務フロー図 + KPI・売上グラフ・案件一覧などをウィジェット形式でカスタマイズ表示 (30秒自動更新)">🏠 ホーム</button>
@@ -698,12 +701,9 @@ setTimeout(_removeBootLoader_, 5000);
     <button class="tb-icon-btn" id="notify-toggle-btn" onclick="requestNotificationPermission(true)" title="ブラウザ通知の有効化" style="font-size:14px">🔔</button>
     <!-- クラウド同期ステータス -->
     <span id="cloud-sync-indicator" style="font-size:11px;margin-right:10px"></span>
-    <!-- ログイン中のユーザー名表示 -->
-    <span id="current-user" style="font-size:11px;color:rgba(255,255,255,.7);margin-right:4px"></span>
-    <!-- ログイン中の会社名表示 -->
-    <span id="current-company" style="font-size:12px;color:#fff;background:rgba(255,255,255,.15);padding:4px 10px;border-radius:4px;margin-right:8px;cursor:pointer" onclick="showCompanySwitcher()" title="クリックで会社切替"></span>
-    <button class="tb-icon-btn" onclick="doLogout()" title="ログアウト">🚪 ログアウト</button>
-    <span style="width:1px;height:20px;background:rgba(255,255,255,.2);margin:0 4px"></span>
+    <!-- 互換用 (左側に統合済のため非表示) -->
+    <span id="current-user" style="display:none"></span>
+    <span id="current-company" style="display:none"></span>
     <!-- クラウド同期ボタン -->
     <span id="sync-status" style="font-size:11px;color:rgba(255,255,255,.5);white-space:nowrap"></span>
     <button class="tb-icon-btn" id="sync-btn" onclick="cloudSync()" title="Googleスプレッドシートと同期">
