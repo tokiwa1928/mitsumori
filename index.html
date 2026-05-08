@@ -26719,63 +26719,98 @@ function openInquiryDetail(id) {
       <button class="btn" style="font-size:11px" onclick="deleteInquiry('${inq.id}')">🗑 削除</button>
     </div>
     
-    <!-- チャット風タイムライン (受信=左 / 送信=右 / システム=中央) -->
-    <div style="font-size:13px;font-weight:700;margin-bottom:.5rem">💬 やりとり履歴</div>
-    <div class="inq-chat" id="inq-chat">
-      ${_renderInqChatBubbles_(inq, tlIcons)}
+    <!-- 親問合せリンク (XXX-1) -->
+    ${_renderParentInquirySection_(inq)}
+
+    <!-- メイン2カラム: 受信メール (左) + 返信ボックス (右) -->
+    <div class="inq-2col" style="display:flex;gap:14px;margin-top:1rem;flex-wrap:wrap">
+      <!-- LEFT: 受信メール -->
+      <div style="flex:1;min-width:300px;display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:13px;font-weight:700;color:#92400e;display:flex;align-items:center;gap:6px">
+          📨 受信メール
+          ${inq.source_url ? `<a href="${inq.source_url}" target="_blank" style="font-size:11px;color:#3b82f6;text-decoration:none;font-weight:400">↗ 元を開く</a>` : ''}
+        </div>
+        <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:14px;font-size:14px;line-height:1.7;white-space:pre-wrap;flex:1;min-height:440px;max-height:600px;overflow-y:auto;box-shadow:0 1px 3px rgba(0,0,0,.04)">${_escDiff(inq.body || '(本文なし)')}</div>
+      </div>
+
+      <!-- RIGHT: 返信ボックス -->
+      <div style="flex:1;min-width:300px;display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:13px;font-weight:700;color:#1e40af;display:flex;align-items:center;gap:6px;justify-content:space-between">
+          <span>📝 返信下書き <span id="inq-draft-status" style="font-size:10px;color:#7c3aed;font-weight:400">🤖 AI 生成中…</span></span>
+          <div style="display:flex;gap:4px">
+            <button class="pill sel" id="inq-reply-type-reply" onclick="setInqReplyType('reply')" style="font-size:11px;padding:2px 10px">💬 返信</button>
+            <button class="pill" id="inq-reply-type-note" onclick="setInqReplyType('note')" style="font-size:11px;padding:2px 10px">📝 社内メモ</button>
+          </div>
+        </div>
+        <textarea id="inq-reply-text" placeholder="返信内容を入力... (AI が下書き生成中…)" style="font-size:14px;min-height:440px;max-height:600px;line-height:1.7;padding:14px;font-family:inherit;width:100%;box-sizing:border-box;resize:vertical;border:1px solid #93c5fd;border-radius:10px;background:#eff6ff;flex:1"></textarea>
+        <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;align-items:center">
+          <button class="btn" style="font-size:11px;background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="_regenerateAiDraft_('${inq.id}')" title="AI で下書きを再生成">🔄 AI 再生成</button>
+          <button class="btn" style="font-size:11px;background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="showReplyTemplatePicker('${inq.id}')" title="保存済テンプレートから挿入">📝 テンプレ</button>
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#555">
+            <input type="checkbox" id="inq-send-email"> メールも送信
+          </label>
+          ${inq.source_type === 'linesvc' ? `<button class="btn" style="font-size:11px;background:#10b981;color:#fff;border-color:#10b981" onclick="sendLineworksReplyFromInq('${inq.id}')">📤 LW 送信</button>` : ''}
+          <button class="btn btn-p" onclick="addInquiryReply('${inq.id}')">📨 送信</button>
+        </div>
+      </div>
     </div>
-    
+
     <!-- AI 下書きパネル (LINE WORKS で受信した問い合わせのみ) -->
     ${_renderAiDraftPanel_(inq)}
 
-    <!-- 返信・メモ入力 -->
-    <div style="margin-top:1rem;border-top:1px solid #e0ddd6;padding-top:1rem">
-      <div style="display:flex;gap:4px;margin-bottom:8px">
-        <button class="pill sel" id="inq-reply-type-reply" onclick="setInqReplyType('reply')">💬 返信</button>
-        <button class="pill" id="inq-reply-type-note" onclick="setInqReplyType('note')">📝 社内メモ</button>
+    <!-- 過去のやりとり履歴 (折りたたみ) -->
+    <details style="margin-top:1.25rem;border-top:1px solid #e0ddd6;padding-top:1rem">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:#555;padding:6px 0;list-style:none">
+        💬 過去のやりとり履歴 (${(inq.timeline||[]).length}件) <span style="color:#888;font-size:11px;font-weight:400">▼ クリックで展開</span>
+      </summary>
+      <div class="inq-chat" id="inq-chat" style="margin-top:8px">
+        ${_renderInqChatBubbles_(inq, tlIcons)}
       </div>
-      <textarea id="inq-reply-text" rows="20" placeholder="返信内容を入力... (AI下書きを自動生成中…)" style="font-size:14px;min-height:440px;line-height:1.7;padding:14px;font-family:inherit;width:100%;box-sizing:border-box;resize:vertical"></textarea>
-      <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end;flex-wrap:wrap">
-        <button class="btn" style="font-size:11px;background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="showReplyTemplatePicker('${inq.id}')" title="保存済テンプレートから挿入 (プレースホルダ自動展開)">📝 テンプレ</button>
-        <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#555">
-          <input type="checkbox" id="inq-send-email"> メールも送信
-        </label>
-        ${inq.source_type === 'linesvc' ? `<button class="btn" style="font-size:11px;background:#10b981;color:#fff;border-color:#10b981" onclick="sendLineworksReplyFromInq('${inq.id}')">📤 LINE WORKS 送信</button>` : ''}
-        <button class="btn btn-p" onclick="addInquiryReply('${inq.id}')">送信</button>
-      </div>
-    </div>`;
+    </details>`;
 
   panel.classList.add('show');
   overlay.style.display = 'block';
 
-  // 🆕 SSS-2: 返信窓に AI 下書き自動生成 → 自動挿入
+  // 🆕 SSS-2 / XXX-1: 返信窓に AI 下書き自動生成 → 自動挿入
   setTimeout(async function(){
     var ta = document.getElementById('inq-reply-text');
-    if(!ta || ta.value) return;  // 既に何か入力されていればスキップ
+    var st = document.getElementById('inq-draft-status');
+    if(!ta || ta.value) {
+      if(st) st.textContent = '';
+      return;
+    }
 
     // 既に保存済の AI 下書きがあればそれを使う
     var drafts = (inq.timeline || []).filter(function(t){ return t.type === 'ai_draft_reply'; });
     if(drafts.length > 0){
       var latest = drafts[drafts.length - 1];
-      var draftText = (typeof _appendSignature_ === 'function') ? _appendSignature_(latest.text || '') : (latest.text || '');
+      var draftText = (typeof _appendSignature_ === 'function') ? _appendSignature_(latest.text || '', inq) : (latest.text || '');
       ta.value = draftText;
+      if(st) st.textContent = '✅ 既存下書きを表示中';
+      setTimeout(function(){ if(st) st.textContent = ''; }, 3000);
       return;
     }
 
     // 既存ドラフト無し → 署名だけ先に出して、その後 AI 自動生成
+    var sig = '';
     if(typeof _appendSignature_ === 'function'){
-      var sig = _appendSignature_('', inq);
+      sig = _appendSignature_('', inq);
       if(sig) ta.value = sig;
     }
 
     // 社内連絡 (internal_msg / interco / voice_memo / phone) は AI 下書き対象外
     var skipKinds = ['internal_msg','interco','voice_memo','phone'];
-    if(skipKinds.indexOf(inq.source_type) >= 0) return;
-    if(!inq.body || inq.body.length < 10) return; // 本文が短すぎる場合はスキップ
+    if(skipKinds.indexOf(inq.source_type) >= 0){
+      if(st) st.textContent = '(社内連絡のため AI 下書きスキップ)';
+      return;
+    }
+    if(!inq.body || inq.body.length < 10){
+      if(st) st.textContent = '(本文が短いため AI 下書きスキップ)';
+      return;
+    }
 
     // ローディング表示
-    var origPlaceholder = ta.placeholder;
-    ta.placeholder = '🤖 AI が返信下書きを生成中… (10〜30秒)';
+    if(st) st.textContent = '🤖 AI が下書きを生成中… (10〜30秒)';
     try {
       var resp = await callCloudAPI('generateAiDraftReply', {}, {
         inquiryId: inq.id,
@@ -26786,18 +26821,20 @@ function openInquiryDetail(id) {
       var taNow = document.getElementById('inq-reply-text');
       if(!taNow) return;
       if(taNow.value && taNow.value !== sig) {
-        ta.placeholder = origPlaceholder;
+        if(st) st.textContent = '(ユーザー入力あり: スキップ)';
         return;
       }
       if(resp && resp.success && resp.draft){
         var withSig = (typeof _appendSignature_ === 'function') ? _appendSignature_(resp.draft, inq) : resp.draft;
         taNow.value = withSig;
+        if(st) st.textContent = '✅ AI 下書き生成完了';
+        setTimeout(function(){ if(st) st.textContent = ''; }, 3000);
+      } else {
+        if(st) st.textContent = '⚠ ' + (resp?.error || '生成失敗');
       }
-      taNow.placeholder = origPlaceholder;
     } catch(e){
       console.warn('AI draft auto-gen failed:', e);
-      var t2 = document.getElementById('inq-reply-text');
-      if(t2) t2.placeholder = origPlaceholder;
+      if(st) st.textContent = '⚠ ' + e.message;
     }
   }, 200);
 }
@@ -26811,6 +26848,145 @@ function setInqReplyType(type) {
 }
 
 // AI 下書きパネル: 直近の ai_draft_reply timeline エントリを表示
+// XXX-1: 親問合せリンク セクション描画
+function _renderParentInquirySection_(inq){
+  if(!inq) return '';
+  var parent = inq.parent_inquiry_id ? (DB.inquiries||[]).find(function(x){ return x.id === inq.parent_inquiry_id; }) : null;
+  var children = (DB.inquiries||[]).filter(function(x){ return x.parent_inquiry_id === inq.id; });
+
+  var html = '<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px;margin-bottom:1rem;font-size:12px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:' + (parent || children.length ? '8px' : '0') + '">' +
+      '<strong style="color:#0369a1">🔗 関連連絡 (親子リンク)</strong>' +
+      '<button class="btn" style="font-size:11px;background:#0369a1;color:#fff;border-color:#0369a1" onclick="showLinkParentInquiryModal(\'' + inq.id + '\')">🔗 ' + (parent ? '親連絡変更' : '親連絡を選択') + '</button>' +
+    '</div>';
+
+  if(parent){
+    html += '<div style="background:#fff;border:1px solid #e0ddd6;border-radius:6px;padding:8px 12px;margin-bottom:6px;cursor:pointer" onclick="openInquiryDetail(\'' + parent.id + '\')">' +
+      '<div style="font-size:11px;color:#0369a1;font-weight:700;margin-bottom:2px">📌 親連絡:</div>' +
+      '<div style="font-size:12px"><strong>' + _escDiff(parent.subject || '(件名なし)') + '</strong></div>' +
+      '<div style="font-size:10px;color:#888;margin-top:2px">' + (parent.from_name || parent.custName || '') + ' · ' + (parent.received_at ? new Date(parent.received_at).toLocaleString('ja-JP') : '') + ' · クリックで開く</div>' +
+    '</div>';
+  }
+
+  if(children.length > 0){
+    html += '<div style="font-size:11px;color:#0369a1;font-weight:700;margin:6px 0 4px">📥 子連絡 (' + children.length + '件):</div>';
+    children.forEach(function(c){
+      html += '<div style="background:#fff;border:1px solid #e0ddd6;border-radius:6px;padding:6px 12px;margin-bottom:4px;cursor:pointer;font-size:11px" onclick="openInquiryDetail(\'' + c.id + '\')">' +
+        '<strong>' + _escDiff(c.subject || '(件名なし)') + '</strong>' +
+        ' <span style="color:#888">· ' + (c.received_at ? new Date(c.received_at).toLocaleString('ja-JP') : '') + '</span>' +
+      '</div>';
+    });
+  }
+
+  if(!parent && children.length === 0){
+    html += '<div style="font-size:11px;color:#666;margin-top:4px">関連する連絡を紐付けると、過去のやりとり全体を辿れます。</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// XXX-1: 親連絡選択モーダル
+function showLinkParentInquiryModal(inqId){
+  var inq = (DB.inquiries||[]).find(function(x){ return x.id === inqId; });
+  if(!inq){ alert('連絡が見つかりません'); return; }
+
+  // 候補: 自分以外 + 既に親が同じ顧客のもの優先
+  var candidates = (DB.inquiries||[]).filter(function(x){ return x.id !== inqId; })
+    .sort(function(a,b){
+      // 同じ顧客優先
+      var aSame = (a.from_email && a.from_email === inq.from_email) || (a.from_company && a.from_company === inq.from_company) ? 1 : 0;
+      var bSame = (b.from_email && b.from_email === inq.from_email) || (b.from_company && b.from_company === inq.from_company) ? 1 : 0;
+      if(aSame !== bSame) return bSame - aSame;
+      return (b.received_at||b.createdAt||'').localeCompare(a.received_at||a.createdAt||'');
+    })
+    .slice(0, 50);
+
+  var existing = document.getElementById('link-parent-modal');
+  if(existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'link-parent-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+
+  var listHtml = candidates.length === 0
+    ? '<div style="padding:14px;text-align:center;color:#888;font-size:12px">他に連絡がありません</div>'
+    : candidates.map(function(c){
+        var sameCust = (c.from_email && c.from_email === inq.from_email) || (c.from_company && c.from_company === inq.from_company);
+        return '<div class="lp-item" data-text="' + ((c.id||'')+' '+(c.subject||'')+' '+(c.from_name||'')+' '+(c.from_company||'')).toLowerCase() + '" ' +
+          'style="padding:10px 14px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:12px;background:' + (sameCust ? '#fef9c3' : '#fff') + '" ' +
+          'onclick="_doLinkParentInquiry_(\'' + inqId + '\',\'' + c.id + '\')" ' +
+          'onmouseover="this.style.background=\'#dbeafe\'" onmouseout="this.style.background=\'' + (sameCust ? '#fef9c3' : '#fff') + '\'">' +
+          (sameCust ? '<span style="background:#fcd34d;color:#78350f;font-size:9px;padding:1px 6px;border-radius:4px;margin-right:6px;font-weight:700">同顧客</span>' : '') +
+          '<strong>' + _escDiff(c.subject || '(件名なし)') + '</strong>' +
+          '<div style="font-size:10px;color:#666;margin-top:2px">' +
+            _escDiff(c.from_name||c.custName||'') + (c.from_company ? ' (' + _escDiff(c.from_company) + ')' : '') +
+            ' · ' + (c.received_at ? new Date(c.received_at).toLocaleDateString('ja-JP') : '') +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:680px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#0369a1;color:#fff;display:flex;justify-content:space-between;align-items:center">' +
+        '<strong>🔗 親連絡を選択</strong>' +
+        '<button onclick="document.getElementById(\'link-parent-modal\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button>' +
+      '</div>' +
+      '<div style="padding:10px 14px;background:#f0f9ff;border-bottom:1px solid #e0ddd6">' +
+        '<input id="lp-search" placeholder="🔍 件名・送信元で絞り込み..." style="width:100%;padding:6px 10px;font-size:12px;border:1px solid #ccc;border-radius:4px" oninput="_filterLinkParentList_(this.value)">' +
+        '<div style="font-size:10px;color:#0369a1;margin-top:6px">同じ送信元のものは黄色でハイライトされます。</div>' +
+      '</div>' +
+      '<div style="overflow-y:auto;flex:1">' + listHtml + '</div>' +
+      (inq.parent_inquiry_id ? '<div style="padding:10px 14px;border-top:1px solid #e0ddd6;background:#fef2f2"><button class="btn" style="font-size:11px;background:#dc2626;color:#fff;border-color:#dc2626" onclick="_doLinkParentInquiry_(\'' + inqId + '\',\'\')">🔗 親リンクを解除</button></div>' : '') +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+function _filterLinkParentList_(q){
+  q = (q||'').toLowerCase();
+  document.querySelectorAll('.lp-item').forEach(function(el){
+    el.style.display = (!q || el.dataset.text.indexOf(q) >= 0) ? '' : 'none';
+  });
+}
+
+async function _doLinkParentInquiry_(childId, parentId){
+  var inq = (DB.inquiries||[]).find(function(x){ return x.id === childId; });
+  if(!inq) return;
+  inq.parent_inquiry_id = parentId || null;
+  if(typeof saveDB === 'function') saveDB();
+  // バックエンドにも送信 (任意)
+  if(typeof callCloudAPI === 'function'){
+    try { await callCloudAPI('linkCommunication', { id: childId, links: { parent_inquiry_id: parentId || '' } }); }
+    catch(e){ console.warn('parent link backend save failed:', e); }
+  }
+  if(typeof _addAuditLog_ === 'function') _addAuditLog_('inquiry', childId, parentId ? '親連絡リンク: ' + parentId : '親連絡リンク解除');
+  document.getElementById('link-parent-modal')?.remove();
+  alert(parentId ? '✅ 親連絡を紐付けました' : '✅ 親連絡リンクを解除しました');
+  if(typeof openInquiryDetail === 'function') openInquiryDetail(childId);
+}
+
+// XXX-1: AI 下書き再生成 (返信窓のテキストを上書き)
+async function _regenerateAiDraft_(inqId){
+  var ta = document.getElementById('inq-reply-text');
+  var st = document.getElementById('inq-draft-status');
+  if(!ta) return;
+  if(ta.value.trim() && !confirm('現在の下書きを上書きして AI で再生成しますか?')) return;
+  if(st) st.textContent = '🤖 AI 再生成中…';
+  ta.placeholder = '🤖 AI が再生成中…';
+  try {
+    var resp = await callCloudAPI('generateAiDraftReply', {}, { inquiryId: inqId, tone: 'polite', instruction: '' });
+    var inqObj = (DB.inquiries||[]).find(function(x){ return x.id === inqId; });
+    if(resp && resp.success && resp.draft){
+      var withSig = (typeof _appendSignature_ === 'function') ? _appendSignature_(resp.draft, inqObj) : resp.draft;
+      ta.value = withSig;
+      if(st) st.textContent = '✅ 生成完了';
+      setTimeout(function(){ if(st) st.textContent = ''; }, 3000);
+    } else {
+      if(st) st.textContent = '⚠ ' + (resp?.error || '失敗');
+    }
+  } catch(e){
+    if(st) st.textContent = '⚠ ' + e.message;
+  }
+}
+
 // WWW-1: チャット風タイムライン描画 (受信=左 / 送信=右 / システム=中央)
 function _renderInqChatBubbles_(inq, tlIcons){
   if(!inq) return '';
