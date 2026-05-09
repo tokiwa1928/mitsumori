@@ -10929,7 +10929,7 @@ async function submitOutsourceQuote(inqId){
 
   // 履歴を保存 (DB.outsourceQuoteRequests)
   if(!DB.outsourceQuoteRequests) DB.outsourceQuoteRequests = [];
-  DB.outsourceQuoteRequests.push({
+  var oqr = {
     id: 'OQR' + Date.now(),
     fromInquiryId: inqId,
     sentAt: new Date().toISOString(),
@@ -10939,8 +10939,16 @@ async function submitOutsourceQuote(inqId){
     message: message,
     sentMail: sentMail,
     sentLw: sentLw,
-    failed: failed
-  });
+    failed: failed,
+    projectId: (inq && inq.linked_project_id) || null
+  };
+  // AAAA-3: 連絡 or 紐付く案件から master_no 継承
+  if(typeof _inheritMasterNo_ === 'function'){
+    var srcInq = inq;
+    var srcProj = (inq && inq.linked_project_id) ? (DB.projects||[]).find(function(p){ return p.id === inq.linked_project_id; }) : null;
+    _inheritMasterNo_(oqr, srcProj || srcInq);
+  }
+  DB.outsourceQuoteRequests.push(oqr);
   // 連絡側 timeline に記録
   if(!inq.timeline) inq.timeline = [];
   inq.timeline.push({
@@ -13651,6 +13659,11 @@ function submitInvoice(type){
     status: 'sent',
     issuedAt: new Date().toISOString()
   };
+  // AAAA-3: 案件から master_no 継承
+  if(typeof _inheritMasterNo_ === 'function'){
+    var srcProj = inv.projectId ? (DB.projects||[]).find(function(p){ return p.id === inv.projectId; }) : null;
+    _inheritMasterNo_(inv, srcProj);
+  }
   if(!DB.invoices) DB.invoices = [];
   DB.invoices.push(inv);
   if(typeof saveDB === 'function') saveDB();
@@ -13692,7 +13705,7 @@ function showShimeBatchModal(){
       id: 'INV-S-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(Math.random()*1000),
       type: 'shime',
       cust: c,
-      items: ps.map(function(p){ return { item: p.item, qty: p.qty, unit: p.unit, subtotal: p.exTax, projectId: p.id }; }),
+      items: ps.map(function(p){ return { item: p.item, qty: p.qty, unit: p.unit, subtotal: p.exTax, projectId: p.id, master_no: p.master_no || '' }; }),
       subtotal: subtotal,
       tax: tax,
       total: subtotal + tax,
@@ -13701,6 +13714,9 @@ function showShimeBatchModal(){
       status: 'sent',
       issuedAt: new Date().toISOString()
     };
+    // AAAA-3: 締め請求は複数案件のため、独自の master_no を付与
+    // 各明細行に元案件の master_no を保持 (子番号で追跡可)
+    if(typeof _ensureMasterNo_ === 'function') _ensureMasterNo_(inv);
     if(!DB.invoices) DB.invoices = [];
     DB.invoices.push(inv);
     ps.forEach(function(p){ p._invoicedShime = inv.id; });
@@ -13778,12 +13794,23 @@ function showCreateReceiptModal(){
   if(!amount) return;
   var cust = prompt('得意先:', '');
   if(!cust) return;
+  var refId = prompt('紐付ける案件番号 or 請求書番号 (任意):', '');
   var rcpt = {
     id: 'R-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(Math.random()*1000),
     cust: cust,
     total: parseInt(amount) || 0,
+    projectId: refId || '',
     issuedAt: new Date().toISOString()
   };
+  // AAAA-3: 案件 or 請求書から master_no 継承
+  if(typeof _inheritMasterNo_ === 'function'){
+    var src = null;
+    if(refId){
+      src = (DB.projects||[]).find(function(p){ return p.id === refId; }) ||
+            (DB.invoices||[]).find(function(v){ return v.id === refId; });
+    }
+    _inheritMasterNo_(rcpt, src);
+  }
   if(!DB.receipts) DB.receipts = [];
   DB.receipts.push(rcpt);
   if(typeof saveDB === 'function') saveDB();
@@ -13902,6 +13929,11 @@ function submitPayment(){
     memo: document.getElementById('pay-memo')?.value || '',
     matchedInvoiceId: null
   };
+  // AAAA-3: 案件から master_no 継承
+  if(typeof _inheritMasterNo_ === 'function'){
+    var srcProj = pay.projectId ? (DB.projects||[]).find(function(p){ return p.id === pay.projectId; }) : null;
+    _inheritMasterNo_(pay, srcProj);
+  }
   if(!DB.payments) DB.payments = [];
   DB.payments.push(pay);
   if(typeof saveDB === 'function') saveDB();
@@ -14109,6 +14141,14 @@ function showAddPayoutModal(){
       createdAt: new Date().toISOString()
     }, data);
     po.amount = parseInt(po.amount) || 0;
+    // AAAA-3: 案件 / 仕入 / 外注 から master_no 継承
+    if(typeof _inheritMasterNo_ === 'function'){
+      var src = null;
+      if(po.projectId)  src = (DB.projects||[]).find(function(p){ return p.id === po.projectId; });
+      if(!src && po.purchaseId) src = (DB.purchases||[]).find(function(s){ return s.id === po.purchaseId; });
+      if(!src && po.outsourceId) src = (DB.outsource||[]).find(function(o){ return o.id === po.outsourceId; });
+      _inheritMasterNo_(po, src);
+    }
     if(!DB.payouts) DB.payouts = [];
     DB.payouts.push(po);
     if(typeof saveDB === 'function') saveDB();
@@ -21910,6 +21950,13 @@ function addDeliveryItemDirect(opts){
     proofingId: opts.proofingId || null,
     createdAt: new Date().toISOString()
   };
+  // AAAA-3: 案件 or 校正からマスター番号継承
+  if(typeof _inheritMasterNo_ === 'function'){
+    var src = null;
+    if(opts.projectId)  src = (DB.projects||[]).find(function(p){ return p.id === opts.projectId; });
+    if(!src && opts.proofingId) src = (DB.proofings||[]).find(function(pr){ return pr.id === opts.proofingId; });
+    _inheritMasterNo_(item, src);
+  }
   DB.deliveryItems.push(item);
   saveDB();
   renderDeliverySchedule();
@@ -22867,6 +22914,7 @@ function confirmOrder(tabId){
 
   const proj={
     id: nextProjNo(),
+    master_no: '', // AAAA-3: 直後にタブ状態の master_no か新規番号を継承
     companyId: currentAuth.companyId || 'COMP001',
     companyCode: getCurrentCompanyCode(),
     orderDate: date||new Date().toISOString().slice(0,10),
@@ -22882,6 +22930,11 @@ function confirmOrder(tabId){
     estTabId: tabId,
     _estSnapshot: estSnapshot  // 🆕 見積書スナップショット
   };
+  // AAAA-3: タブが連絡から作成された場合 (s._fromInquiryId) は連絡から継承
+  if(typeof _inheritMasterNo_ === 'function'){
+    var srcInq = s && s._fromInquiryId ? (DB.inquiries||[]).find(function(i){ return i.id === s._fromInquiryId; }) : null;
+    _inheritMasterNo_(proj, srcInq);
+  }
   if(!DB.projects) DB.projects=[];
   DB.projects.push(proj);
   saveDB();
@@ -23476,6 +23529,8 @@ function createProofingFromProject(project, openAfterCreate){
     createdAt: new Date().toISOString(),
     note: `案件 ${project.id} より自動作成`
   };
+  // AAAA-3: 案件の master_no を継承
+  if(typeof _inheritMasterNo_ === 'function') _inheritMasterNo_(proofing, project);
   if(!DB.proofings) DB.proofings = [];
   DB.proofings.push(proofing);
 
@@ -26858,11 +26913,24 @@ function openInquiryDetail(id) {
   if(!inq) return;
 
   // 🆕 既読マーク (開封日時を記録 → カードの色変化に使用)
+  var stateChanged = false;
   if(!inq.readAt){
     inq.readAt = new Date().toISOString();
     inq.readBy = (currentAuth && currentAuth.userName) || '';
+    stateChanged = true;
+  }
+  // CCCC-1: 「新規」→「対応中」に自動進行
+  if(inq.status === 'new'){
+    inq.status = 'progress';
+    stateChanged = true;
+  }
+  // CCCC-1: 担当者が空ならログインユーザーで自動補完
+  if(!inq.assignee && currentAuth && currentAuth.userName){
+    inq.assignee = currentAuth.userName;
+    stateChanged = true;
+  }
+  if(stateChanged){
     if(typeof saveDB === 'function') try { saveDB(); } catch(e){}
-    // 一覧側を再描画して色変化を反映
     if(typeof renderInquiryList === 'function') setTimeout(renderInquiryList, 100);
   }
 
@@ -26922,7 +26990,7 @@ function openInquiryDetail(id) {
 
     <div style="font-size:16px;font-weight:700;margin-bottom:.5rem">${inq.subject||''}</div>
 
-    ${projectInfo}
+<!-- 案件情報は _renderInquiryLinksSection_ に統合済 (CCCC-1) -->
 
     <div style="background:#f9f9f7;border-radius:8px;padding:12px;margin-bottom:1rem;font-size:12px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -26942,45 +27010,28 @@ function openInquiryDetail(id) {
 
     ${attachmentsHtml}
 
-    <!-- 案件・見積化アクション -->
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem;padding:10px;background:#f0f9ff;border-radius:6px">
-      <span style="font-size:11px;color:#0369a1;align-self:center">この問い合わせから:</span>
-      ${!linkedProject ? `<button class="btn btn-p" style="font-size:11px;background:#1e40af;border-color:#1e40af" onclick="convertInquiryToProject('${inq.id}')">📋 案件作成</button>` : ''}
-      <button class="btn" style="font-size:11px;background:#fef3c7;border-color:#fcd34d" onclick="convertInquiryToEstimate('${inq.id}')">📝 見積作成</button>
-      <button class="btn" style="font-size:11px;background:#dcfce7;border-color:#86efac;color:#14532d;font-weight:700" onclick="showForwardInquiryModal('${inq.id}')">📤 転送 (匿名化)</button>
-      <button class="btn" style="font-size:11px;background:#dbeafe;border-color:#93c5fd;color:#1e3a8a" onclick="forwardInquiryToProofing('${inq.id}')" title="この連絡内容を校正BOXへ転送 (新規校正セッション作成)">📐 校正BOX へ送る</button>
-      <button class="btn" style="font-size:11px;background:#fef3c7;border-color:#fbbf24;color:#78350f" onclick="showOutsourceQuoteModal('${inq.id}')" title="この内容を元に外注先に見積依頼 (顧客名は自動匿名化)">🤝 外注見積依頼</button>
-      ${linkedProject ? `<button class="btn" style="font-size:11px" onclick="unlinkInquiryFromProject('${inq.id}')">🔗 案件リンク解除</button>` : `<button class="btn" style="font-size:11px" onclick="linkInquiryToExistingProject('${inq.id}')">🔗 既存案件にリンク</button>`}
-    </div>
+    <!-- 🔗 リンク管理: 案件リンク + 関連メール (親子) -->
+    ${_renderInquiryLinksSection_(inq)}
 
-    <!-- III-1: ワンストップ転送 + AI 返信下書き -->
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem;padding:10px;background:linear-gradient(135deg,#faf5ff,#ede9fe);border:1px solid #c4b5fd;border-radius:6px">
-      <span style="font-size:11px;color:#5b21b6;align-self:center;font-weight:700">📡 ワンストップ:</span>
-      <button class="btn" style="font-size:11px;background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="showAiDraftReplyModal('${inq.id}')" title="任意トーンで AI 返信下書きを生成">🤖 AI 返信下書き</button>
-      <button class="btn" style="font-size:11px;background:#10b981;color:#fff;border-color:#10b981" onclick="showLineworksForwardModal('${inq.id}')" title="LINE WORKS のユーザー / トークルームに転送">📲 LINE WORKS 転送</button>
-      <button class="btn" style="font-size:11px;background:#06c755;color:#fff;border-color:#06c755" onclick="showLineForwardModal('${inq.id}')" title="LINE Notify 経由で LINE グループに転送">💚 LINE 転送</button>
-      ${(inq.from_email || inq.email) ? `<button class="btn" style="font-size:11px;background:#dc2626;color:#fff;border-color:#dc2626" onclick="showEmailReplyModal('${inq.id}')" title="送信元メールアドレスに直接返信">📧 メール返信</button>` : ''}
-    </div>
-    
-    <!-- 操作ボタン -->
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem">
-      <select id="inq-d-status" style="font-size:12px;padding:4px 8px" onchange="updateInquiryStatus('${inq.id}',this.value)">
+    <!-- ⚡ アクションボタン (管理者は並び替え可) -->
+    ${_renderInquiryActionsSection_(inq)}
+
+    <!-- 操作ボタン (コンパクト化) -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.5rem;align-items:center">
+      <select id="inq-d-status" style="font-size:11px;padding:3px 6px" onchange="updateInquiryStatus('${inq.id}',this.value)">
         <option value="new"${inq.status==='new'?' selected':''}>新規</option>
         <option value="progress"${inq.status==='progress'?' selected':''}>対応中</option>
         <option value="waiting"${inq.status==='waiting'?' selected':''}>返信待ち</option>
         <option value="done"${inq.status==='done'?' selected':''}>完了</option>
       </select>
-      <select id="inq-d-prio" style="font-size:12px;padding:4px 8px" onchange="updateInquiryPriority('${inq.id}',this.value)">
+      <select id="inq-d-prio" style="font-size:11px;padding:3px 6px" onchange="updateInquiryPriority('${inq.id}',this.value)">
         <option value="urgent"${inq.priority==='urgent'?' selected':''}>緊急</option>
         <option value="normal"${inq.priority==='normal'?' selected':''}>通常</option>
         <option value="low"${inq.priority==='low'?' selected':''}>低</option>
       </select>
-      <input id="inq-d-assign" placeholder="担当者" value="${inq.assignee||''}" style="width:100px;font-size:12px;padding:4px 8px" onchange="updateInquiryAssignee('${inq.id}',this.value)">
-      <button class="btn" style="font-size:11px" onclick="deleteInquiry('${inq.id}')">🗑 削除</button>
+      <input id="inq-d-assign" placeholder="担当者" value="${inq.assignee || (currentAuth && currentAuth.userName) || ''}" style="width:100px;font-size:11px;padding:3px 6px" onchange="updateInquiryAssignee('${inq.id}',this.value)">
+      <button class="btn" style="font-size:11px;margin-left:auto" onclick="deleteInquiry('${inq.id}')">🗑 削除</button>
     </div>
-    
-    <!-- 親問合せリンク (XXX-1) -->
-    ${_renderParentInquirySection_(inq)}
 
     <!-- メイン2カラム: 受信メール (左) + 返信ボックス (右) -->
     <div class="inq-2col" style="display:flex;gap:14px;margin-top:1rem;flex-wrap:wrap">
@@ -26995,38 +27046,23 @@ function openInquiryDetail(id) {
 
       <!-- RIGHT: 返信ボックス -->
       <div style="flex:1;min-width:300px;display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:13px;font-weight:700;color:#1e40af;display:flex;align-items:center;gap:6px;justify-content:space-between">
+        <div style="font-size:13px;font-weight:700;color:#1e40af;display:flex;align-items:center;gap:6px;justify-content:space-between;flex-wrap:wrap">
           <span>📝 返信下書き <span id="inq-draft-status" style="font-size:10px;color:#7c3aed;font-weight:400">🤖 AI 生成中…</span></span>
           <div style="display:flex;gap:4px">
             <button class="pill sel" id="inq-reply-type-reply" onclick="setInqReplyType('reply')" style="font-size:11px;padding:2px 10px">💬 返信</button>
             <button class="pill" id="inq-reply-type-note" onclick="setInqReplyType('note')" style="font-size:11px;padding:2px 10px">📝 社内メモ</button>
           </div>
         </div>
-        <textarea id="inq-reply-text" placeholder="返信内容を入力... (AI が下書き生成中…)" style="font-size:14px;min-height:440px;max-height:600px;line-height:1.7;padding:14px;font-family:inherit;width:100%;box-sizing:border-box;resize:vertical;border:1px solid #93c5fd;border-radius:10px;background:#eff6ff;flex:1"></textarea>
-        <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;align-items:center">
-          <button class="btn" style="font-size:11px;background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="_regenerateAiDraft_('${inq.id}')" title="AI で下書きを再生成">🔄 AI 再生成</button>
-          <button class="btn" style="font-size:11px;background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="showReplyTemplatePicker('${inq.id}')" title="保存済テンプレートから挿入">📝 テンプレ</button>
-          <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#555">
-            <input type="checkbox" id="inq-send-email"> メールも送信
-          </label>
-          ${inq.source_type === 'linesvc' ? `<button class="btn" style="font-size:11px;background:#10b981;color:#fff;border-color:#10b981" onclick="sendLineworksReplyFromInq('${inq.id}')">📤 LW 送信</button>` : ''}
-          <button class="btn btn-p" onclick="addInquiryReply('${inq.id}')">📨 送信</button>
-        </div>
+        ${_renderReplySignatureSelector_(inq)}
+        <textarea id="inq-reply-text" placeholder="返信内容を入力... (AI が下書き生成中…)" style="font-size:14px;min-height:380px;max-height:600px;line-height:1.7;padding:14px;font-family:inherit;width:100%;box-sizing:border-box;resize:vertical;border:1px solid #93c5fd;border-radius:10px;background:#eff6ff;flex:1"></textarea>
+        ${_renderReplyChannelSelector_(inq)}
       </div>
     </div>
 
     <!-- AI 下書きパネル (LINE WORKS で受信した問い合わせのみ) -->
     ${_renderAiDraftPanel_(inq)}
 
-    <!-- 過去のやりとり履歴 (折りたたみ) -->
-    <details style="margin-top:1.25rem;border-top:1px solid #e0ddd6;padding-top:1rem">
-      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:#555;padding:6px 0;list-style:none">
-        💬 過去のやりとり履歴 (${(inq.timeline||[]).length}件) <span style="color:#888;font-size:11px;font-weight:400">▼ クリックで展開</span>
-      </summary>
-      <div class="inq-chat" id="inq-chat" style="margin-top:8px">
-        ${_renderInqChatBubbles_(inq, tlIcons)}
-      </div>
-    </details>`;
+`;
 
   panel.classList.add('show');
   overlay.style.display = 'block';
@@ -27136,20 +27172,39 @@ async function _generateInquiryDraft_(inq, tone, instruction){
       'phone':    '電話メモ'
     })[inq.source_type] || '問合せ';
 
+    // BBBB-1: 宛名を明示 (会社名 + お客様名)
+    var fromName    = inq.from_name    || inq.custName || '';
+    var fromCompany = inq.from_company || inq.company  || '';
+    var greetingLine = '';
+    if(fromCompany && fromName){
+      greetingLine = fromCompany + '\n' + fromName + ' 様';
+    } else if(fromCompany){
+      greetingLine = fromCompany + ' ご担当者様';
+    } else if(fromName){
+      greetingLine = fromName + ' 様';
+    } else {
+      greetingLine = 'ご担当者様';
+    }
+
     var customerInfo = '';
-    if(inq.from_name || inq.from_company){
-      customerInfo = '宛先: ' + (inq.from_name || '') + (inq.from_company ? ' (' + inq.from_company + ')' : '');
+    if(fromName || fromCompany){
+      customerInfo = '会社名: ' + (fromCompany || '(不明)') + '\n' +
+                     '担当者名: ' + (fromName || '(不明)') + '\n' +
+                     '※ 必ず本文の最初の行に「' + greetingLine.replace(/\n/g, ' ') + '」と記載すること';
     }
 
     var prompt = 'あなたは印刷会社「トキワ印刷グループ」のカスタマーサポート担当です。\n' +
       '以下の' + sourceLabel + 'に対する返信下書きを作成してください。\n\n' +
       '## トーン指示\n' + toneInstruction + '\n\n' +
-      (customerInfo ? '## 宛先\n' + customerInfo + '\n\n' : '') +
+      (customerInfo ? '## 宛先 (重要: 必ず冒頭に明記)\n' + customerInfo + '\n\n' : '') +
       (instruction ? '## 担当者からの追加指示\n' + instruction + '\n\n' : '') +
       '## 元のメッセージ\n' +
       '件名: ' + (inq.subject || '(件名なし)') + '\n' +
       '本文:\n' + (inq.body || '') + '\n\n' +
       '## 出力フォーマット\n' +
+      '- 1行目に必ず宛名「' + greetingLine.replace(/\n/g, ' / ') + '」を記載\n' +
+      '- 2行目は空行\n' +
+      '- 3行目から「いつもお世話になっております。」等の挨拶文\n' +
       '- 返信本文のみを出力 (前置きや「以下が返信です:」のような説明は不要)\n' +
       '- 改行で適切に段落分け\n' +
       '- 末尾に署名行は不要 (システムが自動付与)\n' +
@@ -27178,7 +27233,177 @@ function setInqReplyType(type) {
 }
 
 // AI 下書きパネル: 直近の ai_draft_reply timeline エントリを表示
-// XXX-1: 親問合せリンク セクション描画
+// CCCC-1: 連絡詳細 - リンクセクション (案件リンク + 関連メール親子)
+function _renderInquiryLinksSection_(inq){
+  if(!inq) return '';
+  // 案件リンク
+  var linkedProj = inq.linked_project_id ? (DB.projects||[]).find(function(p){ return p.id === inq.linked_project_id; }) : null;
+  // 関連メール (親子)
+  var parent = inq.parent_inquiry_id ? (DB.inquiries||[]).find(function(x){ return x.id === inq.parent_inquiry_id; }) : null;
+  var children = (DB.inquiries||[]).filter(function(x){ return x.parent_inquiry_id === inq.id; });
+
+  // 案件リンク表示 (ぱっと見でわかるよう large badge)
+  var projHtml;
+  if(linkedProj){
+    projHtml =
+      '<div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:8px;padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px" onclick="jumpToProject(\'' + linkedProj.id + '\')" title="クリックで案件を開く">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:11px;color:#1e40af;font-weight:700">📁 紐付く案件</div>' +
+          '<div style="font-size:13px;font-weight:700;color:#1e3a8a">' + linkedProj.id +
+            (linkedProj.master_no ? ' <span style="background:#1e40af;color:#fff;font-size:10px;padding:1px 6px;border-radius:4px">P' + linkedProj.master_no + '</span>' : '') +
+          '</div>' +
+          '<div style="font-size:11px;color:#1e40af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
+            _escDiff((linkedProj.cust||'') + ' / ' + (linkedProj.item||'')) +
+          '</div>' +
+          '<div style="font-size:10px;color:#1e3a8a;margin-top:2px">ステータス: ' + (linkedProj.status||'-') + '　納期: ' + (linkedProj.dueDate||'-') + '</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:4px">' +
+          '<button class="btn" style="font-size:10px;padding:3px 8px;background:#1e40af;color:#fff;border-color:#1e40af" onclick="event.stopPropagation();jumpToProject(\'' + linkedProj.id + '\')">案件を開く →</button>' +
+          '<button class="btn" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();unlinkInquiryFromProject(\'' + inq.id + '\')">🔗 解除</button>' +
+        '</div>' +
+      '</div>';
+  } else {
+    projHtml =
+      '<div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+        '<div style="font-size:12px;color:#78350f"><strong>📁 案件リンク:</strong> なし <span style="font-size:10px">(案件を作成 or 既存案件にリンク)</span></div>' +
+        '<button class="btn" style="font-size:11px;background:#1e40af;color:#fff;border-color:#1e40af" onclick="linkInquiryToExistingProject(\'' + inq.id + '\')">🔗 既存案件にリンク</button>' +
+      '</div>';
+  }
+
+  // 関連メール (親子)
+  var relHtml = '';
+  if(parent || children.length > 0){
+    relHtml = '<div style="background:#f3e8ff;border:1px solid #d8b4fe;border-radius:8px;padding:10px 12px;margin-top:6px">' +
+      '<div style="font-size:11px;color:#6b21a8;font-weight:700;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">' +
+        '<span>📨 関連メール (同じやりとりの過去/今後)</span>' +
+        '<button class="btn" style="font-size:10px;padding:2px 8px" onclick="showLinkParentInquiryModal(\'' + inq.id + '\')">🔗 編集</button>' +
+      '</div>';
+    if(parent){
+      relHtml += '<div style="font-size:11px;background:#fff;border:1px solid #e0ddd6;border-radius:5px;padding:6px 10px;margin-bottom:4px;cursor:pointer" onclick="openInquiryDetail(\'' + parent.id + '\')">' +
+        '↑ <strong>親メール:</strong> ' + _escDiff(parent.subject || '(件名なし)') +
+        '<span style="color:#888"> · ' + (parent.received_at ? new Date(parent.received_at).toLocaleDateString('ja-JP') : '') + '</span>' +
+      '</div>';
+    }
+    children.forEach(function(c){
+      relHtml += '<div style="font-size:11px;background:#fff;border:1px solid #e0ddd6;border-radius:5px;padding:6px 10px;margin-bottom:4px;cursor:pointer" onclick="openInquiryDetail(\'' + c.id + '\')">' +
+        '↓ <strong>関連:</strong> ' + _escDiff(c.subject || '(件名なし)') +
+        '<span style="color:#888"> · ' + (c.received_at ? new Date(c.received_at).toLocaleDateString('ja-JP') : '') + '</span>' +
+      '</div>';
+    });
+    relHtml += '</div>';
+  } else {
+    // 関連無しの場合は控えめに
+    relHtml = '<div style="margin-top:6px;text-align:right">' +
+      '<button class="btn" style="font-size:10px;padding:2px 8px;color:#6b21a8;border-color:#d8b4fe;background:#faf5ff" onclick="showLinkParentInquiryModal(\'' + inq.id + '\')">📨 関連メールにリンク</button>' +
+    '</div>';
+  }
+
+  return '<div style="margin-bottom:.75rem">' + projHtml + relHtml + '</div>';
+}
+
+// CCCC-1: アクションボタン群 (管理者並び替え可)
+// 順序は DB.conf.inquiryActionOrder に保存 (cloud sync される)
+const INQ_ACTION_DEFS = [
+  // ワンストップ系
+  { key:'aiDraft',         label:'🤖 AI返信下書き',  bg:'#7c3aed', color:'#fff', fn:'showAiDraftReplyModal',     title:'任意トーンで AI 返信下書きを生成' },
+  { key:'lwForward',       label:'📲 LW転送',       bg:'#10b981', color:'#fff', fn:'showLineworksForwardModal', title:'LINE WORKS のユーザー / トークルームに転送' },
+  { key:'lineForward',     label:'💚 LINE転送',     bg:'#06c755', color:'#fff', fn:'showLineForwardModal',      title:'LINE Notify 経由で LINE グループに転送' },
+  { key:'emailReply',      label:'📧 メール返信',    bg:'#dc2626', color:'#fff', fn:'showEmailReplyModal',       title:'送信元メールアドレスに直接返信', cond:function(inq){ return !!(inq.from_email || inq.email); } },
+  // 業務化
+  { key:'createProject',   label:'📋 案件作成',      bg:'#1e40af', color:'#fff', fn:'convertInquiryToProject',   title:'この問合せから新規案件を作成', cond:function(inq){ return !inq.linked_project_id; } },
+  { key:'createEstimate',  label:'📝 見積作成',      bg:'#fef3c7', color:'#78350f', fn:'convertInquiryToEstimate', title:'見積タブに転記' },
+  { key:'forwardProofing', label:'📐 校正BOXへ送る', bg:'#dbeafe', color:'#1e3a8a', fn:'forwardInquiryToProofing', title:'この内容で校正セッション作成' },
+  { key:'forwardOther',    label:'📤 転送(匿名化)',  bg:'#dcfce7', color:'#14532d', fn:'showForwardInquiryModal',  title:'お客様情報を匿名化して社内転送' },
+  { key:'outsourceQuote',  label:'🤝 外注見積依頼',  bg:'#fef3c7', color:'#78350f', fn:'showOutsourceQuoteModal',  title:'内容を元に外注先に見積依頼' }
+];
+function _isAdmin_(){
+  return !!(currentAuth && (currentAuth.role === 'admin' || currentAuth.role === 'owner'));
+}
+function _getInquiryActionOrder_(){
+  if(!DB.conf) DB.conf = {};
+  var saved = DB.conf.inquiryActionOrder;
+  if(!Array.isArray(saved) || saved.length === 0){
+    return INQ_ACTION_DEFS.map(function(a){ return a.key; });
+  }
+  // 新しい action が追加されていれば末尾に追加
+  var savedSet = {}; saved.forEach(function(k){ savedSet[k] = true; });
+  var merged = saved.slice();
+  INQ_ACTION_DEFS.forEach(function(a){ if(!savedSet[a.key]) merged.push(a.key); });
+  return merged;
+}
+function _saveInquiryActionOrder_(order){
+  if(!DB.conf) DB.conf = {};
+  DB.conf.inquiryActionOrder = order;
+  if(typeof saveDB === 'function') saveDB();
+}
+function _renderInquiryActionsSection_(inq){
+  if(!inq) return '';
+  var order = _getInquiryActionOrder_();
+  var defsByKey = {}; INQ_ACTION_DEFS.forEach(function(a){ defsByKey[a.key] = a; });
+  var isAdmin = _isAdmin_();
+  var btns = order.map(function(key){
+    var a = defsByKey[key]; if(!a) return '';
+    if(typeof a.cond === 'function' && !a.cond(inq)) return '';
+    return '<button class="btn inq-action-btn" data-action="' + a.key + '" ' +
+      (isAdmin ? 'draggable="true"' : '') +
+      ' style="font-size:11px;padding:5px 10px;background:' + a.bg + ';color:' + a.color + ';border-color:' + a.bg + ';' +
+      (isAdmin ? 'cursor:grab;' : '') + '" ' +
+      'onclick="' + a.fn + '(\'' + inq.id + '\')" title="' + (a.title||'') + '">' + a.label + '</button>';
+  }).filter(Boolean).join('');
+
+  var adminControl = isAdmin
+    ? '<button class="btn" style="font-size:10px;padding:2px 8px;background:#fff;color:#5b21b6;border-color:#c4b5fd;margin-left:auto" onclick="_toggleInqActionReorder_()" id="inq-action-reorder-toggle" title="ボタンの並び替え (管理者のみ)">⚙ 並び替え</button>'
+    : '';
+
+  return '<div style="margin-bottom:.75rem;padding:10px;background:linear-gradient(135deg,#faf5ff,#ede9fe);border:1px solid #c4b5fd;border-radius:8px">' +
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">' +
+      '<strong style="font-size:11px;color:#5b21b6">⚡ アクション</strong>' +
+      '<span id="inq-action-hint" style="font-size:10px;color:#888;display:none">ドラッグで並び替え (管理者のみ)</span>' +
+      adminControl +
+    '</div>' +
+    '<div id="inq-actions-row" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">' + btns + '</div>' +
+  '</div>';
+}
+function _toggleInqActionReorder_(){
+  if(!_isAdmin_()){ alert('並び替えは管理者のみ可能です'); return; }
+  var btn = document.getElementById('inq-action-reorder-toggle');
+  var hint = document.getElementById('inq-action-hint');
+  var row = document.getElementById('inq-actions-row');
+  if(!row) return;
+  var on = !row.dataset.reorderMode;
+  if(on){
+    row.dataset.reorderMode = '1';
+    if(btn){ btn.textContent = '✅ 完了'; btn.style.background = '#7c3aed'; btn.style.color = '#fff'; }
+    if(hint) hint.style.display = '';
+    // ドラッグハンドラ
+    Array.from(row.querySelectorAll('.inq-action-btn')).forEach(function(el){
+      el.style.cursor = 'grab';
+      el.ondragstart = function(e){ e.dataTransfer.setData('text/plain', el.dataset.action); el.style.opacity = '.4'; };
+      el.ondragend   = function(){ el.style.opacity = '1'; };
+      el.ondragover  = function(e){ e.preventDefault(); el.style.background = '#fff'; };
+      el.ondragleave = function(){ el.style.background = ''; };
+      el.ondrop      = function(e){
+        e.preventDefault(); el.style.background = '';
+        var dragKey = e.dataTransfer.getData('text/plain');
+        var dragEl = row.querySelector('.inq-action-btn[data-action="' + dragKey + '"]');
+        if(dragEl && dragEl !== el) row.insertBefore(dragEl, el);
+      };
+    });
+  } else {
+    delete row.dataset.reorderMode;
+    if(btn){ btn.textContent = '⚙ 並び替え'; btn.style.background = '#fff'; btn.style.color = '#5b21b6'; }
+    if(hint) hint.style.display = 'none';
+    // 順序を保存
+    var newOrder = Array.from(row.querySelectorAll('.inq-action-btn')).map(function(el){ return el.dataset.action; });
+    // 条件で非表示なものは末尾に補完
+    var seen = {}; newOrder.forEach(function(k){ seen[k] = true; });
+    INQ_ACTION_DEFS.forEach(function(a){ if(!seen[a.key]) newOrder.push(a.key); });
+    _saveInquiryActionOrder_(newOrder);
+    alert('✅ 並び順を保存しました');
+  }
+}
+
+// XXX-1: 親問合せリンク セクション描画 (旧、新は _renderInquiryLinksSection_ に統合)
 function _renderParentInquirySection_(inq){
   if(!inq) return '';
   var parent = inq.parent_inquiry_id ? (DB.inquiries||[]).find(function(x){ return x.id === inq.parent_inquiry_id; }) : null;
