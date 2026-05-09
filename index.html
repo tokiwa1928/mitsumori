@@ -27233,6 +27233,203 @@ function setInqReplyType(type) {
 }
 
 // AI 下書きパネル: 直近の ai_draft_reply timeline エントリを表示
+// DDDD-1: 署名プロファイルセレクタ (自動選択 + 手動上書き可)
+function _renderReplySignatureSelector_(inq){
+  if(!inq) return '';
+  var s = (typeof _getMailSettings_ === 'function') ? _getMailSettings_() : { signatures: [] };
+  var sigs = s.signatures || [];
+  if(sigs.length === 0){
+    return '<div style="background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:6px 10px;font-size:11px;color:#78350f">' +
+      '⚠ 署名プロファイル未登録 — <a href="#" onclick="showMailSignatureSettings();return false" style="color:#1e40af;text-decoration:underline">⚙ メール設定</a> で登録してください' +
+      '</div>';
+  }
+  var auto = (typeof _pickSignatureProfile_ === 'function') ? _pickSignatureProfile_(inq) : null;
+  var autoId = auto ? auto.id : (sigs[0] && sigs[0].id);
+
+  // 一致条件のラベル (なぜ自動選択されたか)
+  var autoReason = '';
+  if(auto && inq){
+    var toEmail = (inq.to_email || inq.delivered_to || '').toLowerCase();
+    var lwReceiver = inq.lw_receiver_id || '';
+    var myEmail = (currentAuth && currentAuth.userEmail || '').toLowerCase();
+    if(inq.source_type === 'linesvc' && auto.lwUserId && lwReceiver === auto.lwUserId) autoReason = '受注LW: ' + auto.lwUserId;
+    else if(toEmail && auto.email && toEmail === auto.email.toLowerCase())            autoReason = '受注アドレス: ' + auto.email;
+    else if(myEmail && auto.email && myEmail === auto.email.toLowerCase())             autoReason = 'ログインアドレス: ' + auto.email;
+    else if(auto.isDefault)                                                            autoReason = 'デフォルト';
+    else                                                                               autoReason = '最初のプロファイル';
+  }
+
+  return '<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:6px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+    '<span style="font-size:11px;font-weight:700;color:#0369a1">📝 署名:</span>' +
+    '<select id="inq-sig-profile" onchange="_changeReplySignature_(\'' + inq.id + '\')" style="font-size:12px;padding:3px 6px;flex:1;min-width:140px;max-width:280px">' +
+      sigs.map(function(p){
+        var lbl = (p.label || '無名') + (p.email ? ' (' + p.email + ')' : '');
+        return '<option value="' + p.id + '"' + (p.id === autoId ? ' selected' : '') + '>' + _escDiff(lbl) + '</option>';
+      }).join('') +
+    '</select>' +
+    (autoReason ? '<span style="font-size:10px;color:#0369a1" title="自動選択理由">🎯 ' + _escDiff(autoReason) + '</span>' : '') +
+    '<button class="btn" style="font-size:10px;padding:2px 6px" onclick="showMailSignatureSettings()" title="プロファイル管理">⚙</button>' +
+  '</div>';
+}
+
+// 署名プロファイル変更時: 旧署名を除去して新署名を末尾に
+function _changeReplySignature_(inqId){
+  var sel = document.getElementById('inq-sig-profile');
+  var ta = document.getElementById('inq-reply-text');
+  if(!sel || !ta) return;
+  var s = _getMailSettings_();
+  var newProfile = (s.signatures || []).find(function(p){ return p.id === sel.value; });
+  if(!newProfile) return;
+  var inq = (DB.inquiries||[]).find(function(x){ return x.id === inqId; });
+  var ch = (inq && inq.source_type === 'linesvc') ? 'lw' : 'email';
+  var newSig = (ch === 'lw' && newProfile.lwSignature) ? newProfile.lwSignature : (newProfile.signature || '');
+  // 既存の全プロファイルの署名を本文から除去
+  var body = ta.value;
+  (s.signatures || []).forEach(function(p){
+    var sig = (ch === 'lw' && p.lwSignature) ? p.lwSignature : (p.signature || '');
+    if(sig && sig.trim()){
+      var idx = body.indexOf(sig.trim());
+      if(idx >= 0){
+        body = body.slice(0, idx).replace(/\n*$/, '') + body.slice(idx + sig.trim().length);
+      }
+    }
+  });
+  // 新署名を追加
+  if(newSig){
+    body = (body || '').replace(/\n*$/, '') + '\n\n' + newSig;
+  }
+  ta.value = body;
+}
+
+// DDDD-1: 送信チャネルセレクタ + 統一送信ボタン
+function _renderReplyChannelSelector_(inq){
+  if(!inq) return '';
+  // チャネル候補 (連絡の発信元から auto)
+  var channels = [
+    { key:'email',     label:'📧 メール',  bg:'#dc2626', cond:!!(inq.from_email || inq.email) },
+    { key:'lineworks', label:'💼 LW',      bg:'#10b981', cond:true },
+    { key:'line',      label:'💚 LINE',    bg:'#06c755', cond:true },
+    { key:'memo',      label:'📝 内部記録', bg:'#6b7280', cond:true }
+  ].filter(function(c){ return c.cond; });
+
+  // 自動デフォルト
+  var defaultCh = 'memo';
+  if(inq.source_type === 'gmail' || inq.source_type === 'web_form') defaultCh = (inq.from_email || inq.email) ? 'email' : 'memo';
+  else if(inq.source_type === 'linesvc') defaultCh = 'lineworks';
+
+  var radios = channels.map(function(c){
+    var checked = (c.key === defaultCh) ? 'checked' : '';
+    return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:4px 10px;border:1px solid ' + c.bg + ';border-radius:6px;cursor:pointer;background:' + (c.key === defaultCh ? c.bg + '20' : '#fff') + '">' +
+      '<input type="radio" name="inq-send-ch" value="' + c.key + '" ' + checked + ' onchange="_updateChannelStyles_()"> ' +
+      '<span style="color:' + c.bg + ';font-weight:700">' + c.label + '</span>' +
+    '</label>';
+  }).join('');
+
+  return '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+    '<div style="display:flex;gap:4px;flex-wrap:wrap;flex:1">' + radios + '</div>' +
+    '<button class="btn" style="font-size:11px;padding:5px 10px;background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="_regenerateAiDraft_(\'' + inq.id + '\')" title="AI で下書きを再生成">🔄 AI 再生成</button>' +
+    '<button class="btn" style="font-size:11px;padding:5px 10px;background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="showReplyTemplatePicker(\'' + inq.id + '\')" title="保存済テンプレートから挿入">📝 テンプレ</button>' +
+    '<button class="btn btn-p" style="font-size:13px;padding:6px 18px;background:#1e40af;border-color:#1e40af;font-weight:700" onclick="_sendInquiryReplyByChannel_(\'' + inq.id + '\')">📨 送信</button>' +
+  '</div>';
+}
+
+function _updateChannelStyles_(){
+  document.querySelectorAll('input[name="inq-send-ch"]').forEach(function(r){
+    var lbl = r.closest('label');
+    if(!lbl) return;
+    var bg = lbl.style.borderColor;
+    lbl.style.background = r.checked ? (bg + '20') : '#fff';
+  });
+}
+
+// DDDD-1: 統一送信 (チャネル別ディスパッチ)
+async function _sendInquiryReplyByChannel_(inqId){
+  var inq = (DB.inquiries||[]).find(function(x){ return x.id === inqId; });
+  if(!inq){ alert('連絡が見つかりません'); return; }
+  var ta = document.getElementById('inq-reply-text');
+  var text = (ta && ta.value || '').trim();
+  if(!text){ alert('返信内容を入力してください'); return; }
+  var chEl = document.querySelector('input[name="inq-send-ch"]:checked');
+  var ch = chEl ? chEl.value : 'memo';
+
+  // 内部記録 (社内メモ)
+  if(ch === 'memo'){
+    if(typeof addInquiryReply === 'function') addInquiryReply(inqId);
+    return;
+  }
+
+  // メール
+  if(ch === 'email'){
+    var to = inq.from_email || inq.email;
+    if(!to){ alert('送信元メールアドレスが取得できません'); return; }
+    if(!confirm('📧 メールで送信します。\n宛先: ' + to + '\n\n本文を送信しますか?')) return;
+    try {
+      var subject = 'Re: ' + (inq.subject || '');
+      var resp = await callCloudAPI('forwardInquiryToEmail', {}, {
+        inquiryId: inqId, replyTo: to, subject: subject, body: text,
+        by: (currentAuth && currentAuth.userName) || 'user'
+      });
+      if(resp && resp.success){
+        alert('✅ メール送信完了');
+        if(ta) ta.value = '';
+        if(typeof loadFromCloud === 'function') await loadFromCloud();
+        if(typeof openInquiryDetail === 'function') openInquiryDetail(inqId);
+      } else {
+        alert('⚠ 送信失敗: ' + (resp && resp.error || 'unknown'));
+      }
+    } catch(e){ alert('⚠ ' + e.message); }
+    return;
+  }
+
+  // LINE WORKS
+  if(ch === 'lineworks'){
+    if(inq.source_type === 'linesvc'){
+      // LW スレッドへの返信 (送信元の userId / channelId に紐付き)
+      if(typeof sendLineworksReplyFromInq === 'function'){
+        sendLineworksReplyFromInq(inqId);
+        return;
+      }
+    }
+    // 任意の LW 宛先に転送 (宛先選択モーダル)
+    var lwTarget = prompt('送信先 LINE WORKS ユーザーID または チャネルID:', '');
+    if(!lwTarget) return;
+    try {
+      var resp = await callCloudAPI('forwardInquiryToLineworks', {}, {
+        inquiryId: inqId, target: 'user', targetId: lwTarget, message: text,
+        by: (currentAuth && currentAuth.userName) || 'user'
+      });
+      if(resp && resp.success){
+        alert('✅ LINE WORKS 送信完了');
+        if(ta) ta.value = '';
+        if(typeof openInquiryDetail === 'function') openInquiryDetail(inqId);
+      } else {
+        alert('⚠ 送信失敗: ' + (resp && resp.error || 'unknown'));
+      }
+    } catch(e){ alert('⚠ ' + e.message); }
+    return;
+  }
+
+  // LINE Notify
+  if(ch === 'line'){
+    var tokenKey = prompt('LINE Notify トークンキー (default など):', 'default');
+    if(!tokenKey) return;
+    try {
+      var resp = await callCloudAPI('forwardInquiryToLine', {}, {
+        inquiryId: inqId, tokenKey: tokenKey, message: text,
+        by: (currentAuth && currentAuth.userName) || 'user'
+      });
+      if(resp && resp.success){
+        alert('✅ LINE 送信完了');
+        if(ta) ta.value = '';
+        if(typeof openInquiryDetail === 'function') openInquiryDetail(inqId);
+      } else {
+        alert('⚠ 送信失敗: ' + (resp && resp.error || 'unknown'));
+      }
+    } catch(e){ alert('⚠ ' + e.message); }
+    return;
+  }
+}
+
 // CCCC-1: 連絡詳細 - リンクセクション (案件リンク + 関連メール親子)
 function _renderInquiryLinksSection_(inq){
   if(!inq) return '';
