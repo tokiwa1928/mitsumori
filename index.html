@@ -17377,13 +17377,28 @@ function _getMailSettings_(){
     s.signatures.push({
       id: 'sig_' + Date.now(),
       label: (currentAuth && currentAuth.userName) || 'デフォルト',
-      email: (currentAuth && currentAuth.userEmail) || '',
+      receivingEmails: (currentAuth && currentAuth.userEmail) ? [currentAuth.userEmail] : [],
+      replyEmail: (currentAuth && currentAuth.userEmail) || '',
       lwUserId: '',
       signature: legacy || _defaultSig_(),
       lwSignature: '',
       isDefault: true
     });
   }
+  // EEEE-1: 旧 email (string) → receivingEmails (array) へマイグレーション
+  s.signatures.forEach(function(p){
+    if(!Array.isArray(p.receivingEmails)){
+      p.receivingEmails = p.email ? [p.email] : [];
+    }
+    if(!p.replyEmail){
+      // 旧 email を返信アドレスとして引き継ぎ (なければ受注[0])
+      p.replyEmail = p.email || p.receivingEmails[0] || '';
+    }
+    if(!p.lwUserId) p.lwUserId = '';
+    if(!p.signature) p.signature = '';
+    if(!p.lwSignature) p.lwSignature = '';
+    if(!p.label) p.label = '';
+  });
   // 旧 signature フィールドはもう使わないが残す (互換)
   if(s.signature === undefined){
     var def = (s.signatures.find(function(x){ return x.isDefault; }) || s.signatures[0]);
@@ -17411,6 +17426,14 @@ function _pickSignatureProfile_(inq, channel){
     else channel = 'email';
   }
 
+  // EEEE-1: receivingEmails (複数) との照合に対応
+  function _emailMatchesProfile_(targetEmail, p){
+    if(!targetEmail) return false;
+    var t = targetEmail.toLowerCase();
+    var emails = p.receivingEmails || (p.email ? [p.email] : []);
+    return emails.some(function(e){ return e && e.toLowerCase() === t; });
+  }
+
   // 1. inq から to_email / assignee_email で照合
   var hits = [];
   if(inq){
@@ -17418,14 +17441,14 @@ function _pickSignatureProfile_(inq, channel){
     var lwReceiver = inq.lw_receiver_id || inq.lw_user_id || '';
     sigs.forEach(function(p){
       if(channel === 'lw' && p.lwUserId && lwReceiver && p.lwUserId === lwReceiver) hits.push(p);
-      else if(channel === 'email' && p.email && toEmail && p.email.toLowerCase() === toEmail) hits.push(p);
+      else if(channel === 'email' && toEmail && _emailMatchesProfile_(toEmail, p)) hits.push(p);
     });
   }
   // 2. currentAuth.userEmail で照合
   if(hits.length === 0){
     var myEmail = (currentAuth && currentAuth.userEmail || '').toLowerCase();
     if(myEmail){
-      sigs.forEach(function(p){ if(p.email && p.email.toLowerCase() === myEmail) hits.push(p); });
+      sigs.forEach(function(p){ if(_emailMatchesProfile_(myEmail, p)) hits.push(p); });
     }
   }
   // 3. デフォルト or 最初
@@ -17493,6 +17516,7 @@ function _renderSignatureProfilesHtml_(sigs){
       'プロファイルがありません。「＋ プロファイル追加」で作成してください。</div>';
   }
   return sigs.map(function(p, i){
+    var receivingValue = (p.receivingEmails || (p.email ? [p.email] : [])).join(', ');
     return '<div class="sig-profile" data-idx="' + i + '" style="border:' + (p.isDefault ? '2px solid #dc2626' : '1px solid #e5e7eb') + ';border-radius:8px;padding:14px;margin-bottom:10px;background:' + (p.isDefault ? '#fef2f2' : '#fff') + '">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">' +
         '<div style="display:flex;align-items:center;gap:8px;flex:1">' +
@@ -17504,9 +17528,14 @@ function _renderSignatureProfilesHtml_(sigs){
           '<button class="btn" style="font-size:10px;padding:3px 8px;color:#b91c1c;border-color:#fca5a5" onclick="_removeSignatureProfile_(' + i + ')">🗑 削除</button>' +
         '</div>' +
       '</div>' +
+      // 受注メールアドレス (複数: カンマ or 改行区切り)
+      '<label style="font-size:11px;color:#555;display:block;margin-bottom:6px">' +
+        '📥 受注メールアドレス (To) — 複数登録可 <span style="color:#888">(このアドレスに来たメールへの返信時に自動選択)</span>' +
+        '<textarea class="sp-receiving" rows="2" placeholder="info@tokiwap.co.jp, sales@tokiwap.co.jp&#10;(カンマ または 改行で区切る)" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;margin-top:2px;font-family:inherit;resize:vertical">' + _escDiff(receivingValue) + '</textarea>' +
+      '</label>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
-        '<label style="font-size:11px;color:#555">受注メールアドレス (To)<input class="sp-email" type="email" placeholder="info@tokiwap.co.jp" value="' + _escDiff(p.email||'') + '" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;margin-top:2px"></label>' +
-        '<label style="font-size:11px;color:#555">LINE WORKS ユーザーID<input class="sp-lwid" placeholder="honda_lw" value="' + _escDiff(p.lwUserId||'') + '" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;margin-top:2px"></label>' +
+        '<label style="font-size:11px;color:#555">📤 返信時の From アドレス<br><span style="color:#888;font-size:10px">(メール返信の送信元として使用)</span><input class="sp-reply-email" type="email" placeholder="honda@tokiwap.co.jp" value="' + _escDiff(p.replyEmail||'') + '" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;margin-top:2px"></label>' +
+        '<label style="font-size:11px;color:#555">💼 LINE WORKS ユーザーID<br><span style="color:#888;font-size:10px">(LWで受信したメッセージへの返信)</span><input class="sp-lwid" placeholder="honda_lw" value="' + _escDiff(p.lwUserId||'') + '" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;margin-top:2px"></label>' +
       '</div>' +
       '<label style="font-size:11px;color:#555">📧 メール用署名<textarea class="sp-sig" rows="6" placeholder="--&#10;本田 太郎&#10;トキワ印刷株式会社 営業部&#10;TEL: 042-XXX-XXXX&#10;MAIL: honda@tokiwap.co.jp" style="width:100%;font-size:12px;padding:8px;border:1px solid #ccc;border-radius:4px;margin-top:2px;font-family:monospace;line-height:1.5;resize:vertical">' + _escDiff(p.signature||'') + '</textarea></label>' +
       '<label style="font-size:11px;color:#555;margin-top:6px;display:block">💼 LW用署名 (空欄ならメール署名を流用)<textarea class="sp-lwsig" rows="3" placeholder="本田/トキワ印刷&#10;LW: honda_lw" style="width:100%;font-size:12px;padding:8px;border:1px solid #ccc;border-radius:4px;margin-top:2px;font-family:monospace;line-height:1.5;resize:vertical">' + _escDiff(p.lwSignature||'') + '</textarea></label>' +
@@ -17520,10 +17549,19 @@ function _readSignatureProfilesFromUI_(){
   nodes.forEach(function(node){
     var idx = parseInt(node.dataset.idx, 10);
     var prev = (_getMailSettings_().signatures || [])[idx] || {};
+    // 受注メールアドレス: カンマ・改行・スペースで分割
+    var rawReceiving = node.querySelector('.sp-receiving')?.value || '';
+    var receivingEmails = rawReceiving
+      .split(/[,;、\s\n]+/)
+      .map(function(e){ return e.trim(); })
+      .filter(function(e){ return e && e.indexOf('@') > 0; });
     sigs.push({
       id: prev.id || ('sig_' + Date.now() + '_' + idx),
       label: node.querySelector('.sp-label')?.value || '',
-      email: (node.querySelector('.sp-email')?.value || '').trim(),
+      receivingEmails: receivingEmails,
+      replyEmail: (node.querySelector('.sp-reply-email')?.value || '').trim(),
+      // 旧 email フィールドは互換用に reply or 最初の receiving
+      email: (node.querySelector('.sp-reply-email')?.value || '').trim() || receivingEmails[0] || '',
       lwUserId: (node.querySelector('.sp-lwid')?.value || '').trim(),
       signature: node.querySelector('.sp-sig')?.value || '',
       lwSignature: node.querySelector('.sp-lwsig')?.value || '',
@@ -17544,6 +17582,8 @@ function _addSignatureProfile_(){
   s.signatures.push({
     id: 'sig_' + Date.now(),
     label: '',
+    receivingEmails: (currentAuth && currentAuth.userEmail) ? [currentAuth.userEmail] : [],
+    replyEmail: (currentAuth && currentAuth.userEmail) || '',
     email: (currentAuth && currentAuth.userEmail) || '',
     lwUserId: '',
     signature: '',
@@ -27252,11 +27292,14 @@ function _renderReplySignatureSelector_(inq){
     var toEmail = (inq.to_email || inq.delivered_to || '').toLowerCase();
     var lwReceiver = inq.lw_receiver_id || '';
     var myEmail = (currentAuth && currentAuth.userEmail || '').toLowerCase();
+    var autoReceiving = (auto.receivingEmails || (auto.email ? [auto.email] : [])).map(function(e){ return e.toLowerCase(); });
+    var hitEmail = '';
+    if(toEmail && autoReceiving.indexOf(toEmail) >= 0) hitEmail = toEmail;
+    else if(myEmail && autoReceiving.indexOf(myEmail) >= 0) hitEmail = myEmail;
     if(inq.source_type === 'linesvc' && auto.lwUserId && lwReceiver === auto.lwUserId) autoReason = '受注LW: ' + auto.lwUserId;
-    else if(toEmail && auto.email && toEmail === auto.email.toLowerCase())            autoReason = '受注アドレス: ' + auto.email;
-    else if(myEmail && auto.email && myEmail === auto.email.toLowerCase())             autoReason = 'ログインアドレス: ' + auto.email;
-    else if(auto.isDefault)                                                            autoReason = 'デフォルト';
-    else                                                                               autoReason = '最初のプロファイル';
+    else if(hitEmail)                                                                    autoReason = '受注アドレス: ' + hitEmail;
+    else if(auto.isDefault)                                                              autoReason = 'デフォルト';
+    else                                                                                 autoReason = '最初のプロファイル';
   }
 
   return '<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:6px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
@@ -27362,15 +27405,25 @@ async function _sendInquiryReplyByChannel_(inqId){
   if(ch === 'email'){
     var to = inq.from_email || inq.email;
     if(!to){ alert('送信元メールアドレスが取得できません'); return; }
-    if(!confirm('📧 メールで送信します。\n宛先: ' + to + '\n\n本文を送信しますか?')) return;
+    // 選択中の署名プロファイルから返信元 (From) アドレスを取得
+    var sigSel = document.getElementById('inq-sig-profile');
+    var s = (typeof _getMailSettings_ === 'function') ? _getMailSettings_() : { signatures: [] };
+    var profile = (s.signatures || []).find(function(p){ return p.id === (sigSel && sigSel.value); }) ||
+                  (typeof _pickSignatureProfile_ === 'function' ? _pickSignatureProfile_(inq, 'email') : null);
+    var fromEmail = (profile && profile.replyEmail) || (profile && profile.email) || '';
+    if(!confirm('📧 メールで送信します\n\nFrom: ' + (fromEmail || '(default)') + '\nTo:   ' + to + '\n\n本文を送信しますか?')) return;
     try {
       var subject = 'Re: ' + (inq.subject || '');
       var resp = await callCloudAPI('forwardInquiryToEmail', {}, {
-        inquiryId: inqId, replyTo: to, subject: subject, body: text,
+        inquiryId: inqId,
+        replyTo: to,
+        fromEmail: fromEmail,  // EEEE-1: 返信時 From アドレス (バックエンド対応時に使用)
+        subject: subject,
+        body: text,
         by: (currentAuth && currentAuth.userName) || 'user'
       });
       if(resp && resp.success){
-        alert('✅ メール送信完了');
+        alert('✅ メール送信完了' + (fromEmail ? '\nFrom: ' + fromEmail : ''));
         if(ta) ta.value = '';
         if(typeof loadFromCloud === 'function') await loadFromCloud();
         if(typeof openInquiryDetail === 'function') openInquiryDetail(inqId);
