@@ -352,6 +352,17 @@ textarea{resize:vertical;font-size:12px;line-height:1.5}
 .inbox-status-badge.done{background:#dcfce7;color:#15803d}
 .inbox-preview{max-width:200px;max-height:150px;object-fit:contain;border:1px solid #ddd;border-radius:4px;margin-top:8px}
 /* ═══ 問い合わせ窓口 ═══ */
+/* ═══ Gmail風 左サイドバー フォルダ (HHHH-1) ═══ */
+.inq-folder-item{display:flex;align-items:center;gap:8px;padding:6px 10px;margin-bottom:2px;border-radius:6px;cursor:pointer;font-size:12px;color:#3c4043;transition:background .12s;user-select:none}
+.inq-folder-item:hover{background:#e8f0fe}
+.inq-folder-item.act{background:#1a73e8;color:#fff;font-weight:700}
+.inq-folder-item.act .inq-folder-count{background:rgba(255,255,255,.25);color:#fff}
+.inq-folder-icon{font-size:14px;flex-shrink:0;width:18px;text-align:center}
+.inq-folder-label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inq-folder-count{background:#e8eaed;color:#5f6368;font-size:10px;padding:1px 6px;border-radius:8px;font-weight:600;flex-shrink:0}
+.inq-folder-divider{height:1px;background:#e0e0e0;margin:8px 0}
+.inq-folder-section{font-size:10px;color:#80868b;font-weight:700;padding:6px 10px 2px;letter-spacing:.04em;text-transform:uppercase}
+
 /* ═══ Gmail風 連絡リスト (GGGG-1) ═══ */
 #inq-list{background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
 .inq-card{background:#fff;border:none;border-bottom:1px solid #f1f3f4;border-left:3px solid transparent;padding:10px 14px 10px 12px;margin:0;cursor:pointer;transition:background .12s,box-shadow .12s;position:relative;font-size:13px;line-height:1.5;display:flex;align-items:center;gap:10px}
@@ -1826,9 +1837,14 @@ setTimeout(_removeBootLoader_, 5000);
 
 <!-- ═══ 問い合わせ窓口ページ ═══ -->
 <div class="page" id="page-inquiry">
-  <div style="display:flex;gap:1rem;flex-wrap:wrap">
+  <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-start">
+    <!-- 📁 左サイドバー (Gmail風フォルダ・自動振分) -->
+    <div id="inq-sidebar" class="sec" style="width:200px;flex-shrink:0;min-width:180px;padding:.5rem;background:#f8f9fa;border:1px solid #e5e7eb">
+      <div style="font-size:11px;color:#666;font-weight:700;margin-bottom:6px;padding:0 6px">📁 フォルダ <span style="color:#aaa;font-weight:400">(自動振分)</span></div>
+      <div id="inq-folder-list"></div>
+    </div>
     <!-- 問い合わせ一覧 -->
-    <div class="sec" style="flex:2;min-width:450px">
+    <div class="sec" style="flex:2;min-width:380px">
       <!-- 使い方ガイド -->
       <div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:#1e3a8a;line-height:1.6">
         <strong>📨 連絡管理とは:</strong> 社外 (お客様)・社内 (グループ会社)・社間 (グループ会社間) のすべての連絡を一元管理する場所です。<br>
@@ -27302,6 +27318,8 @@ function initInquiryPage() {
     categories: ['見積依頼','納品について','データ入稿','校正確認','クレーム','その他'],
     assignees: []
   };
+  // HHHH-1: フォルダ表示
+  if(typeof renderInquiryFolderList === 'function') renderInquiryFolderList();
   renderInquiryList();
   renderInquiryStats();
   populateInquiryAssignFilter();
@@ -27345,6 +27363,123 @@ function setInqScope(scope){
   renderInquiryList();
 }
 
+// ═══════════════════════════════════════════════════
+// HHHH-1: 左サイドバー フォルダ + 自動振分
+// ═══════════════════════════════════════════════════
+window._inqFolder_ = window._inqFolder_ || 'inbox';
+
+// 自動カテゴリ判定 (連絡の現在のステータスから推定)
+function _inqAutoFolder_(inq){
+  if(!inq) return 'inbox';
+  if(inq.status === 'done') return 'done';
+  // 受注確定: linked_project_id があるか、紐付く見積が案件化済
+  if(inq.linked_project_id) return 'won';
+  if(inq.linked_quote_id){
+    var est = (DB.estimates||[]).find(function(e){ return e.id === inq.linked_quote_id; });
+    if(est){
+      if(est.linkedProjectId) return 'won';
+      if(est.status === '提出済') return 'quote_sent';
+      return 'quote_in_progress';  // 見積作成中
+    }
+  }
+  // 受領通知済 (見積はまだ送ってない)
+  if(inq.acknowledged_at && inq.status !== 'done') return 'acknowledged';
+  if(inq.status === 'waiting') return 'waiting';
+  if(inq.status === 'progress') return 'progress';
+  // 新規・未読・未対応
+  return 'inbox';
+}
+
+const INQ_FOLDERS = [
+  { key:'inbox',             label:'受信トレイ',      icon:'📥', color:'#dc2626' },
+  { key:'progress',          label:'対応中',          icon:'🟡', color:'#f59e0b' },
+  { key:'acknowledged',      label:'受領通知済',      icon:'💬', color:'#0891b2', help:'「依頼ありがとう」だけ返した — まだ対応継続' },
+  { key:'quote_in_progress', label:'見積作成中',      icon:'📝', color:'#fbbf24' },
+  { key:'quote_sent',        label:'見積送付済',      icon:'📤', color:'#0891b2' },
+  { key:'waiting',           label:'返信待ち',        icon:'⏳', color:'#7c3aed' },
+  { key:'won',               label:'受注確定',        icon:'✅', color:'#16a34a' },
+  { key:'done',              label:'完了',            icon:'📁', color:'#6b7280' }
+];
+
+function renderInquiryFolderList(){
+  var container = document.getElementById('inq-folder-list');
+  if(!container) return;
+  var all = DB.inquiries || [];
+
+  // フォルダごとの件数
+  var counts = { all: all.length };
+  INQ_FOLDERS.forEach(function(f){ counts[f.key] = 0; });
+  var channelCounts = { gmail:0, linesvc:0, webform:0, manual:0, phone:0, internal_msg:0, interco:0, fax:0, voice_memo:0 };
+  var myUser = (currentAuth && currentAuth.userName) || '';
+  var myAssignedCount = 0;
+  all.forEach(function(inq){
+    var f = _inqAutoFolder_(inq);
+    if(counts[f] !== undefined) counts[f]++;
+    var s = inq.source_type || 'manual';
+    if(channelCounts[s] !== undefined) channelCounts[s]++;
+    if(myUser && inq.assignee === myUser) myAssignedCount++;
+  });
+
+  var current = window._inqFolder_ || 'inbox';
+
+  // ステータス系フォルダ
+  var folderHtml = '<div class="inq-folder-item' + (current === 'all' ? ' act' : '') + '" onclick="setInqFolder(\'all\')">' +
+      '<span class="inq-folder-icon">📨</span>' +
+      '<span class="inq-folder-label">すべて</span>' +
+      '<span class="inq-folder-count">' + counts.all + '</span>' +
+    '</div>';
+
+  folderHtml += INQ_FOLDERS.map(function(f){
+    var count = counts[f.key] || 0;
+    var act = current === f.key;
+    return '<div class="inq-folder-item' + (act ? ' act' : '') + '" onclick="setInqFolder(\'' + f.key + '\')" title="' + (f.help || f.label) + '">' +
+      '<span class="inq-folder-icon" style="color:' + (act ? '#fff' : f.color) + '">' + f.icon + '</span>' +
+      '<span class="inq-folder-label">' + f.label + '</span>' +
+      (count > 0 ? '<span class="inq-folder-count">' + count + '</span>' : '') +
+    '</div>';
+  }).join('');
+
+  // 担当
+  folderHtml += '<div class="inq-folder-divider"></div>' +
+    '<div class="inq-folder-section">担当</div>' +
+    '<div class="inq-folder-item' + (current === 'mine' ? ' act' : '') + '" onclick="setInqFolder(\'mine\')">' +
+      '<span class="inq-folder-icon">👤</span>' +
+      '<span class="inq-folder-label">自分宛</span>' +
+      (myAssignedCount > 0 ? '<span class="inq-folder-count">' + myAssignedCount + '</span>' : '') +
+    '</div>';
+
+  // チャネル
+  folderHtml += '<div class="inq-folder-divider"></div>' +
+    '<div class="inq-folder-section">チャネル</div>';
+  var channelMap = [
+    { key:'gmail',        label:'Gmail',        icon:'📧' },
+    { key:'linesvc',      label:'LINE WORKS',   icon:'💼' },
+    { key:'webform',      label:'Webフォーム',  icon:'🌐' },
+    { key:'phone',        label:'電話',         icon:'📞' },
+    { key:'manual',       label:'手動入力',     icon:'✏️' },
+    { key:'internal_msg', label:'社内連絡',     icon:'🏢' },
+    { key:'interco',      label:'社間依頼',     icon:'🔄' }
+  ];
+  channelMap.forEach(function(c){
+    var count = channelCounts[c.key] || 0;
+    if(count === 0) return; // 0件は非表示でコンパクトに
+    var act = current === 'channel:' + c.key;
+    folderHtml += '<div class="inq-folder-item' + (act ? ' act' : '') + '" onclick="setInqFolder(\'channel:' + c.key + '\')">' +
+      '<span class="inq-folder-icon">' + c.icon + '</span>' +
+      '<span class="inq-folder-label">' + c.label + '</span>' +
+      '<span class="inq-folder-count">' + count + '</span>' +
+    '</div>';
+  });
+
+  container.innerHTML = folderHtml;
+}
+
+function setInqFolder(folder){
+  window._inqFolder_ = folder;
+  renderInquiryFolderList();
+  renderInquiryList();
+}
+
 function renderInquiryList() {
   const container = document.getElementById('inq-list');
   if(!container) return;
@@ -27371,7 +27506,23 @@ function renderInquiryList() {
   // 提出済 (linked_quote_id の見積が「提出済/受注確定」または status === 'done') の連絡を非表示
   var showSubmitted = document.getElementById('inq-show-submitted')?.checked;
 
+  // HHHH-1: 左サイドバーのフォルダフィルタ
+  var folder = window._inqFolder_ || 'inbox';
+  var myUser = (currentAuth && currentAuth.userName) || '';
+
   let items = periodFiltered.filter(inq => {
+    // フォルダ判定 (左サイドバー)
+    if(folder !== 'all'){
+      if(folder === 'mine'){
+        if(inq.assignee !== myUser) return false;
+      } else if(folder.indexOf('channel:') === 0){
+        var ch = folder.substring(8);
+        if((inq.source_type || 'manual') !== ch) return false;
+      } else {
+        // ステータス系フォルダ
+        if(_inqAutoFolder_(inq) !== folder) return false;
+      }
+    }
     // スコープ判定
     var src = inq.source_type || '';
     if(scope === 'external' && externalSources.indexOf(src) < 0) return false;
@@ -28115,7 +28266,7 @@ function _changeReplySignature_(inqId){
   ta.value = body;
 }
 
-// DDDD-1: 送信チャネルセレクタ + 統一送信ボタン
+// DDDD-1 / HHHH-1: 送信チャネルセレクタ + 返信種別 + 統一送信ボタン
 function _renderReplyChannelSelector_(inq){
   if(!inq) return '';
   // チャネル候補 (連絡の発信元から auto)
@@ -28139,11 +28290,40 @@ function _renderReplyChannelSelector_(inq){
     '</label>';
   }).join('');
 
-  return '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
-    '<div style="display:flex;gap:4px;flex-wrap:wrap;flex:1">' + radios + '</div>' +
-    '<button class="btn" style="font-size:11px;padding:5px 10px;background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="_regenerateAiDraft_(\'' + inq.id + '\')" title="AI で下書きを再生成">🔄 AI 再生成</button>' +
-    '<button class="btn" style="font-size:11px;padding:5px 10px;background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="showReplyTemplatePicker(\'' + inq.id + '\')" title="保存済テンプレートから挿入">📝 テンプレ</button>' +
-    '<button class="btn btn-p" style="font-size:13px;padding:6px 18px;background:#1e40af;border-color:#1e40af;font-weight:700" onclick="_sendInquiryReplyByChannel_(\'' + inq.id + '\')">📨 送信</button>' +
+  // 返信種別 (自動振分のトリガー)
+  // - 見積依頼っぽい場合のみ「見積送付」を出す
+  var isQuoteReq = (inq.kind === 'quote_req' || inq.category === '見積依頼' || inq.extracted_data || inq.linked_quote_id);
+  var kindOptions = [
+    { key:'normal',       label:'📨 通常返信',          bg:'#1e40af', help:'通常の対応' },
+    { key:'acknowledged', label:'💬 受領通知のみ',      bg:'#0891b2', help:'「依頼ありがとうございます」だけ送る — まだ対応継続' }
+  ];
+  if(isQuoteReq){
+    kindOptions.push({ key:'quote_sent', label:'📤 見積送付', bg:'#16a34a', help:'見積書を添えて送付 → 見積送付済フォルダへ' });
+  }
+  var kindRadios = kindOptions.map(function(k, i){
+    var checked = (i === 0) ? 'checked' : '';
+    return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 8px;border:1px dashed ' + k.bg + ';border-radius:5px;cursor:pointer;color:' + k.bg + ';font-weight:600" title="' + k.help + '">' +
+      '<input type="radio" name="inq-reply-kind" value="' + k.key + '" ' + checked + '> ' + k.label +
+    '</label>';
+  }).join('');
+
+  return '<div style="display:flex;flex-direction:column;gap:6px">' +
+    // チャネル
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+      '<span style="font-size:10px;color:#666;font-weight:700">送信先:</span>' +
+      '<div style="display:flex;gap:4px;flex-wrap:wrap;flex:1">' + radios + '</div>' +
+    '</div>' +
+    // 返信種別 (HHHH-1)
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:4px 0;border-top:1px dashed #e5e7eb">' +
+      '<span style="font-size:10px;color:#666;font-weight:700" title="送信後、連絡が自動でこのフォルダに振り分けされます">種別:</span>' +
+      kindRadios +
+    '</div>' +
+    // ボタン群
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end">' +
+      '<button class="btn" style="font-size:11px;padding:5px 10px;background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="_regenerateAiDraft_(\'' + inq.id + '\')" title="AI で下書きを再生成">🔄 AI 再生成</button>' +
+      '<button class="btn" style="font-size:11px;padding:5px 10px;background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="showReplyTemplatePicker(\'' + inq.id + '\')" title="保存済テンプレートから挿入">📝 テンプレ</button>' +
+      '<button class="btn btn-p" style="font-size:13px;padding:6px 18px;background:#1e40af;border-color:#1e40af;font-weight:700" onclick="_sendInquiryReplyByChannel_(\'' + inq.id + '\')">📨 送信</button>' +
+    '</div>' +
   '</div>';
 }
 
@@ -28165,6 +28345,29 @@ async function _sendInquiryReplyByChannel_(inqId){
   if(!text){ alert('返信内容を入力してください'); return; }
   var chEl = document.querySelector('input[name="inq-send-ch"]:checked');
   var ch = chEl ? chEl.value : 'memo';
+
+  // HHHH-1: 返信種別 (受領通知 / 通常返信 / 見積送付) — radio から取得
+  var replyKindEl = document.querySelector('input[name="inq-reply-kind"]:checked');
+  var replyKind = replyKindEl ? replyKindEl.value : 'normal';
+
+  // 自動振分: 返信種別に応じて inq の状態を更新
+  if(replyKind === 'acknowledged'){
+    inq.acknowledged_at = new Date().toISOString();
+    if(inq.status === 'new' || inq.status === 'progress') inq.status = 'waiting';
+  } else if(replyKind === 'quote_sent'){
+    inq.quote_sent_at = new Date().toISOString();
+    // 紐付く見積を「提出済」に更新
+    if(inq.linked_quote_id){
+      var est = (DB.estimates||[]).find(function(e){ return e.id === inq.linked_quote_id; });
+      if(est){ est.status = '提出済'; est.submittedAt = new Date().toISOString(); }
+    }
+    if(inq.status !== 'done') inq.status = 'waiting';
+  } else if(replyKind === 'won'){
+    // 受注確定 — 案件作成へ誘導
+    if(inq.status !== 'done') inq.status = 'progress';  // 案件作成後 done に
+  }
+  if(typeof saveDB === 'function') saveDB();
+  if(typeof renderInquiryFolderList === 'function') renderInquiryFolderList();
 
   // 内部記録 (社内メモ)
   if(ch === 'memo'){
@@ -29118,6 +29321,7 @@ function addInquiryReply(id) {
   openInquiryDetail(id);
   renderInquiryList();
   renderInquiryStats();
+  if(typeof renderInquiryFolderList === 'function') renderInquiryFolderList();
 }
 
 function updateInquiryStatus(id, status) {
