@@ -1873,6 +1873,8 @@ setTimeout(_removeBootLoader_, 5000);
       <div id="inq-company-tabs" style="display:flex;gap:0;margin-bottom:.5rem;border-bottom:2px solid #e5e7eb;flex-wrap:wrap;align-items:center;background:#fafafa;border-radius:6px 6px 0 0"></div>
       <!-- SSSS-1: 受信元 (Gmail/LW/Web フォーム…) 横並びセレクタ -->
       <div id="inq-source-tabs" style="display:flex;gap:6px;margin-bottom:.5rem;flex-wrap:wrap;align-items:center;padding:6px 8px;background:#f9fafb;border-radius:6px;border:1px solid #e5e7eb"></div>
+      <!-- TTTT-1: 受信窓口 (社内のどの宛先に届いたか) 横並びセレクタ -->
+      <div id="inq-recipient-tabs" style="display:flex;gap:6px;margin-bottom:.5rem;flex-wrap:wrap;align-items:center;padding:6px 8px;background:#fffbeb;border-radius:6px;border:1px solid #fde68a"></div>
       <!-- 種別タブは左サイドバーに統合済 (PPPP-1) — 互換性のため非表示要素として残置 -->
       <div style="display:none">
         <button id="inq-scope-all" class="inq-scope-tab active" data-scope="all" onclick="setInqScope('all')">📨 すべて</button>
@@ -27344,6 +27346,8 @@ function initInquiryPage() {
   if(typeof renderInquiryCompanyTabs === 'function') renderInquiryCompanyTabs();
   // SSSS-1: 受信元タブ
   if(typeof renderInquirySourceTabs === 'function') renderInquirySourceTabs();
+  // TTTT-1: 受信窓口タブ
+  if(typeof renderInquiryRecipientTabs === 'function') renderInquiryRecipientTabs();
   if(typeof applyInqReadingPane === 'function') applyInqReadingPane();
   renderInquiryList();
   renderInquiryStats();
@@ -27488,6 +27492,94 @@ function setInqSource(key){
   if(typeof renderInquiryList === 'function') renderInquiryList();
   if(typeof renderInquiryStats === 'function') renderInquiryStats();
   renderInquirySourceTabs();
+  if(typeof renderInquiryRecipientTabs === 'function') renderInquiryRecipientTabs();
+}
+
+// ──────────────────────────────────────────
+// TTTT-1: 受信窓口タブ (社内のどの宛先メールに届いたか)
+// ──────────────────────────────────────────
+function renderInquiryRecipientTabs(){
+  var container = document.getElementById('inq-recipient-tabs');
+  if(!container) return;
+
+  // 会社フィルタを反映した母集合
+  var companyTab = window._inqCompanyTab_ || 'all';
+  var base = (DB.inquiries||[]).filter(function(inq){
+    if(companyTab === 'all') return true;
+    return _matchesCompanyTab_(inq, companyTab);
+  });
+
+  // 受信窓口別件数を集計
+  var counts = {};
+  base.forEach(function(inq){
+    var to = (inq.to_email || inq.delivered_to || '').trim().toLowerCase();
+    if(to) counts[to] = (counts[to] || 0) + 1;
+  });
+  var addrs = Object.keys(counts).sort(function(a,b){ return counts[b] - counts[a]; });
+
+  // 1件もなければ非表示
+  if(addrs.length === 0){
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+  container.style.display = 'flex';
+
+  // 現在選択中の窓口
+  var folder = window._inqFolder_ || 'inbox';
+  var currentAddr = '';
+  if(folder.indexOf('recipient:') === 0) currentAddr = folder.substring(10);
+
+  // 色 (受信窓口は黄系で統一)
+  var baseColor = '#b45309';
+  var baseBg    = '#fef3c7';
+
+  var html = '<span style="font-size:11px;color:#92400e;font-weight:700;margin-right:4px">📥 受信窓口:</span>';
+
+  // すべて (受信窓口フィルタ解除) — 現在 recipient: の時のみ active 判定
+  var allActive = (currentAddr === '' && folder !== 'inbox' && folder !== 'all') ? false : (currentAddr === '');
+  // 実用上は「受信窓口フィルタかかってない=allActive」
+  allActive = currentAddr === '';
+  html += '<button onclick="setInqRecipient(\'all\')" ' +
+    'style="padding:4px 10px;background:' + (allActive ? baseColor : baseBg) + ';color:' + (allActive ? '#fff' : baseColor) + ';' +
+    'border:2px solid ' + (allActive ? baseColor : 'transparent') + ';' +
+    (allActive ? 'box-shadow:0 2px 6px rgba(0,0,0,.15);' : '') +
+    'border-radius:14px;font-size:12px;font-weight:' + (allActive ? '700' : '500') + ';cursor:pointer">' +
+    '📨 すべて <span style="background:' + (allActive ? 'rgba(255,255,255,.25)' : '#fff') + ';color:' + (allActive ? '#fff' : baseColor) + ';padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;margin-left:4px">' + base.length + '</span>' +
+    '</button>';
+
+  addrs.forEach(function(addr){
+    var isActive = (currentAddr === addr);
+    var localPart = addr.split('@')[0];
+    var domain = addr.split('@')[1] || '';
+    // 表示は localPart のみ (フル address は title 属性)
+    var disp = localPart.length > 16 ? localPart.substring(0,14) + '…' : localPart;
+    html += '<button onclick="setInqRecipient(\'' + addr + '\')" ' +
+      'title="' + addr + '" ' +
+      'style="padding:4px 10px;background:' + (isActive ? baseColor : baseBg) + ';color:' + (isActive ? '#fff' : baseColor) + ';' +
+      'border:2px solid ' + (isActive ? baseColor : 'transparent') + ';' +
+      (isActive ? 'box-shadow:0 2px 6px rgba(0,0,0,.15);' : '') +
+      'border-radius:14px;font-size:12px;font-weight:' + (isActive ? '700' : '500') + ';cursor:pointer;display:inline-flex;align-items:center;gap:5px">' +
+      '<span>📩</span><span>' + disp + '</span>' +
+      '<span style="background:' + (isActive ? 'rgba(255,255,255,.25)' : '#fff') + ';color:' + (isActive ? '#fff' : baseColor) + ';padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700">' + counts[addr] + '</span>' +
+      '</button>';
+  });
+
+  container.innerHTML = html;
+}
+
+function setInqRecipient(addr){
+  if(addr === 'all'){
+    // 解除 → 全件表示
+    window._inqFolder_ = 'all';
+  } else {
+    window._inqFolder_ = 'recipient:' + addr;
+  }
+  if(typeof renderInquiryFolderList === 'function') renderInquiryFolderList();
+  if(typeof renderInquiryList === 'function') renderInquiryList();
+  if(typeof renderInquiryStats === 'function') renderInquiryStats();
+  if(typeof renderInquirySourceTabs === 'function') renderInquirySourceTabs();
+  renderInquiryRecipientTabs();
 }
 
 function setInqReadingPane(mode){
