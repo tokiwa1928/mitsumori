@@ -1854,12 +1854,20 @@ setTimeout(_removeBootLoader_, 5000);
       <div class="st" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <span>📨 連絡管理</span>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <!-- IIII-1: レイアウト切替 (なし/右/下) -->
+          <div style="display:flex;gap:2px;background:#f3f4f6;border-radius:6px;padding:2px;font-size:10px">
+            <button id="inq-pane-none" class="inq-pane-btn act" onclick="setInqReadingPane('none')" title="一覧のみ (クリックで詳細はスライドパネル)" style="padding:3px 8px;background:#1a73e8;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:700">☐ 一覧</button>
+            <button id="inq-pane-right" class="inq-pane-btn" onclick="setInqReadingPane('right')" title="一覧 + 右側プレビュー (Gmail風)" style="padding:3px 8px;background:transparent;color:#3c4043;border:none;border-radius:4px;cursor:pointer">⊞ 右</button>
+            <button id="inq-pane-bottom" class="inq-pane-btn" onclick="setInqReadingPane('bottom')" title="一覧 + 下プレビュー" style="padding:3px 8px;background:transparent;color:#3c4043;border:none;border-radius:4px;cursor:pointer">⊟ 下</button>
+          </div>
           <span id="inq-period-wrapper"></span>
           <span id="inq-count" style="font-size:11px;color:#888"></span>
           <button class="btn btn-p" onclick="addInquiryManual()">📞 受電・対面メモ追加</button>
           <button class="btn" onclick="showInquiryFormPreview()">📋 公開フォーム</button>
         </div>
       </div>
+      <!-- IIII-1: 会社別タブ (グループ7社 + 全社) -->
+      <div id="inq-company-tabs" style="display:flex;gap:0;margin-bottom:.5rem;border-bottom:2px solid #e5e7eb;flex-wrap:wrap;align-items:center;background:#fafafa;border-radius:6px 6px 0 0"></div>
       <!-- 社外/社内 切替タブ -->
       <div style="display:flex;gap:0;margin-bottom:.5rem;border-bottom:2px solid #e5e7eb;flex-wrap:wrap;align-items:center">
         <button id="inq-scope-all" class="inq-scope-tab active" data-scope="all" onclick="setInqScope('all')">📨 すべて</button>
@@ -1934,8 +1942,13 @@ setTimeout(_removeBootLoader_, 5000);
       </div>
       <!-- 📊 ステータス概要 (フィルタ直下に横並びコンパクト表示) -->
       <div id="inq-stats-bar" style="display:flex;gap:6px;margin-bottom:.65rem;font-size:11px;flex-wrap:wrap"></div>
-      <!-- 問い合わせカード一覧 -->
-      <div id="inq-list" style="max-height:calc(100vh - 320px);min-height:400px;overflow-y:auto"></div>
+      <!-- IIII-1: レイアウト切替対応コンテナ (右/下プレビュー対応) -->
+      <div id="inq-list-pane-wrap" style="display:flex;flex-direction:column;gap:8px">
+        <!-- 問い合わせカード一覧 -->
+        <div id="inq-list" style="max-height:calc(100vh - 320px);min-height:400px;overflow-y:auto"></div>
+        <!-- インラインプレビュー (右/下モード時に使用) -->
+        <div id="inq-reading-pane" style="display:none;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden"></div>
+      </div>
       <!-- 互換性のため (renderInquiryStats 内で参照される) -->
       <div id="inq-stats" style="display:none"></div>
       <div id="inq-response-stats" style="display:none"></div>
@@ -27320,9 +27333,207 @@ function initInquiryPage() {
   };
   // HHHH-1: フォルダ表示
   if(typeof renderInquiryFolderList === 'function') renderInquiryFolderList();
+  // IIII-1: 会社タブ + レイアウト復元
+  if(typeof renderInquiryCompanyTabs === 'function') renderInquiryCompanyTabs();
+  if(typeof applyInqReadingPane === 'function') applyInqReadingPane();
   renderInquiryList();
   renderInquiryStats();
   populateInquiryAssignFilter();
+}
+
+// ═══════════════════════════════════════════════════
+// IIII-1: 会社別タブ + レイアウト切替 + 添付プレビュー
+// ═══════════════════════════════════════════════════
+window._inqReadingPane_ = (function(){
+  try { return localStorage.getItem('inq_reading_pane') || 'none'; } catch(e){ return 'none'; }
+})();
+window._inqCompanyTab_ = (function(){
+  try { return localStorage.getItem('inq_company_tab') || 'all'; } catch(e){ return 'all'; }
+})();
+
+function renderInquiryCompanyTabs(){
+  var container = document.getElementById('inq-company-tabs');
+  if(!container) return;
+
+  // グループ7社 + 全社
+  var companies = [
+    { key:'all',     label:'🏢 全社',         color:'#374151' },
+    { key:'トキワ',   label:'トキワ印刷',      color:'#65a30d' },
+    { key:'村山',     label:'村山印刷',        color:'#6d28d9' },
+    { key:'北上',     label:'北上プリント',    color:'#c2410c' },
+    { key:'アート',   label:'アート・エス',    color:'#1d4ed8' },
+    { key:'津島',     label:'津島プリント',    color:'#78350f' },
+    { key:'中尾',     label:'中尾印刷',        color:'#9f1239' }
+  ];
+
+  // 各社の件数
+  var counts = { all: (DB.inquiries||[]).length };
+  companies.forEach(function(c){
+    if(c.key === 'all') return;
+    counts[c.key] = (DB.inquiries||[]).filter(function(inq){
+      return _matchesCompanyTab_(inq, c.key);
+    }).length;
+  });
+
+  var current = window._inqCompanyTab_ || 'all';
+
+  container.innerHTML = companies.map(function(c){
+    var act = current === c.key;
+    var bgColor = act ? c.color : 'transparent';
+    var textColor = act ? '#fff' : c.color;
+    var count = counts[c.key] || 0;
+    return '<button class="inq-co-tab" onclick="setInqCompanyTab(\'' + c.key + '\')" ' +
+      'style="padding:6px 12px;background:' + bgColor + ';color:' + textColor + ';border:none;border-bottom:3px solid ' + (act ? c.color : 'transparent') + ';font-size:12px;font-weight:' + (act ? '700' : '500') + ';cursor:pointer;display:flex;align-items:center;gap:6px;border-radius:4px 4px 0 0">' +
+      c.label +
+      (count > 0 ? '<span style="background:' + (act ? 'rgba(255,255,255,.25)' : c.color + '20') + ';color:' + (act ? '#fff' : c.color) + ';font-size:10px;padding:1px 6px;border-radius:8px;font-weight:600">' + count + '</span>' : '') +
+    '</button>';
+  }).join('');
+}
+
+function _matchesCompanyTab_(inq, key){
+  if(key === 'all') return true;
+  // channel_company / from_company / companyCode で照合
+  var fields = [inq.channel_company, inq.from_company, inq.companyCode, inq.company].filter(Boolean);
+  return fields.some(function(f){ return String(f).indexOf(key) >= 0; });
+}
+
+function setInqCompanyTab(key){
+  window._inqCompanyTab_ = key;
+  try { localStorage.setItem('inq_company_tab', key); } catch(e){}
+  renderInquiryCompanyTabs();
+  renderInquiryList();
+}
+
+function setInqReadingPane(mode){
+  window._inqReadingPane_ = mode;
+  try { localStorage.setItem('inq_reading_pane', mode); } catch(e){}
+  applyInqReadingPane();
+  // ボタン状態更新
+  ['none','right','bottom'].forEach(function(m){
+    var b = document.getElementById('inq-pane-' + m);
+    if(!b) return;
+    if(m === mode){
+      b.style.background = '#1a73e8'; b.style.color = '#fff'; b.style.fontWeight = '700';
+      b.classList.add('act');
+    } else {
+      b.style.background = 'transparent'; b.style.color = '#3c4043'; b.style.fontWeight = '500';
+      b.classList.remove('act');
+    }
+  });
+}
+
+function applyInqReadingPane(){
+  var mode = window._inqReadingPane_ || 'none';
+  var wrap = document.getElementById('inq-list-pane-wrap');
+  var list = document.getElementById('inq-list');
+  var pane = document.getElementById('inq-reading-pane');
+  if(!wrap || !list || !pane) return;
+
+  if(mode === 'right'){
+    wrap.style.flexDirection = 'row';
+    list.style.flex = '1';
+    list.style.maxWidth = '420px';
+    list.style.maxHeight = 'calc(100vh - 320px)';
+    list.style.minHeight = '400px';
+    pane.style.display = 'block';
+    pane.style.flex = '2';
+    pane.style.maxHeight = 'calc(100vh - 320px)';
+    pane.style.overflowY = 'auto';
+  } else if(mode === 'bottom'){
+    wrap.style.flexDirection = 'column';
+    list.style.flex = 'unset';
+    list.style.maxWidth = '';
+    list.style.maxHeight = '300px';
+    list.style.minHeight = '200px';
+    pane.style.display = 'block';
+    pane.style.flex = 'unset';
+    pane.style.maxHeight = 'calc(100vh - 600px)';
+    pane.style.minHeight = '300px';
+    pane.style.overflowY = 'auto';
+  } else {
+    // none
+    wrap.style.flexDirection = 'column';
+    list.style.flex = '';
+    list.style.maxWidth = '';
+    list.style.maxHeight = 'calc(100vh - 320px)';
+    list.style.minHeight = '400px';
+    pane.style.display = 'none';
+  }
+}
+
+// インラインプレビュー (right/bottom モード時) - 既存スライドパネル HTML を借りる
+function _renderInquiryDetailInPane_(inq){
+  // 既読マーク + 状態自動進行 (CCCC-1 と同じロジック)
+  var stateChanged = false;
+  if(!inq.readAt){ inq.readAt = new Date().toISOString(); inq.readBy = (currentAuth && currentAuth.userName) || ''; stateChanged = true; }
+  if(inq.status === 'new'){ inq.status = 'progress'; stateChanged = true; }
+  if(!inq.assignee && currentAuth && currentAuth.userName){ inq.assignee = currentAuth.userName; stateChanged = true; }
+  if(stateChanged){
+    if(typeof saveDB === 'function') try { saveDB(); } catch(e){}
+    setTimeout(function(){ renderInquiryList(); renderInquiryFolderList(); renderInquiryCompanyTabs(); }, 50);
+  }
+
+  // 既存の inq-detail-panel に HTML を生成させてから、それを reading pane に移動
+  var panel = document.getElementById('inq-detail-panel');
+  var pane  = document.getElementById('inq-reading-pane');
+  if(!panel || !pane) return;
+
+  // 一時的に detail panel に描画 → 中身を取得 → reading pane へ
+  // openInquiryDetail を再帰呼び出ししないため、_renderInquiryDetailHtml_ ヘルパが理想
+  // ここでは簡易: スライドパネル経由でレンダーするがオーバーレイは出さない
+  var origMode = window._inqReadingPane_;
+  window._inqReadingPane_ = 'none'; // 一時的に none にして既存ロジックを発火
+  try {
+    openInquiryDetail(inq.id);
+  } finally {
+    window._inqReadingPane_ = origMode;
+  }
+  // パネルの HTML を取得して reading pane に移植
+  var panelHtml = panel.innerHTML;
+  pane.innerHTML = '<div style="padding:14px 20px 0;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center"><strong style="font-size:13px;color:#3c4043">📨 ' + _escDiff(inq.subject || '(件名なし)') + '</strong><button onclick="document.getElementById(\'inq-reading-pane\').innerHTML=\'\'" style="background:none;border:none;font-size:18px;cursor:pointer;color:#888">×</button></div>' +
+    '<div style="padding:14px 20px">' + panelHtml + '</div>';
+  // スライドパネルは閉じる
+  panel.classList.remove('show');
+  document.getElementById('inq-detail-overlay').style.display = 'none';
+  // ハイライト: 一覧側で選択中の連絡をマーク
+  document.querySelectorAll('.inq-card').forEach(function(c){ c.style.background = ''; });
+  var selectedCard = Array.from(document.querySelectorAll('.inq-card')).find(function(c){
+    return c.getAttribute('onclick') && c.getAttribute('onclick').indexOf(inq.id) >= 0;
+  });
+  if(selectedCard){ selectedCard.style.background = '#eff6ff'; selectedCard.style.boxShadow = 'inset 3px 0 0 #1a73e8'; }
+}
+
+// 添付ファイルプレビュー描画 (PDF/画像 inline、その他はダウンロードボタン)
+function _renderAttachmentPreview_(inq){
+  if(!inq || !inq.attachments || inq.attachments.length === 0) return '';
+  return '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;margin-bottom:10px">' +
+    '<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">📎 添付ファイル (' + inq.attachments.length + ')</div>' +
+    inq.attachments.map(function(att, i){
+      var name = att.name || att.filename || ('添付' + (i+1));
+      var url = att.url || att.driveUrl || att.dataUrl || '';
+      var mime = att.mimeType || att.type || '';
+      var size = att.size ? (' · ' + Math.round(att.size/1024) + ' KB') : '';
+      var isImage = /^image\//.test(mime) || /\.(jpe?g|png|gif|webp|bmp)$/i.test(name);
+      var isPdf   = mime === 'application/pdf' || /\.pdf$/i.test(name);
+      var preview = '';
+      if(isImage && url){
+        preview = '<div style="margin-top:6px"><img src="' + _escDiff(url) + '" alt="' + _escDiff(name) + '" style="max-width:100%;max-height:300px;border:1px solid #e5e7eb;border-radius:4px;cursor:pointer" onclick="window.open(\'' + _escDiff(url) + '\',\'_blank\')"></div>';
+      } else if(isPdf && url){
+        preview = '<div style="margin-top:6px"><iframe src="' + _escDiff(url) + '#toolbar=0" style="width:100%;height:300px;border:1px solid #e5e7eb;border-radius:4px"></iframe></div>';
+      }
+      return '<div style="background:#fff;border:1px solid #e0ddd6;border-radius:6px;padding:8px 12px;margin-bottom:6px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+          '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">' +
+            (isImage ? '🖼' : isPdf ? '📄' : '📎') + ' <strong>' + _escDiff(name) + '</strong>' +
+            '<span style="color:#888;font-size:10px">' + size + '</span>' +
+          '</div>' +
+          (url ? '<a href="' + _escDiff(url) + '" target="_blank" style="font-size:11px;color:#1e40af;text-decoration:none;flex-shrink:0">↗ 開く</a>' : '') +
+          (url ? '<a href="' + _escDiff(url) + '" download="' + _escDiff(name) + '" style="font-size:11px;color:#16a34a;text-decoration:none;flex-shrink:0">💾 DL</a>' : '') +
+        '</div>' +
+        preview +
+      '</div>';
+    }).join('') +
+  '</div>';
 }
 
 function populateInquiryAssignFilter() {
@@ -27509,8 +27720,12 @@ function renderInquiryList() {
   // HHHH-1: 左サイドバーのフォルダフィルタ
   var folder = window._inqFolder_ || 'inbox';
   var myUser = (currentAuth && currentAuth.userName) || '';
+  // IIII-1: 会社タブのフィルタ
+  var companyTab = window._inqCompanyTab_ || 'all';
 
   let items = periodFiltered.filter(inq => {
+    // 会社タブ判定
+    if(companyTab !== 'all' && !_matchesCompanyTab_(inq, companyTab)) return false;
     // フォルダ判定 (左サイドバー)
     if(folder !== 'all'){
       if(folder === 'mine'){
@@ -27874,6 +28089,14 @@ function openInquiryDetail(id) {
   const inq = (DB.inquiries||[]).find(i => i.id === id);
   if(!inq) return;
 
+  // IIII-1: レイアウトモードで詳細の描画先を切替
+  // - 'none' → スライドパネル (既存動作)
+  // - 'right' / 'bottom' → 一覧と並んで inline 表示
+  var paneMode = window._inqReadingPane_ || 'none';
+  if(paneMode === 'right' || paneMode === 'bottom'){
+    return _renderInquiryDetailInPane_(inq);
+  }
+
   // 🆕 既読マーク (開封日時を記録 → カードの色変化に使用)
   var stateChanged = false;
   if(!inq.readAt){
@@ -27971,6 +28194,7 @@ function openInquiryDetail(id) {
     </div>` : ''}
 
     ${attachmentsHtml}
+    ${(typeof _renderAttachmentPreview_ === 'function') ? _renderAttachmentPreview_(inq) : ''}
 
     <!-- 🔗 リンク管理: 案件リンク + 関連メール (親子) -->
     ${_renderInquiryLinksSection_(inq)}
