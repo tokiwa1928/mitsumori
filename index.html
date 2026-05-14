@@ -1878,6 +1878,7 @@ setTimeout(_removeBootLoader_, 5000);
         <label style="margin-left:auto;font-size:11px;color:#666;display:flex;align-items:center;gap:4px;padding:0 8px;cursor:pointer">
           <input type="checkbox" id="inq-show-submitted" onchange="renderInquiryList()"> 提出済も表示
         </label>
+        <button class="btn" style="font-size:11px;padding:3px 10px;background:#f0f9ff;border-color:#bae6fd;color:#0369a1" onclick="showReceivingAddressManager()" title="自社が受信しているメールアドレスを確認">📥 受信アドレス一覧</button>
         <button class="btn" style="font-size:11px;padding:3px 10px" onclick="showContactTargetMaster()" title="LW/LINE 転送先のマスタ管理">📞 宛先マスタ</button>
         <button class="btn" style="font-size:11px;padding:3px 10px" onclick="showMailSignatureSettings()" title="メール署名 + 自動下書き設定">✉ メール設定</button>
         <!-- ⚙ その他設定ドロップダウン -->
@@ -27502,6 +27503,212 @@ function _renderInquiryDetailInPane_(inq){
     return c.getAttribute('onclick') && c.getAttribute('onclick').indexOf(inq.id) >= 0;
   });
   if(selectedCard){ selectedCard.style.background = '#eff6ff'; selectedCard.style.boxShadow = 'inset 3px 0 0 #1a73e8'; }
+}
+
+// ═══════════════════════════════════════════════════
+// KKKK-1: 自社の受信メールアドレス一覧・管理
+// ═══════════════════════════════════════════════════
+function showReceivingAddressManager(){
+  // 連絡データから自動抽出
+  var addresses = {};  // addr → { count, lastReceived, fromCompanies, sourceTypes }
+  (DB.inquiries || []).forEach(function(inq){
+    var to = (inq.to_email || inq.delivered_to || '').trim().toLowerCase();
+    if(!to || to.indexOf('@') < 0) return;
+    if(!addresses[to]){
+      addresses[to] = {
+        addr: to,
+        count: 0,
+        lastReceived: '',
+        firstReceived: '',
+        fromCompanies: {},
+        sourceTypes: {},
+        channelCompanies: {}
+      };
+    }
+    var a = addresses[to];
+    a.count++;
+    var dt = inq.received_at || inq.createdAt || '';
+    if(!a.lastReceived || dt > a.lastReceived) a.lastReceived = dt;
+    if(!a.firstReceived || dt < a.firstReceived) a.firstReceived = dt;
+    var fc = inq.from_company || inq.company || '';
+    if(fc) a.fromCompanies[fc] = (a.fromCompanies[fc] || 0) + 1;
+    var st = inq.source_type || '';
+    if(st) a.sourceTypes[st] = (a.sourceTypes[st] || 0) + 1;
+    var cc = inq.channel_company || '';
+    if(cc) a.channelCompanies[cc] = (a.channelCompanies[cc] || 0) + 1;
+  });
+
+  // 署名プロファイルから登録済アドレスも取得
+  var registered = {};
+  var mailSettings = (typeof _getMailSettings_ === 'function') ? _getMailSettings_() : { signatures: [] };
+  (mailSettings.signatures || []).forEach(function(p){
+    (p.receivingEmails || []).forEach(function(e){
+      var key = e.toLowerCase();
+      registered[key] = { label: p.label || '', replyEmail: p.replyEmail || '', sigId: p.id };
+    });
+  });
+
+  // ソート: 件数の多い順
+  var addrList = Object.values(addresses).sort(function(a,b){ return b.count - a.count; });
+
+  // 未登録 (連絡に出てくるが署名未設定) と登録済 を分離
+  var unregistered = addrList.filter(function(a){ return !registered[a.addr]; });
+  var registeredList = addrList.filter(function(a){ return registered[a.addr]; });
+
+  // 署名プロファイルに登録されているが まだ受信が無いもの
+  var noReceiveList = [];
+  Object.keys(registered).forEach(function(key){
+    if(!addresses[key]) noReceiveList.push({ addr: key, count: 0, lastReceived: '', fromCompanies: {}, sourceTypes: {} });
+  });
+
+  var existing = document.getElementById('recv-addr-mgr');
+  if(existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'recv-addr-mgr';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999999;display:flex;align-items:center;justify-content:center;padding:1rem';
+
+  function _addrRow_(a, isRegistered){
+    var reg = registered[a.addr];
+    var topCompany = Object.keys(a.fromCompanies || {}).sort(function(x,y){ return a.fromCompanies[y] - a.fromCompanies[x]; })[0] || '';
+    var topChannel = Object.keys(a.channelCompanies || {}).sort(function(x,y){ return a.channelCompanies[y] - a.channelCompanies[x]; })[0] || '';
+    var lastDate = a.lastReceived ? new Date(a.lastReceived).toLocaleDateString('ja-JP') : '-';
+    return '<tr style="border-bottom:1px solid #f3f4f6">' +
+      '<td style="padding:8px 10px;font-family:monospace;font-size:12px;font-weight:700;color:#0369a1">📩 ' + _escDiff(a.addr) + '</td>' +
+      '<td style="padding:8px 10px;text-align:right;font-weight:700;font-size:13px">' + a.count + '件</td>' +
+      '<td style="padding:8px 10px;font-size:11px;color:#666">' +
+        (a.count > 0 ? '初: ' + (a.firstReceived ? new Date(a.firstReceived).toLocaleDateString('ja-JP') : '-') + '<br>最: ' + lastDate : '-') +
+      '</td>' +
+      '<td style="padding:8px 10px;font-size:11px">' + _escDiff(topChannel || '-') + '</td>' +
+      '<td style="padding:8px 10px;font-size:11px">' + (topCompany ? '主: ' + _escDiff(topCompany) : '-') + '</td>' +
+      '<td style="padding:8px 10px;text-align:center">' +
+        (reg
+          ? '<span style="background:#dcfce7;color:#15803d;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700" title="署名プロファイル: ' + _escDiff(reg.label) + (reg.replyEmail ? ' / 返信→' + _escDiff(reg.replyEmail) : '') + '">✅ 登録済</span>'
+          : '<button class="btn" style="font-size:10px;padding:2px 8px;background:#f59e0b;color:#fff;border-color:#f59e0b" onclick="_quickRegisterReceivingAddress_(\'' + _escDiff(a.addr) + '\')">＋ 署名登録</button>'
+        ) +
+        '<button class="btn" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="setInqFolder(\'recipient:' + _escDiff(a.addr) + '\');document.getElementById(\'recv-addr-mgr\').remove();" title="このアドレス宛の連絡だけ表示">📂 絞込</button>' +
+      '</td>' +
+    '</tr>';
+  }
+
+  var totalReceived = addrList.reduce(function(s, a){ return s + a.count; }, 0);
+
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:880px;max-height:92vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:14px 20px;background:#0369a1;color:#fff;display:flex;justify-content:space-between;align-items:center">' +
+        '<div><strong>📥 受信メールアドレス 一覧・管理</strong><div style="font-size:11px;opacity:.85;margin-top:2px">自社で受信中のアドレス: ' + addrList.length + ' 件 / 受信メール総数: ' + totalReceived + ' 件</div></div>' +
+        '<button onclick="document.getElementById(\'recv-addr-mgr\').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer">×</button>' +
+      '</div>' +
+      '<div style="overflow-y:auto;flex:1;padding:14px 20px">' +
+
+        // 未登録アドレス (登録の必要あり)
+        (unregistered.length > 0
+          ? '<div style="margin-bottom:18px">' +
+              '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:8px 12px;margin-bottom:8px">' +
+                '<strong style="color:#78350f;font-size:12px">⚠ 未登録 (' + unregistered.length + '件)</strong> — ' +
+                '<span style="font-size:11px;color:#78350f">連絡を受信しているが、署名プロファイル未設定。「＋ 署名登録」 で本田/山田などの担当を紐付けると、返信時に自動で適切な署名が出ます</span>' +
+              '</div>' +
+              '<table style="width:100%;font-size:12px;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">' +
+                '<thead><tr style="background:#fef9c3"><th style="padding:8px 10px;text-align:left">アドレス</th><th style="padding:8px 10px;text-align:right">受信</th><th style="padding:8px 10px;text-align:left">期間</th><th style="padding:8px 10px;text-align:left">チャネル</th><th style="padding:8px 10px;text-align:left">送信元</th><th style="padding:8px 10px;text-align:center">操作</th></tr></thead>' +
+                '<tbody>' + unregistered.map(function(a){ return _addrRow_(a, false); }).join('') + '</tbody>' +
+              '</table>' +
+            '</div>'
+          : ''
+        ) +
+
+        // 登録済アドレス
+        (registeredList.length > 0
+          ? '<div style="margin-bottom:18px">' +
+              '<div style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:8px 12px;margin-bottom:8px">' +
+                '<strong style="color:#15803d;font-size:12px">✅ 登録済 (' + registeredList.length + '件)</strong> — ' +
+                '<span style="font-size:11px;color:#15803d">署名プロファイルに紐付け済。返信時に自動で適切な署名が選ばれます</span>' +
+              '</div>' +
+              '<table style="width:100%;font-size:12px;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">' +
+                '<thead><tr style="background:#dcfce7"><th style="padding:8px 10px;text-align:left">アドレス</th><th style="padding:8px 10px;text-align:right">受信</th><th style="padding:8px 10px;text-align:left">期間</th><th style="padding:8px 10px;text-align:left">チャネル</th><th style="padding:8px 10px;text-align:left">送信元</th><th style="padding:8px 10px;text-align:center">操作</th></tr></thead>' +
+                '<tbody>' + registeredList.map(function(a){ return _addrRow_(a, true); }).join('') + '</tbody>' +
+              '</table>' +
+            '</div>'
+          : ''
+        ) +
+
+        // 受信実績無しの登録済 (署名だけある)
+        (noReceiveList.length > 0
+          ? '<div style="margin-bottom:18px">' +
+              '<div style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:8px 12px;margin-bottom:8px">' +
+                '<strong style="color:#374151;font-size:12px">📋 受信実績なし・署名のみ登録 (' + noReceiveList.length + '件)</strong> — ' +
+                '<span style="font-size:11px;color:#374151">署名プロファイルに登録されているが、まだ受信なし</span>' +
+              '</div>' +
+              '<table style="width:100%;font-size:12px;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">' +
+                '<thead><tr style="background:#f3f4f6"><th style="padding:8px 10px;text-align:left">アドレス</th><th colspan="5" style="padding:8px 10px;text-align:left">担当ラベル / 返信先</th></tr></thead>' +
+                '<tbody>' + noReceiveList.map(function(a){
+                  var reg = registered[a.addr];
+                  return '<tr style="border-bottom:1px solid #f3f4f6">' +
+                    '<td style="padding:8px 10px;font-family:monospace;font-size:12px;font-weight:700;color:#0369a1">📩 ' + _escDiff(a.addr) + '</td>' +
+                    '<td colspan="5" style="padding:8px 10px;font-size:11px">' +
+                      '<strong>' + _escDiff(reg.label || '無名') + '</strong>' +
+                      (reg.replyEmail ? ' / 返信→ <span style="font-family:monospace">' + _escDiff(reg.replyEmail) + '</span>' : '') +
+                    '</td>' +
+                  '</tr>';
+                }).join('') + '</tbody>' +
+              '</table>' +
+            '</div>'
+          : ''
+        ) +
+
+        // 説明・操作ガイド
+        '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:10px 14px;font-size:11px;color:#374151;line-height:1.7">' +
+          '<strong>💡 このページの使い方</strong><br>' +
+          '・ 連絡管理に届いた連絡から自動で受信アドレスを抽出します<br>' +
+          '・ 「📂 絞込」 で そのアドレス宛の連絡だけ表示できます<br>' +
+          '・ 「＋ 署名登録」 で 署名プロファイル (誰の窓口か) を紐付けると 返信時に自動選択<br>' +
+          '・ 「✉ メール設定」 から直接プロファイル管理も可能<br>' +
+          '・ <strong>注意:</strong> 受信時の To アドレスはバックエンドの Gmail 取込で保存されます。空欄の場合は GAS 側の取込ロジック確認が必要です' +
+        '</div>' +
+      '</div>' +
+      '<div style="padding:14px 20px;border-top:1px solid #e5e7eb;background:#f9fafb;display:flex;justify-content:space-between;gap:8px">' +
+        '<button class="btn" onclick="showMailSignatureSettings();document.getElementById(\'recv-addr-mgr\').remove()" style="background:#0369a1;color:#fff;border-color:#0369a1">✉ メール設定を開く</button>' +
+        '<button class="btn" onclick="document.getElementById(\'recv-addr-mgr\').remove()">閉じる</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+// 連絡から発見したアドレスをワンクリックで署名プロファイルに登録
+function _quickRegisterReceivingAddress_(addr){
+  var settings = _getMailSettings_();
+  var label = prompt('このアドレスの担当ラベル (例: 本田 / 営業共通):', '');
+  if(label === null) return;
+  // 既存プロファイルへの追加 or 新規作成
+  var choice = '新規';
+  if((settings.signatures || []).length > 0){
+    var listStr = settings.signatures.map(function(p, i){ return (i+1) + ') ' + (p.label || '無名'); }).join('\n');
+    choice = prompt('既存プロファイルに追加するなら番号、新規なら 「新」 を入力:\n\n' + listStr + '\n\n[新 / 番号]:', '新');
+    if(choice === null) return;
+  }
+  if(choice === '新' || choice === '新規'){
+    settings.signatures = settings.signatures || [];
+    settings.signatures.push({
+      id: 'sig_' + Date.now(),
+      label: label || addr.split('@')[0],
+      receivingEmails: [addr],
+      replyEmail: addr,
+      email: addr,
+      lwUserId: '',
+      signature: '',
+      lwSignature: '',
+      isDefault: settings.signatures.length === 0
+    });
+  } else {
+    var idx = parseInt(choice, 10) - 1;
+    var target = (settings.signatures || [])[idx];
+    if(!target){ alert('番号が不正です'); return; }
+    if(!Array.isArray(target.receivingEmails)) target.receivingEmails = target.email ? [target.email] : [];
+    if(target.receivingEmails.indexOf(addr) < 0) target.receivingEmails.push(addr);
+    if(label) target.label = label;
+  }
+  _saveMailSettings_(settings);
+  alert('✅ 署名プロファイルに登録しました');
+  document.getElementById('recv-addr-mgr')?.remove();
+  showReceivingAddressManager();
 }
 
 // 添付ファイルプレビュー描画 (PDF/画像 inline、その他はダウンロードボタン)
