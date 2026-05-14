@@ -1871,12 +1871,14 @@ setTimeout(_removeBootLoader_, 5000);
       <div id="inq-stats-bar" style="display:flex;gap:6px;margin-bottom:.5rem;font-size:11px;flex-wrap:wrap"></div>
       <!-- IIII-1: 会社別タブ (グループ7社 + 全社) -->
       <div id="inq-company-tabs" style="display:flex;gap:0;margin-bottom:.5rem;border-bottom:2px solid #e5e7eb;flex-wrap:wrap;align-items:center;background:#fafafa;border-radius:6px 6px 0 0"></div>
-      <!-- 社外/社内 切替タブ -->
-      <div style="display:flex;gap:0;margin-bottom:.5rem;border-bottom:2px solid #e5e7eb;flex-wrap:wrap;align-items:center">
+      <!-- 種別タブは左サイドバーに統合済 (PPPP-1) — 互換性のため非表示要素として残置 -->
+      <div style="display:none">
         <button id="inq-scope-all" class="inq-scope-tab active" data-scope="all" onclick="setInqScope('all')">📨 すべて</button>
         <button id="inq-scope-external" class="inq-scope-tab" data-scope="external" onclick="setInqScope('external')">🌐 社外</button>
         <button id="inq-scope-internal" class="inq-scope-tab" data-scope="internal" onclick="setInqScope('internal')">🏢 社内連絡</button>
         <button id="inq-scope-interco" class="inq-scope-tab" data-scope="interco" onclick="setInqScope('interco')">🔄 社間依頼</button>
+      </div>
+      <div style="display:flex;gap:0;margin-bottom:.5rem;border-bottom:2px solid #e5e7eb;flex-wrap:wrap;align-items:center">
         <label style="margin-left:auto;font-size:11px;color:#666;display:flex;align-items:center;gap:4px;padding:0 8px;cursor:pointer">
           <input type="checkbox" id="inq-show-submitted" onchange="renderInquiryList()"> 提出済も表示
         </label>
@@ -27407,6 +27409,8 @@ function setInqCompanyTab(key){
   renderInquiryList();
   // OOOO-1: ステータス概要も選択中会社の件数に更新
   if(typeof renderInquiryStats === 'function') renderInquiryStats();
+  // PPPP-1: 左サイドバーの種別件数も会社フィルタに連動
+  if(typeof renderInquiryFolderList === 'function') renderInquiryFolderList();
 }
 
 function setInqReadingPane(mode){
@@ -28226,6 +28230,8 @@ function setInqScope(scope){
   window._inqScope_ = scope;
   document.querySelectorAll('.inq-scope-tab').forEach(function(t){ t.classList.toggle('active', t.dataset.scope === scope); });
   renderInquiryList();
+  // PPPP-1: 左サイドバーの種別タブも反映
+  if(typeof renderInquiryFolderList === 'function') renderInquiryFolderList();
 }
 
 // ═══════════════════════════════════════════════════
@@ -28269,12 +28275,21 @@ const INQ_FOLDERS = [
 function renderInquiryFolderList(){
   var container = document.getElementById('inq-folder-list');
   if(!container) return;
-  var all = DB.inquiries || [];
+  var allRaw = DB.inquiries || [];
+
+  // PPPP-1: 会社別フィルタを反映した集計
+  var companyTab = window._inqCompanyTab_ || 'all';
+  var all = companyTab === 'all'
+    ? allRaw
+    : allRaw.filter(function(inq){ return _matchesCompanyTab_(inq, companyTab); });
 
   // フォルダごとの件数
   var counts = { all: all.length };
   INQ_FOLDERS.forEach(function(f){ counts[f.key] = 0; });
   var channelCounts = { gmail:0, linesvc:0, webform:0, manual:0, phone:0, internal_msg:0, interco:0, fax:0, voice_memo:0 };
+  // PPPP-1: スコープ (社外/社内/社間) 件数
+  var scopeCounts = { all: all.length, external: 0, internal: 0, interco: 0 };
+  var externalSources = ['gmail','linesvc','webform','manual','fax','phone',''];
   var myUser = (currentAuth && currentAuth.userName) || '';
   var myAssignedCount = 0;
   all.forEach(function(inq){
@@ -28283,16 +28298,60 @@ function renderInquiryFolderList(){
     var s = inq.source_type || 'manual';
     if(channelCounts[s] !== undefined) channelCounts[s]++;
     if(myUser && inq.assignee === myUser) myAssignedCount++;
+    // スコープ判定
+    if(s === 'internal_msg') scopeCounts.internal++;
+    else if(s === 'interco') scopeCounts.interco++;
+    else if(externalSources.indexOf(s) >= 0) scopeCounts.external++;
   });
 
   var current = window._inqFolder_ || 'inbox';
 
-  // ステータス系フォルダ
-  var folderHtml = '<div class="inq-folder-item' + (current === 'all' ? ' act' : '') + '" onclick="setInqFolder(\'all\')">' +
-      '<span class="inq-folder-icon">📨</span>' +
-      '<span class="inq-folder-label">すべて</span>' +
-      '<span class="inq-folder-count">' + counts.all + '</span>' +
+  // PPPP-1: 現在の会社カラー (色と名前)
+  var companyMeta = { color:'#374151', label:'全社' };
+  if(companyTab !== 'all'){
+    var map = {
+      'トキワ':{color:'#65a30d',label:'トキワ印刷'},
+      '村山':{color:'#6d28d9',label:'村山印刷'},
+      '北上':{color:'#c2410c',label:'北上プリント'},
+      'アート':{color:'#1d4ed8',label:'アート・エス'},
+      '津島':{color:'#78350f',label:'津島プリント'},
+      '中尾':{color:'#9f1239',label:'中尾印刷'}
+    };
+    companyMeta = map[companyTab] || companyMeta;
+  }
+
+  // PPPP-1: 種別セクション (すべて / 社外 / 社内 / 社間) — 上部に配置
+  var curScope = window._inqScope_ || 'all';
+  var scopeItems = [
+    { key:'all',      label:companyMeta.label === '全社' ? 'すべて' : 'すべて (' + companyMeta.label + ')', icon:'📨', count:scopeCounts.all,      colorOverride:companyMeta.color },
+    { key:'external', label:'社外',     icon:'🌐', count:scopeCounts.external },
+    { key:'internal', label:'社内連絡', icon:'🏢', count:scopeCounts.internal },
+    { key:'interco',  label:'社間依頼', icon:'🔄', count:scopeCounts.interco }
+  ];
+  var folderHtml = '<div class="inq-folder-section">種別</div>';
+  scopeItems.forEach(function(s){
+    var act = curScope === s.key;
+    var bgStyle = '';
+    var iconColor = s.colorOverride || '#666';
+    if(act && s.colorOverride){
+      bgStyle = 'background:' + s.colorOverride + ';color:#fff;font-weight:700';
+      iconColor = '#fff';
+    } else if(act){
+      bgStyle = 'background:#1a73e8;color:#fff;font-weight:700';
+      iconColor = '#fff';
+    }
+    folderHtml += '<div class="inq-folder-item' + (act ? ' act' : '') + '" style="' + bgStyle + '" onclick="setInqScope(\'' + s.key + '\')">' +
+      // 色インジケータ (すべての左) + アイコン
+      (s.key === 'all'
+        ? '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + companyMeta.color + ';flex-shrink:0;margin-right:2px" title="' + companyMeta.label + '色"></span>'
+        : '') +
+      '<span class="inq-folder-icon" style="color:' + iconColor + '">' + s.icon + '</span>' +
+      '<span class="inq-folder-label">' + s.label + '</span>' +
+      (s.count > 0 ? '<span class="inq-folder-count">' + s.count + '</span>' : '') +
     '</div>';
+  });
+  folderHtml += '<div class="inq-folder-divider"></div>' +
+    '<div class="inq-folder-section">ステータス</div>';
 
   folderHtml += INQ_FOLDERS.map(function(f){
     var count = counts[f.key] || 0;
