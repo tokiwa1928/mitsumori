@@ -27714,8 +27714,10 @@ function _quickRegisterReceivingAddress_(addr){
 // 添付ファイルプレビュー描画 (PDF/画像 inline、その他はダウンロードボタン)
 function _renderAttachmentPreview_(inq){
   if(!inq || !inq.attachments || inq.attachments.length === 0) return '';
-  // 一覧モード: コンパクト (ホバーでフローティングプレビュー)
-  // 全件で常時 inline 展開は重いため、デフォルトはコンパクト + 「展開」 ボタン
+  // 添付データのインデックスを window に保存 → ホバー時に参照
+  window._currentAttachments_ = window._currentAttachments_ || {};
+  window._currentAttachments_[inq.id] = inq.attachments;
+
   return '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;margin-bottom:10px">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
       '<div style="font-size:12px;font-weight:700;color:#374151">📎 添付ファイル (' + inq.attachments.length + ')</div>' +
@@ -27728,26 +27730,27 @@ function _renderAttachmentPreview_(inq){
       var size = att.size ? (' · ' + Math.round(att.size/1024) + ' KB') : '';
       var isImage = /^image\//.test(mime) || /\.(jpe?g|png|gif|webp|bmp)$/i.test(name);
       var isPdf   = mime === 'application/pdf' || /\.pdf$/i.test(name);
-      var hoverEvents = '';
-      if(url && (isImage || isPdf)){
-        hoverEvents = ' onmouseenter="_showAttachmentHoverPreview_(event,\'' + _escDiff(url) + '\',' + (isImage ? 'true' : 'false') + ',\'' + _escDiff(name) + '\')" onmousemove="_moveAttachmentHoverPreview_(event)" onmouseleave="_hideAttachmentHoverPreview_()"';
-      }
+      var kind = isImage ? 'image' : (isPdf ? 'pdf' : 'other');
+
       var inlineId = 'att-inline-' + inq.id + '-' + i;
       var inlinePreview = '';
       if(isImage && url){
-        inlinePreview = '<div id="' + inlineId + '" style="display:none;margin-top:6px"><img src="' + _escDiff(url) + '" alt="' + _escDiff(name) + '" style="max-width:100%;max-height:400px;border:1px solid #e5e7eb;border-radius:4px;cursor:pointer" onclick="window.open(\'' + _escDiff(url) + '\',\'_blank\')"></div>';
+        inlinePreview = '<div id="' + inlineId + '" style="display:none;margin-top:6px"><img src="' + _escAttr_(url) + '" alt="" style="max-width:100%;max-height:400px;border:1px solid #e5e7eb;border-radius:4px;cursor:pointer" onclick="window.open(this.src,\'_blank\')"></div>';
       } else if(isPdf && url){
-        inlinePreview = '<div id="' + inlineId + '" style="display:none;margin-top:6px"><iframe src="' + _escDiff(url) + '#toolbar=0" style="width:100%;height:500px;border:1px solid #e5e7eb;border-radius:4px"></iframe></div>';
+        inlinePreview = '<div id="' + inlineId + '" style="display:none;margin-top:6px"><iframe src="' + _escAttr_(url) + '#toolbar=0" style="width:100%;height:500px;border:1px solid #e5e7eb;border-radius:4px"></iframe></div>';
       }
-      return '<div style="background:#fff;border:1px solid #e0ddd6;border-radius:6px;padding:8px 12px;margin-bottom:6px">' +
+      // data-属性 + イベント委任 でホバー (URL ない場合も "URL未取得" 表示)
+      return '<div class="att-row" data-inq="' + _escAttr_(inq.id) + '" data-idx="' + i + '" data-kind="' + kind + '" data-url="' + _escAttr_(url) + '" data-name="' + _escAttr_(name) + '" style="background:#fff;border:1px solid #e0ddd6;border-radius:6px;padding:8px 12px;margin-bottom:6px">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
-          '<div ' + hoverEvents + ' style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;cursor:' + ((isImage||isPdf) ? 'help' : 'default') + '">' +
+          '<div class="att-name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;cursor:help">' +
             (isImage ? '🖼' : isPdf ? '📄' : '📎') + ' <strong>' + _escDiff(name) + '</strong>' +
             '<span style="color:#888;font-size:10px">' + size + '</span>' +
           '</div>' +
-          ((isImage||isPdf) ? '<button onclick="var e=document.getElementById(\'' + inlineId + '\');e.style.display=(e.style.display===\'none\'?\'block\':\'none\')" style="font-size:11px;color:#5b21b6;background:#faf5ff;border:1px solid #c4b5fd;padding:2px 8px;border-radius:4px;cursor:pointer;flex-shrink:0">👁 展開</button>' : '') +
-          (url ? '<a href="' + _escDiff(url) + '" target="_blank" style="font-size:11px;color:#1e40af;text-decoration:none;flex-shrink:0">↗ 開く</a>' : '') +
-          (url ? '<a href="' + _escDiff(url) + '" download="' + _escDiff(name) + '" style="font-size:11px;color:#16a34a;text-decoration:none;flex-shrink:0">💾 DL</a>' : '') +
+          ((isImage||isPdf) && url
+            ? '<button onclick="event.stopPropagation();var e=document.getElementById(\'' + inlineId + '\');if(e)e.style.display=(e.style.display===\'none\'?\'block\':\'none\')" style="font-size:11px;color:#5b21b6;background:#faf5ff;border:1px solid #c4b5fd;padding:2px 8px;border-radius:4px;cursor:pointer;flex-shrink:0">👁 展開</button>'
+            : '') +
+          (url ? '<a href="' + _escAttr_(url) + '" target="_blank" style="font-size:11px;color:#1e40af;text-decoration:none;flex-shrink:0">↗ 開く</a>' : '<span style="font-size:10px;color:#9ca3af">(URL未取得)</span>') +
+          (url ? '<a href="' + _escAttr_(url) + '" download="' + _escAttr_(name) + '" style="font-size:11px;color:#16a34a;text-decoration:none;flex-shrink:0">💾 DL</a>' : '') +
         '</div>' +
         inlinePreview +
       '</div>';
@@ -27755,23 +27758,56 @@ function _renderAttachmentPreview_(inq){
   '</div>';
 }
 
-// JJJJ-1: 添付ホバープレビュー (フローティング)
+// JJJJ-2: HTML属性用エスケープ (値の中の ' " < > & を保護)
+function _escAttr_(s){
+  return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// JJJJ-2: グローバルなマウスイベント委任でホバープレビュー
+(function(){
+  if(window._attHoverInited_) return;
+  window._attHoverInited_ = true;
+  document.addEventListener('mouseover', function(e){
+    var nameEl = e.target.closest && e.target.closest('.att-name');
+    if(!nameEl) return;
+    var row = nameEl.closest('.att-row');
+    if(!row) return;
+    var url = row.dataset.url;
+    var kind = row.dataset.kind;
+    var name = row.dataset.name;
+    if(!url || (kind !== 'image' && kind !== 'pdf')) return;
+    _showAttachmentHoverPreview_(e, url, kind === 'image', name);
+  }, true);
+  document.addEventListener('mousemove', function(e){
+    if(!document.getElementById('att-hover-preview')) return;
+    _moveAttachmentHoverPreview_(e);
+  }, true);
+  document.addEventListener('mouseout', function(e){
+    var nameEl = e.target.closest && e.target.closest('.att-name');
+    if(!nameEl) return;
+    // 関連要素 (relatedTarget) が同じ要素内ならそのまま
+    var related = e.relatedTarget;
+    if(related && nameEl.contains(related)) return;
+    _hideAttachmentHoverPreview_();
+  }, true);
+})();
+
 function _showAttachmentHoverPreview_(ev, url, isImage, name){
   var existing = document.getElementById('att-hover-preview');
   if(existing) existing.remove();
   var div = document.createElement('div');
   div.id = 'att-hover-preview';
-  div.style.cssText = 'position:fixed;z-index:99999999;background:#fff;border:2px solid #1a73e8;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);padding:6px;pointer-events:none;max-width:400px';
+  div.style.cssText = 'position:fixed;z-index:99999999;background:#fff;border:2px solid #1a73e8;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);padding:6px;pointer-events:none;max-width:420px';
   var content = '';
   if(isImage){
-    content = '<img src="' + url + '" alt="" style="max-width:400px;max-height:400px;display:block;border-radius:4px">';
+    content = '<img src="' + _escAttr_(url) + '" alt="" style="max-width:400px;max-height:400px;display:block;border-radius:4px" onerror="this.parentElement.parentElement.innerHTML=\'<div style=&quot;padding:14px;color:#dc2626&quot;>⚠ 画像読込失敗</div>\'">';
   } else {
     // PDF
-    content = '<iframe src="' + url + '#toolbar=0&view=Fit" style="width:380px;height:500px;border:none;border-radius:4px"></iframe>';
+    content = '<iframe src="' + _escAttr_(url) + '#toolbar=0&view=Fit" style="width:400px;height:500px;border:none;border-radius:4px"></iframe>';
   }
   div.innerHTML = content +
     '<div style="font-size:10px;color:#666;padding:4px 6px 2px;text-align:center;background:#f9fafb;border-radius:0 0 6px 6px;margin:4px -6px -6px">' +
-    (name || '') + '</div>';
+    _escDiff(name || '') + '</div>';
   document.body.appendChild(div);
   _moveAttachmentHoverPreview_(ev);
 }
@@ -27786,6 +27822,7 @@ function _moveAttachmentHoverPreview_(ev){
   if(x + rect.width > window.innerWidth) x = ev.clientX - rect.width - 20;
   if(y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
   if(y < 10) y = 10;
+  if(x < 10) x = 10;
   div.style.left = x + 'px';
   div.style.top = y + 'px';
 }
@@ -28094,6 +28131,11 @@ function renderInquiryList() {
     const senderDisplay = senderCompany && senderName
       ? senderCompany + ' / ' + senderName
       : (senderName || senderCompany || '(送信元不明)');
+    // JJJJ-2: 送信者の右隣に表示する添付アイコン (件名横)
+    var attCountInline = (inq.attachments || []).length;
+    var senderAttachIcon = attCountInline > 0
+      ? ' <span style="color:#7c3aed;font-size:13px" title="' + attCountInline + ' 件の添付ファイル">📎' + (attCountInline > 1 ? attCountInline : '') + '</span>'
+      : '';
 
     // 件名 + プレビュー (Gmail風: 件名 — 本文プレビュー)
     const subject = inq.subject || '(件名なし)';
@@ -28169,8 +28211,8 @@ function renderInquiryList() {
         '<span class="' + stateDotClass + '" title="' + stateTitle + '"></span>' +
         sourceIcon +
       '</div>' +
-      // 中央: 送信者 — 件名 — プレビュー
-      '<div class="inq-sender">' + _escDiff(senderDisplay) + '</div>' +
+      // 中央: 送信者 [📎] — 件名 — プレビュー
+      '<div class="inq-sender">' + _escDiff(senderDisplay) + senderAttachIcon + '</div>' +
       '<div class="inq-subject-line">' +
         '<span class="inq-subject">' + _escDiff(subject) + '</span>' +
         '<span style="color:#bbb;font-weight:400">—</span>' +
