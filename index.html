@@ -18447,7 +18447,12 @@ function _renderSignatureProfilesHtml_(sigs){
       '</label>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
         '<label style="font-size:11px;color:#555">📤 返信時の From アドレス<br><span style="color:#888;font-size:10px">(メール返信の送信元として使用)</span><input class="sp-reply-email" type="email" placeholder="honda@tokiwap.co.jp" value="' + _escDiff(p.replyEmail||'') + '" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;margin-top:2px"></label>' +
-        '<label style="font-size:11px;color:#555">💼 LINE WORKS ユーザーID<br><span style="color:#888;font-size:10px">(LWで受信したメッセージへの返信)</span><input class="sp-lwid" placeholder="honda_lw" value="' + _escDiff(p.lwUserId||'') + '" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;margin-top:2px"></label>' +
+        '<label style="font-size:11px;color:#555">💼 LINE WORKS ユーザーID<br><span style="color:#888;font-size:10px">(LWで受信したメッセージへの返信)</span>' +
+          '<div style="display:flex;gap:4px;margin-top:2px">' +
+            '<input class="sp-lwid" placeholder="honda_lw" value="' + _escDiff(p.lwUserId||'') + '" style="flex:1;font-size:12px;padding:6px 8px;border:1px solid #ccc;border-radius:4px">' +
+            '<button type="button" class="btn" style="font-size:10px;padding:0 8px;background:#0ea5e9;color:#fff;border-color:#0284c7;white-space:nowrap" onclick="_pickLwUserId_(this)" title="過去にLINE WORKSで受信したメッセージから宛先IDを選ぶ">📥 受信履歴から</button>' +
+          '</div>' +
+        '</label>' +
       '</div>' +
       '<label style="font-size:11px;color:#555">📧 メール用署名<textarea class="sp-sig" rows="6" placeholder="--&#10;本田 太郎&#10;トキワ印刷株式会社 営業部&#10;TEL: 042-XXX-XXXX&#10;MAIL: honda@tokiwap.co.jp" style="width:100%;font-size:12px;padding:8px;border:1px solid #ccc;border-radius:4px;margin-top:2px;font-family:monospace;line-height:1.5;resize:vertical">' + _escDiff(p.signature||'') + '</textarea></label>' +
       '<label style="font-size:11px;color:#555;margin-top:6px;display:block">💼 LW用署名 (空欄ならメール署名を流用)<textarea class="sp-lwsig" rows="3" placeholder="本田/トキワ印刷&#10;LW: honda_lw" style="width:100%;font-size:12px;padding:8px;border:1px solid #ccc;border-radius:4px;margin-top:2px;font-family:monospace;line-height:1.5;resize:vertical">' + _escDiff(p.lwSignature||'') + '</textarea></label>' +
@@ -18497,6 +18502,117 @@ function _readSignatureProfilesFromUI_(){
     sigs[0].isDefault = true;
   }
   return sigs;
+}
+
+// AAAAA-1: LW ユーザーID ピッカー — 過去のLINE WORKS受信履歴から宛先IDを選択
+function _pickLwUserId_(btn){
+  // 対象の input 要素 (同じ profile カードの sp-lwid)
+  var card = btn.closest('.sig-profile');
+  if(!card) return;
+  var input = card.querySelector('.sp-lwid');
+  if(!input) return;
+
+  // 過去のLW受信メッセージから宛先 (lw_receiver_id / lw_user_id) を集計
+  var counts = {};  // id → { count, lastSeen, sampleSubject, sampleFrom }
+  (DB.inquiries || []).forEach(function(inq){
+    if(inq.source_type !== 'linesvc' && inq.source_type !== 'lw') return;
+    var rid = (inq.lw_receiver_id || inq.lw_user_id || inq.lw_channel_id || '').trim();
+    if(!rid) return;
+    if(!counts[rid]){
+      counts[rid] = { id: rid, count: 0, lastSeen: '', sampleSubject: '', sampleFrom: '' };
+    }
+    counts[rid].count++;
+    var dt = inq.received_at || inq.createdAt || '';
+    if(dt > counts[rid].lastSeen){
+      counts[rid].lastSeen = dt;
+      counts[rid].sampleSubject = inq.subject || inq.body || '';
+      counts[rid].sampleFrom = inq.from_name || inq.from_email || '';
+    }
+  });
+  var list = Object.values(counts).sort(function(a,b){ return b.count - a.count; });
+
+  // 連絡宛先マスタ (DB.contactTargets) からも取得 — 名前と紐付ける
+  var targets = (typeof _getContactTargets_ === 'function') ? _getContactTargets_() : (DB.contactTargets || []);
+  var nameOf = function(id){
+    var t = (targets || []).find(function(x){ return x.targetId === id; });
+    return t ? (t.name + (t.type === 'lw_channel' ? ' (トーク)' : ' (ユーザー)')) : '';
+  };
+
+  // モーダル表示
+  var existing = document.getElementById('lw-id-picker');
+  if(existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'lw-id-picker';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999999;display:flex;align-items:center;justify-content:center;padding:1rem';
+
+  var rows;
+  if(list.length === 0){
+    rows = '<tr><td colspan="4" style="padding:24px;text-align:center;color:#888">過去のLINE WORKS受信履歴がありません。<br><br>' +
+      'LWメッセージを受信すると、ここに宛先候補が一覧表示されます。' +
+      '</td></tr>';
+  } else {
+    rows = list.map(function(item){
+      var dispDate = item.lastSeen ? new Date(item.lastSeen).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '-';
+      var resolvedName = nameOf(item.id);
+      var sampleText = (item.sampleSubject || '').slice(0, 40);
+      return '<tr style="border-bottom:1px solid #f3f4f6;cursor:pointer" ' +
+        'onclick="document.querySelector(\'#lw-id-picker\').dataset.picked=\'' + item.id.replace(/[\\\\\']/g, '') + '\';this.style.background=\'#dbeafe\'" ' +
+        'ondblclick="_confirmLwIdPick_()">' +
+        '<td style="padding:8px 10px;font-family:monospace;font-size:12px;font-weight:700;color:#0369a1">' + _escDiff(item.id) + '</td>' +
+        '<td style="padding:8px 10px;font-size:11px">' + (resolvedName ? '<strong>' + _escDiff(resolvedName) + '</strong>' : '<span style="color:#aaa">未登録</span>') + '</td>' +
+        '<td style="padding:8px 10px;text-align:right;font-weight:700;font-size:13px">' + item.count + '件</td>' +
+        '<td style="padding:8px 10px;font-size:11px;color:#666">' + dispDate + '<br><span style="color:#999;font-size:10px">' + _escDiff(sampleText) + '</span></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  modal.innerHTML =
+    '<div style="background:#fff;border-radius:12px;max-width:780px;width:100%;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.3)">' +
+      '<div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center">' +
+        '<div>' +
+          '<div style="font-weight:700;font-size:15px">📥 LINE WORKS 受信履歴から選ぶ</div>' +
+          '<div style="font-size:11px;color:#666;margin-top:2px">過去に届いたLWメッセージの宛先IDを行クリックで選択 → ダブルクリックまたは「選択」ボタンで反映</div>' +
+        '</div>' +
+        '<button class="btn" onclick="document.getElementById(\'lw-id-picker\').remove()">×</button>' +
+      '</div>' +
+      '<div style="overflow:auto;flex:1">' +
+        '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+          '<thead style="position:sticky;top:0;background:#f9fafb;z-index:1">' +
+            '<tr style="border-bottom:2px solid #e5e7eb">' +
+              '<th style="padding:8px 10px;text-align:left">宛先 ID (lw_receiver_id)</th>' +
+              '<th style="padding:8px 10px;text-align:left">登録名</th>' +
+              '<th style="padding:8px 10px;text-align:right">受信件数</th>' +
+              '<th style="padding:8px 10px;text-align:left">最終受信</th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>' +
+      '</div>' +
+      '<div style="padding:12px 20px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;gap:8px;align-items:center">' +
+        '<div style="font-size:11px;color:#666">' + list.length + ' 件の宛先候補</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button class="btn" onclick="document.getElementById(\'lw-id-picker\').remove()">キャンセル</button>' +
+          '<button class="btn btn-p" onclick="_confirmLwIdPick_()">✅ 選択した ID を入力</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  // 選択中の input を覚えておく (確定時に書き戻す)
+  modal.dataset.targetIdx = card.dataset.idx || '';
+}
+
+function _confirmLwIdPick_(){
+  var modal = document.getElementById('lw-id-picker');
+  if(!modal) return;
+  var picked = modal.dataset.picked || '';
+  if(!picked){ alert('行をクリックして選択してください'); return; }
+  var idx = modal.dataset.targetIdx || '';
+  var card = document.querySelector('.sig-profile[data-idx="' + idx + '"]');
+  if(card){
+    var input = card.querySelector('.sp-lwid');
+    if(input){ input.value = picked; input.focus(); }
+  }
+  modal.remove();
 }
 
 function _addSignatureProfile_(){
@@ -27242,21 +27358,135 @@ if(currentAuth.loggedIn && currentAuth.companyId){
 // ═══════════════════ 自動メール取得 ═══════════════════
 
 var autoFetchInterval = null;
+var autoInqSyncInterval = null;
+var _lastInqSyncAt_ = 0;
+var _inqSyncInFlight_ = false;
+var _prevInqIds_ = null;
 
 function startAutoFetchEmails() {
   if(autoFetchInterval) clearInterval(autoFetchInterval);
-  // 30秒ごとに自動取得
+  // 30秒ごとに自動取得 (旧 inboxItems 用)
   autoFetchInterval = setInterval(async () => {
     if(CLOUD_CONFIG.CLOUD_MODE && currentAuth.loggedIn) {
-      console.log('自動メール取得実行...');
       await fetchEmailsSilent();
     }
-  }, 30000); // 30秒
-  // 初回も実行
+  }, 30000);
   setTimeout(() => fetchEmailsSilent(), 2000);
+
+  // AAAAA-2: 連絡管理 (DB.inquiries / LW / Web フォーム等) の自動同期
+  startAutoInquirySync();
+
   // ブラウザ通知の許可を求める
   requestNotificationPermission();
 }
+
+// AAAAA-2: 連絡管理の自動同期 (60秒ごと、連絡管理タブ表示中はもっと頻繁)
+function startAutoInquirySync(){
+  if(autoInqSyncInterval) clearInterval(autoInqSyncInterval);
+
+  // 連絡管理タブが表示中なら 30秒、それ以外なら 90秒間隔
+  var pickInterval = function(){
+    var page = (typeof currentPage !== 'undefined') ? currentPage : '';
+    return (page === 'inquiry') ? 30000 : 90000;
+  };
+
+  var tick = async function(){
+    if(!CLOUD_CONFIG.CLOUD_MODE || !currentAuth.loggedIn) return;
+    if(_inqSyncInFlight_) return;
+    var now = Date.now();
+    if(now - _lastInqSyncAt_ < 15000) return;  // 15秒以内の二重実行を防止
+    _inqSyncInFlight_ = true;
+    try {
+      // 既存件数を覚えておく → 新規件数を計算
+      _prevInqIds_ = new Set((DB.inquiries||[]).map(function(i){ return i.id; }));
+      var ok = await loadFromCloud();
+      _lastInqSyncAt_ = Date.now();
+      if(ok !== false){
+        var newOnes = (DB.inquiries||[]).filter(function(i){ return !_prevInqIds_.has(i.id); });
+        if(newOnes.length > 0){
+          console.log('[AutoSync] 新着連絡 ' + newOnes.length + ' 件');
+          _showInquirySyncIndicator_(newOnes.length);
+          // ブラウザ通知 (許可済みなら)
+          if(typeof showBrowserNotification === 'function'){
+            var first = newOnes[0];
+            showBrowserNotification('📨 新着連絡 ' + newOnes.length + ' 件', (first.subject || first.from_name || '') + ' …');
+          }
+          // 連絡管理タブ表示中なら即時再描画
+          if(typeof renderInquiryList === 'function') try { renderInquiryList(); } catch(e){}
+          if(typeof renderInquiryStats === 'function') try { renderInquiryStats(); } catch(e){}
+          if(typeof renderInquiryFolderList === 'function') try { renderInquiryFolderList(); } catch(e){}
+          if(typeof renderInquirySourceTabs === 'function') try { renderInquirySourceTabs(); } catch(e){}
+          if(typeof renderInquiryRecipientTabs === 'function') try { renderInquiryRecipientTabs(); } catch(e){}
+          if(typeof renderInquiryDestinationTabs === 'function') try { renderInquiryDestinationTabs(); } catch(e){}
+        }
+      }
+    } catch(e){
+      console.warn('[AutoSync] 連絡同期失敗:', e);
+    } finally {
+      _inqSyncInFlight_ = false;
+    }
+  };
+
+  // 初回 5秒後 + 動的間隔リスケジュール
+  setTimeout(tick, 5000);
+  autoInqSyncInterval = setInterval(function(){
+    tick();
+    // 次の周期は現在のタブで決定 (タブ切替時に頻度が自動変化)
+    if(autoInqSyncInterval) {
+      clearInterval(autoInqSyncInterval);
+      autoInqSyncInterval = setInterval(arguments.callee, pickInterval());
+    }
+  }, pickInterval());
+
+  // ページ表示状態の変化で即時更新 (タブを開き直した瞬間にも)
+  if(typeof document !== 'undefined' && !window._inqSyncVisHooked_){
+    document.addEventListener('visibilitychange', function(){
+      if(!document.hidden) tick();
+    });
+    window.addEventListener('focus', function(){ tick(); });
+    window._inqSyncVisHooked_ = true;
+  }
+}
+
+// 同期インジケーター: トップバーに「最終取得 HH:MM」と「新着X件」を表示
+function _showInquirySyncIndicator_(newCount){
+  var existing = document.getElementById('inq-sync-indicator');
+  if(!existing){
+    existing = document.createElement('div');
+    existing.id = 'inq-sync-indicator';
+    existing.style.cssText = 'position:fixed;top:60px;right:20px;background:#16a34a;color:#fff;padding:8px 14px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:9999;font-weight:700;font-size:13px;cursor:pointer;animation:inq-sync-pop .3s';
+    existing.onclick = function(){
+      // クリックで連絡管理タブへ
+      if(typeof swPage === 'function'){
+        var btn = document.querySelector('.tb-btn[data-page="inquiry"]');
+        if(btn) swPage('inquiry', btn);
+      }
+      this.remove();
+    };
+    document.body.appendChild(existing);
+    // CSS アニメーション
+    if(!document.getElementById('inq-sync-anim-style')){
+      var st = document.createElement('style');
+      st.id = 'inq-sync-anim-style';
+      st.textContent = '@keyframes inq-sync-pop{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}';
+      document.head.appendChild(st);
+    }
+  }
+  existing.innerHTML = '📨 新着 ' + newCount + ' 件 (タップで開く)';
+  // 8秒後に自動消去
+  clearTimeout(existing._dismissTimer);
+  existing._dismissTimer = setTimeout(function(){
+    if(existing) existing.remove();
+  }, 8000);
+}
+
+// 手動で即時同期を実行する公開API
+window.refreshInquiries = async function(){
+  _lastInqSyncAt_ = 0;
+  _inqSyncInFlight_ = false;
+  if(typeof loadFromCloud === 'function') return await loadFromCloud();
+  return false;
+};
 
 // ブラウザ通知の許可を求める
 function requestNotificationPermission() {
