@@ -2,8 +2,59 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Tokiwa Hub — トキワ印刷グループ統合基幹</title>
+
+<!-- WWWW-3: PWA 設定 -->
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#84cc16">
+<meta name="description" content="トキワ印刷グループ 統合業務管理システム">
+
+<!-- iOS PWA 対応 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="TOKIWA-HUB">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png">
+<link rel="shortcut icon" href="./icons/icon-192.png">
+
+<!-- Service Worker 登録 (PWA オフライン対応 + キャッシュ高速化) -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(function(reg) {
+        console.log('[PWA] Service Worker registered:', reg.scope);
+        // 新バージョンがあれば自動でアクティベート
+        reg.addEventListener('updatefound', function() {
+          var nw = reg.installing;
+          if (nw) {
+            nw.addEventListener('statechange', function() {
+              if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('[PWA] 新バージョンを検出 - 次回起動時に切り替わります');
+                nw.postMessage({ type: 'SKIP_WAITING' });
+              }
+            });
+          }
+        });
+      })
+      .catch(function(err) {
+        console.warn('[PWA] Service Worker 登録失敗:', err);
+      });
+  });
+}
+// PWA インストール促進: スマホで Safari/Chrome のシェアボタン → ホーム画面に追加
+window.addEventListener('beforeinstallprompt', function(e) {
+  // Android Chrome のみ動作 — iOS Safari は手動でホーム画面に追加が必要
+  e.preventDefault();
+  window._deferredPwaPrompt_ = e;
+  console.log('[PWA] beforeinstallprompt - インストール可能');
+});
+</script>
+
 <script>
 // ═══════════════════════════════════════════════════════════════
 // クラウド連携設定（ここを変更してください）
