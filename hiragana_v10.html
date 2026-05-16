@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ひらがな変換ツール</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif; margin: 0; padding: 20px; background: #f5f6f8; color: #222; }
+  h1 { margin: 0 0 8px; font-size: 22px; }
+  .lead { color: #555; margin-bottom: 18px; font-size: 14px; }
+  .container { max-width: 980px; margin: 0 auto; }
+  .panel { background: #fff; border-radius: 8px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px; }
+  .panel h2 { margin: 0 0 12px; font-size: 15px; border-left: 4px solid #2c7be5; padding-left: 10px; }
+  .drop { border: 2px dashed #b8c2cc; border-radius: 8px; padding: 36px 20px; text-align: center; background: #fafbfc; cursor: pointer; display: block; }
+  .drop.over { border-color: #2c7be5; background: #eff6ff; }
+  .drop p { margin: 6px 0; }
+  .drop .big { font-size: 16px; font-weight: 600; }
+  .drop .small { color: #777; font-size: 12px; }
+  button { background: #2c7be5; color: white; border: 0; padding: 9px 18px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-right: 8px; }
+  button:hover { background: #1f63c4; }
+  button.secondary { background: #6c757d; }
+  button.secondary:hover { background: #565e64; }
+  button.danger { background: #c0392b; }
+  button.success { background: #1e8449; }
+  button.success:hover { background: #196634; }
+  button:disabled { background: #b8c2cc; cursor: not-allowed; }
+  input[type=file] { display: none; }
+  input[type=text] { border: 1px solid #d8dde3; padding: 6px 8px; border-radius: 4px; font-size: 13px; font-family: inherit; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .field-label { font-size: 13px; color: #555; margin-right: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid #ecedef; text-align: left; }
+  th { background: #f7f8fa; font-weight: 600; position: sticky; top: 0; z-index: 1; }
+  tr.dup { background: #fff3cd; }
+  tr.empty-val { background: #f8d7da; }
+  tr.kanji-val { background: #ffe5cc; }
+  td input { width: 100%; border: 1px solid #d8dde3; padding: 4px 6px; border-radius: 3px; font-size: 13px; font-family: inherit; }
+  td.del { width: 40px; text-align: center; }
+  td.del button { padding: 2px 8px; font-size: 12px; margin: 0; background: #c0392b; }
+  td.warn { width: 100px; font-size: 11px; }
+  .stat { display: inline-block; padding: 4px 10px; background: #eaf3ff; border-radius: 14px; font-size: 12px; margin-right: 8px; color: #1f63c4; }
+  .stat.ng { background: #fdecea; color: #c0392b; }
+  .stat.warn { background: #fff3cd; color: #856404; }
+  .stat.ok { background: #e9f7ef; color: #1e8449; }
+  .scroll { max-height: 380px; overflow-y: auto; border: 1px solid #ecedef; border-radius: 4px; }
+  .filter { width: 200px; padding: 5px 8px; border: 1px solid #d8dde3; border-radius: 3px; font-size: 13px; font-family: inherit; }
+  .log { background: #f7f8fa; border-radius: 4px; padding: 10px; font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; max-height: 180px; overflow-y: auto; }
+  details { margin-top: 8px; }
+  details summary { cursor: pointer; color: #1f63c4; font-size: 13px; }
+  .err { color: #c0392b; }
+  .ok { color: #1e8449; }
+  .ng-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ng-table th { background: #fdecea; color: #c0392b; padding: 6px 8px; text-align: left; }
+  .ng-table td { padding: 5px 8px; border-bottom: 1px solid #ffeaea; }
+  .ng-table tr.added { background: #e9f7ef; opacity: 0.7; }
+  .ng-kanji { font-weight: 600; min-width: 100px; }
+  .ng-table input { width: 100%; border: 1px solid #d8dde3; padding: 4px 6px; border-radius: 3px; font-size: 13px; }
+  .ng-actions { white-space: nowrap; }
+  .ng-actions button { padding: 3px 10px; font-size: 12px; margin: 0 4px 0 0; }
+  .validation { padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; font-size: 13px; }
+  .validation.ok { background: #e9f7ef; color: #1e8449; border: 1px solid #c3e6cd; }
+  .validation.ng { background: #fdecea; color: #c0392b; border: 1px solid #f4c5c0; }
+  .validation.warn { background: #fff3cd; color: #856404; border: 1px solid #f6e3a4; }
+  .validation ul { margin: 6px 0 0 18px; padding: 0; }
+  .validation li { margin: 2px 0; }
+  .range-info { font-size: 12px; color: #666; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>ひらがな変換ツール</h1>
+<p class="lead">支給された Excel（.xlsx）の漢字を漢字リストに従って一括でひらがなに変換します。書式（フォント・色・結合・列幅など）は元ファイルの状態を保持。指定範囲のみ変換し、ヘッダー・タイトル・カタカナはそのまま保持されます。すべてブラウザ内で処理されます。</p>
+
+<div class="panel">
+  <h2>1. ファイルを選択</h2>
+  <label class="drop" id="drop" for="file">
+    <p class="big">ここに .xlsx をドラッグ&ドロップ</p>
+    <p>または クリックしてファイルを選択</p>
+    <p class="small">.xlsm にも対応します（マクロは保持されません）</p>
+    <input type="file" id="file" accept=".xlsx,.xlsm">
+  </label>
+  <div id="fileInfo" style="margin-top:10px; font-size:13px; color:#555;"></div>
+</div>
+
+<div class="panel">
+  <h2>2. 変換対象の範囲</h2>
+  <div class="row" style="margin-bottom:8px;">
+    <label><input type="radio" name="mode" value="range" id="modeRange"> <strong>セル範囲を指定（推奨）</strong></label>
+    <input type="text" id="rangeInput" style="width:300px;" placeholder="例：B8:E20, J8:M20">
+    <button id="btnPresetMenu" class="secondary" style="padding:5px 10px; font-size:12px;">メニュー領域 ▶</button>
+  </div>
+  <div class="row">
+    <label><input type="radio" name="mode" value="all" id="modeAll"> 全セル（範囲指定なし）</label>
+  </div>
+  <div class="range-info" style="margin-top:8px;">初期値は <code>B8:E20, J8:M20</code>（献立予定表のメニュー本体エリア）。複数範囲はカンマ区切り。範囲外のセル・カタカナはそのまま保持されます。「メニュー領域」ボタンで初期値に戻せます。設定はブラウザに保存されます。</div>
+</div>
+
+<div class="panel">
+  <h2>3. 変換実行</h2>
+  <div class="row">
+    <button id="btnConvert" disabled>変換してダウンロード</button>
+    <button id="btnPreview" class="secondary" disabled>未変換漢字を抽出 / 登録</button>
+    <span id="convStat"></span>
+  </div>
+  <div id="ngArea" style="margin-top:12px;"></div>
+</div>
+
+<div class="panel">
+  <h2>4. 漢字リスト（A列＝漢字、B列＝ひらがな。編集可能）</h2>
+  <div id="validation" class="validation ok">問題なし</div>
+  <div class="row" style="margin-bottom:8px;">
+    <button id="btnAdd">＋ 行を追加</button>
+    <button id="btnExportList" class="secondary">リストをダウンロード（CSV）</button>
+    <button id="btnImportList" class="secondary">リストを読み込む（CSV）</button>
+    <input type="file" id="csvFile" accept=".csv,.txt">
+    <button id="btnReset" class="danger">初期値に戻す</button>
+    <input type="text" id="filter" class="filter" placeholder="検索...">
+    <span class="stat" id="entryCount"></span>
+  </div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th style="width:38%">漢字</th><th style="width:38%">ひらがな</th><th class="warn">警告</th><th class="del">削除</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <details>
+    <summary>「揚げ」と「竜田揚げ」のような干渉について</summary>
+    <p style="font-size:13px; color:#555;">本ツールは「最長一致＋スキップ方式」で置換します。「竜田揚げ」と「揚げ」を両方登録しても、登録順に関係なく長い語が優先されるため干渉しません。重複・空欄・漢字残りなどの問題は上の検証パネルで警告表示されます。</p>
+  </details>
+</div>
+
+<div class="panel">
+  <h2>処理ログ</h2>
+  <div class="log" id="log">準備完了。</div>
+</div>
+
+</div>
+
+<script>
+const DEFAULT_KANJI = [
+["玉ねぎ", "たまねぎ"],
+["牛乳", "ぎゅうにゅう"],
+["じゃが芋", "じゃがいも"],
+["米", "こめ"],
+["海藻", "かいそう"],
+["豆腐", "とうふ"],
+["大根", "だいこん"],
+["味噌汁", "みそしる"],
+["豚肉", "ぶたにく"],
+["保", "ほ"],
+["調理用", "ちょうりよう"],
+["麦飯", "むぎめし"],
+["冷凍", "れいとう"],
+["短冊", "たんざく"],
+["飾り", "かざり"],
+["焼き", "やき"],
+["節分", "せつぶん"],
+["塩", "しお"],
+["中華", "ちゅうか"],
+["蒲", "かば"],
+["木綿豆腐", "もめんどうふ"],
+["鶏肉", "とりにく"],
+["魚", "さかな"],
+["青大豆", "あおだいず"],
+["大豆", "だいず"],
+["鶏卵", "たまご"],
+["ほうれん草", "ほうれんそう"],
+["具", "ぐ"],
+["文化干しやき", "ぶんかぼしやき"],
+["わかたま汁", "わかたまじる"],
+["つみれ汁", "つみれじる"],
+["きつねうどんの汁", "きつねうどんのしる"],
+["手作り", "てづくり"],
+["木綿", "もめん"],
+["茎", "くき"],
+["乾燥", "かんそう"],
+["上白糖", "じょうはくとう"],
+["柑橘", "かんきつ"],
+["長ねぎ", "ながねぎ"],
+["三温糖", "さんおんとう"],
+["和風", "わふう"],
+["枝豆", "えだまめ"],
+["雑穀", "ざっこく"],
+["精麦", "せいばく"],
+["炒め物", "いためもの"],
+["炒め", "いため"],
+["乾パン粉", "かんパンこ"],
+["小麦粉", "こむぎこ"],
+["グラニュー糖", "グラニューとう"],
+["でん粉", "でんぷん"],
+["人参", "にんじん"],
+["卓上醤油", "たくじょうしょうゆ"],
+["油揚げ", "あぶらあげ"],
+["若布", "わかめ"],
+["黄桃", "おうとう"],
+["缶", "かん"],
+["チンゲン菜", "チンゲンさい"],
+["果汁", "かじゅう"],
+["青菜", "あおな"],
+["白菜", "はくさい"],
+["干し", "ほし"],
+["オリーブ油", "オリーブオイル"],
+["飲む", "のむ"],
+["万能ねぎ", "ばんのうねぎ"],
+["小松菜", "こまつな"],
+["パセリ粉", "パセリこ"],
+["白いりごま", "しろいりごま"],
+["卓上", "たくじょう"],
+["中華丼", "ちゅうかどん"],
+["にら玉", "にらたま"],
+["炒り卵", "いりたまご"],
+["のっぺい汁", "のっぺいじる"],
+["背割り", "せわり"],
+["里芋", "さといも"],
+["いかの黄金揚げ", "いかのこがねあげ"],
+["白滝", "しらたき"],
+["ピリ辛", "ピリから"],
+["煮込み", "にこみ"],
+["品目", "ひんもく"],
+["粉カツオ", "こなカツオ"],
+["生揚げ", "なまあげ"],
+["さつま揚げ", "さつまあげ"],
+["ココア揚げ", "ココアあげ"],
+["唐揚げ", "からあげ"],
+["文化", "ぶんか"],
+["青ピーマン", "あおピーマン"],
+["ぶた丼", "ぶたどん"],
+["生クリーム", "なまクリーム"],
+["めった汁", "めったじる"],
+["豚すき丼", "ぶたすきどん"],
+["マーボー丼", "マーボーどん"],
+["五目", "ごもく"],
+["香り", "かおり"],
+["豚丼", "ぶたどん"],
+["ちらし寿司", "ちらしずし"],
+["菜の花", "なのはな"],
+["すまし汁", "すましじる"],
+["きな粉揚げ", "きなこあげ"],
+["パン粉", "パンこ"],
+["変わり", "かわり"],
+["ヨーグルト風味", "ヨーグルトふうみ"],
+["絹さや", "きぬさや"],
+["黄パプリカ", "きパプリカ"],
+["赤パプリカ", "あかパプリカ"],
+["豆乳バター", "とうにゅうバター"],
+["ご飯", "ごはん"],
+["みそ風味", "みそふうみ"],
+["カレー風味", "カレーふうみ"],
+["和え物", "あえもの"],
+["減しおわふう", "げんしおわふう"],
+["みそ汁", "みそしる"],
+["肉じゃが", "にくじゃが"],
+["さつま芋", "さつまいも"],
+["水菜", "みずな"],
+["黒砂糖食パン", "くろざとうしょくパン"],
+["ごま和え", "ごまあえ"],
+["味噌ラーメン", "みそラーメン"],
+["ひじきの彩り和え", "ひじきのいろどりあえ"],
+["甘辛煮", "あまからに"],
+["大学芋", "だいがくいも"],
+["白玉入り", "しらたまいり"],
+["はっと汁", "はっとじる"],
+["白玉餅", "しらたまもち"],
+["水あめ", "みずあめ"],
+["青のり", "あおのり"],
+["ぶた汁", "ぶたじる"],
+["カリカリ梅", "カリカリうめ"],
+["お祝い汁", "おいわいじる"],
+["鶏のから揚げ", "とりのからあげ"],
+["醤油", "しょうゆ"],
+["梅肉", "ばいにく"],
+["梅", "うめ"],
+["麦", "むぎ"],
+["油", "あぶら"],
+["卵", "たまご"],
+["豚", "ぶた"],
+["皮", "かわ"],
+["二色", "にしょく"],
+["香味", "こうみ"],
+["うま煮丼", "うまにどん"],
+["野菜", "やさい"],
+["清見", "きよみ"],
+["中華煮", "ちゅうかに"],
+["新じゃがいも", "しんじゃがいも"],
+["煮物", "にもの"],
+["味噌", "みそ"],
+["さらさ揚げ", "さらさあげ"],
+["炒り煮", "いりに"],
+["挽肉", "ひきにく"],
+["あんかけ丼", "あんかけどん"],
+["赤飯", "せきはん"],
+["桜かまぼこ", "さくらかまぼこ"],
+["竜田揚げ", "たつたあげ"],
+["春キャベツ", "はるキャベツ"],
+["米粉", "こめこ"],
+["小豆", "あずき"],
+["鶏ごぼう", "とりごぼう"],
+["昆布", "こんぶ"],
+["味噌煮", "みそに"],
+["白身", "しろみ"],
+["ちまき風", "ちまきふう"],
+["お茶", "おちゃ"],
+["ﾊﾟﾝ粉", "ﾊﾟﾝこ"],
+["高野とうふ", "こうやとうふ"],
+["凍りとうふ", "こおりとうふ"],
+["親子丼", "おやこどん"],
+["肉団子汁", "にくだんごじる"],
+["竹輪", "ちくわ"],
+["麻婆", "マーボー"],
+["緑豆春雨", "りょくとうはるさめ"],
+["春雨", "はるさめ"],
+["磯辺揚げ", "いそげあげ"],
+["食パン", "しょくパン"],
+["肉団子", "にくだんご"],
+["揚げ煮", "あげに"],
+["ﾋﾟﾘ辛炒", "ﾋﾟﾘからに"],
+["甘辛揚げ", "あまからあげ"],
+["横割り丸パン", "よこわりまるパン"],
+["春野菜", "はるやさい"],
+["そぼろ丼", "そぼろどん"],
+["肉ごぼう", "にくごぼう"],
+["粉チーズ", "こなチーズ"],
+["一夜干し", "いちやぼし"],
+["花麩", "はなふ"],
+["麩", "ふ"],
+["切干大根", "きりぼしだいこん"],
+["食べるお茶", "たべるおちゃ"],
+["食べる", "たべる"],
+["米粉めん", "こめこめん"],
+["きな粉", "きなこ"],
+["五目汁", "ごもくじる"],
+["カミカミ和え", "カミカミあえ"],
+["中華風", "ちゅうかふう"],
+["きすの狭山茶揚げ", "きすのさやまちゃあげ"],
+["カツオ節", "カツオぶし"],
+["鰹節", "かつおぶし"]
+];
+const DEFAULT_RANGE = 'B8:E20, J8:M20';
+
+let kanjiList = loadList();
+let lastFile = null;
+let lastBytes = null;
+let lastUnconverted = null;
+let lastUnconvertedAdded = new Set();
+let lastFurigana = {};
+let kuromojiTokenizer = null;
+let kuromojiState = 'unloaded';
+let filterText = '';
+
+function loadList() {
+  try { const s = localStorage.getItem('kanjiList_v2'); if (s) return JSON.parse(s); } catch(e) {}
+  return DEFAULT_KANJI.map(p => p.slice());
+}
+function saveList() { try { localStorage.setItem('kanjiList_v2', JSON.stringify(kanjiList)); } catch(e) {} }
+
+// ===== マイグレーション：不正な読みを自動修正 =====
+const HIRAGANA_FIXES = {
+  'ごもくしる': 'ごもくじる',
+  'カミカミわえ': 'カミカミあえ',
+  'ちゅうかかぜ': 'ちゅうかふう',
+  'きすのさやまちゃあげげ': 'きすのさやまちゃあげ',
+  'カツオふし': 'カツオぶし',
+  'しょくべるおちゃ': 'たべるおちゃ',
+  'ピりから': 'ピリから',
+  'きなこな': 'きなこ',
+  'べいふんめん': 'こめこめん'
+};
+// 必ず正しく登録されているべきエントリ（誤登録を上書き、無ければ追加）
+const ENSURED_ENTRIES = {
+  '食べるお茶': 'たべるおちゃ',
+  '食べる': 'たべる',
+  '米粉めん': 'こめこめん',
+  'きな粉': 'きなこ',
+  'ピリ辛': 'ピリから',
+  '五目汁': 'ごもくじる',
+  'カミカミ和え': 'カミカミあえ',
+  '中華風': 'ちゅうかふう',
+  'きすの狭山茶揚げ': 'きすのさやまちゃあげ',
+  'カツオ節': 'カツオぶし',
+  '鰹節': 'かつおぶし'
+};
+function applyHiraganaMigrations(list) {
+  let fixed = [];
+  // 1) 値ベース修正
+  list.forEach(p => {
+    const v = (p[1] || '').trim();
+    if (HIRAGANA_FIXES[v]) {
+      fixed.push({ kanji: p[0], from: v, to: HIRAGANA_FIXES[v], type: '値修正' });
+      p[1] = HIRAGANA_FIXES[v];
+      return;
+    }
+    let nv = v;
+    for (const bad in HIRAGANA_FIXES) {
+      if (nv.includes(bad)) nv = nv.split(bad).join(HIRAGANA_FIXES[bad]);
+    }
+    if (nv !== v) {
+      fixed.push({ kanji: p[0], from: v, to: nv, type: '部分修正' });
+      p[1] = nv;
+    }
+  });
+  // 2) キーベース：必須エントリを保証
+  const keyToIdx = {};
+  list.forEach((p, idx) => { const k = (p[0]||'').trim(); if (k) keyToIdx[k] = idx; });
+  for (const k in ENSURED_ENTRIES) {
+    const correct = ENSURED_ENTRIES[k];
+    if (k in keyToIdx) {
+      const idx = keyToIdx[k];
+      const cur = (list[idx][1] || '').trim();
+      if (cur !== correct) {
+        fixed.push({ kanji: k, from: cur, to: correct, type: 'キー修正' });
+        list[idx][1] = correct;
+      }
+    } else {
+      fixed.push({ kanji: k, from: '(なし)', to: correct, type: '新規追加' });
+      list.push([k, correct]);
+    }
+  }
+  return fixed;
+}
+function loadRange() { try { const s = localStorage.getItem('rangeStr_v3'); if (s != null) return s; } catch(e) {} return DEFAULT_RANGE; }
+function saveRange(s) { try { localStorage.setItem('rangeStr_v3', s); } catch(e) {} }
+
+function log(msg, cls) {
+  const el = document.getElementById('log');
+  const ts = new Date().toLocaleTimeString();
+  const line = (cls ? '<span class="' + cls + '">' : '') + '[' + ts + '] ' + escapeHtml(msg) + (cls ? '</span>' : '');
+  el.innerHTML = line + '\n' + el.innerHTML;
+}
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function kataToHira(s) {
+  return String(s).replace(/[ァ-ヶ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+}
+function isKanjiChar(ch) {
+  const u = ch.charCodeAt(0);
+  return (u >= 0x4E00 && u <= 0x9FFF) || (u >= 0x3400 && u <= 0x4DBF) || (u >= 0xF900 && u <= 0xFAFF);
+}
+function findKanjiRuns(s) {
+  const out = []; let cur = '';
+  for (const ch of s) { if (isKanjiChar(ch)) cur += ch; else { if (cur) { out.push(cur); cur = ''; } } }
+  if (cur) out.push(cur);
+  return out;
+}
+function hasKanji(s) { for (const ch of (s||'')) if (isKanjiChar(ch)) return true; return false; }
+
+// ===== Red fill style detection =====
+function getRedStyleIds(stylesXml) {
+  const redStyleIds = new Set();
+  if (!stylesXml) return redStyleIds;
+  // 1) find which fill indices are red
+  const fillsMatch = stylesXml.match(/<fills[^>]*>([\s\S]*?)<\/fills>/);
+  if (!fillsMatch) return redStyleIds;
+  const fillsBlock = fillsMatch[1];
+  const fillItems = [];
+  const fillRe = /<fill\b[^>]*\/>|<fill\b[^>]*>[\s\S]*?<\/fill>/g;
+  let mm;
+  while ((mm = fillRe.exec(fillsBlock)) !== null) fillItems.push(mm[0]);
+  const redFillIds = new Set();
+  fillItems.forEach((f, i) => {
+    const cm = f.match(/<fgColor\s+rgb="([0-9A-Fa-f]+)"/);
+    if (cm) {
+      let rgb = cm[1].toUpperCase();
+      if (rgb.length === 8 && rgb.startsWith('FF')) rgb = rgb.substring(2);
+      // Accept FF0000 (pure red) or any color where R is dominant (R>200, G<100, B<100)
+      if (rgb.length === 6) {
+        const r = parseInt(rgb.substring(0,2),16);
+        const g = parseInt(rgb.substring(2,4),16);
+        const b = parseInt(rgb.substring(4,6),16);
+        if (r > 200 && g < 100 && b < 100) redFillIds.add(i);
+      }
+    }
+  });
+  // 2) find cellXfs that use these fills
+  const xfsMatch = stylesXml.match(/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/);
+  if (!xfsMatch) return redStyleIds;
+  const xfsBlock = xfsMatch[1];
+  const xfItems = [];
+  const xfRe = /<xf\b[^>]*\/>|<xf\b[^>]*>[\s\S]*?<\/xf>/g;
+  while ((mm = xfRe.exec(xfsBlock)) !== null) xfItems.push(mm[0]);
+  xfItems.forEach((x, i) => {
+    const fm = x.match(/fillId="(\d+)"/);
+    if (fm && redFillIds.has(parseInt(fm[1]))) redStyleIds.add(i);
+  });
+  return redStyleIds;
+}
+
+// ===== Cell range parsing =====
+function colToNum(c) { let n = 0; for (const ch of c) n = n * 26 + (ch.charCodeAt(0) - 64); return n; }
+function addrToRowCol(addr) {
+  const m = addr.match(/^([A-Z]+)(\d+)$/);
+  return m ? { col: colToNum(m[1]), row: parseInt(m[2]) } : null;
+}
+function parseRanges(s) {
+  if (!s || !s.trim()) return null;
+  const parts = s.split(',').map(x => x.trim()).filter(x => x);
+  const out = [];
+  for (const p of parts) {
+    let m = p.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i);
+    if (m) {
+      out.push({
+        startCol: colToNum(m[1].toUpperCase()),
+        startRow: parseInt(m[2]),
+        endCol: colToNum(m[3].toUpperCase()),
+        endRow: parseInt(m[4])
+      });
+      continue;
+    }
+    m = p.match(/^([A-Z]+)(\d+)$/i);
+    if (m) {
+      const cn = colToNum(m[1].toUpperCase()); const rn = parseInt(m[2]);
+      out.push({ startCol: cn, startRow: rn, endCol: cn, endRow: rn });
+    }
+  }
+  return out.length ? out : null;
+}
+function inAnyRange(addr, ranges) {
+  if (!ranges) return true;
+  const rc = addrToRowCol(addr);
+  if (!rc) return false;
+  return ranges.some(r => rc.col >= r.startCol && rc.col <= r.endCol && rc.row >= r.startRow && rc.row <= r.endRow);
+}
+
+// ===== Validation =====
+function validateList() {
+  const issues = { duplicates: {}, emptyRows: new Set(), kanjiValueRows: new Set(), errors: [], warnings: [], duplicateRowSet: new Set() };
+  const keyToRows = {};
+  kanjiList.forEach((p, idx) => {
+    const k = (p[0]||'').trim(); const v = (p[1]||'').trim();
+    if (!k && !v) return;
+    if (!k || !v) { issues.emptyRows.add(idx); return; }
+    if (!keyToRows[k]) keyToRows[k] = [];
+    keyToRows[k].push(idx);
+    if (hasKanji(v)) issues.kanjiValueRows.add(idx);
+  });
+  for (const k in keyToRows) {
+    if (keyToRows[k].length > 1) {
+      issues.duplicates[k] = keyToRows[k];
+      keyToRows[k].forEach(idx => issues.duplicateRowSet.add(idx));
+    }
+  }
+  for (const k in issues.duplicates) {
+    const rows = issues.duplicates[k];
+    issues.errors.push('「' + k + '」が ' + rows.length + ' 行に重複しています（行: ' + rows.map(i => i+1).join(', ') + '）');
+  }
+  if (issues.emptyRows.size > 0) issues.warnings.push('空欄を含む行が ' + issues.emptyRows.size + ' 件あります（変換で無視されます）');
+  if (issues.kanjiValueRows.size > 0) {
+    const samples = [...issues.kanjiValueRows].slice(0, 5).map(i => '「' + kanjiList[i][0] + '」→「' + kanjiList[i][1] + '」').join('、');
+    issues.warnings.push('ひらがな欄に漢字が残っている行が ' + issues.kanjiValueRows.size + ' 件あります（' + samples + (issues.kanjiValueRows.size > 5 ? '…' : '') + '）');
+  }
+  return issues;
+}
+function renderValidation() {
+  const issues = validateList();
+  const el = document.getElementById('validation');
+  if (issues.errors.length === 0 && issues.warnings.length === 0) {
+    el.className = 'validation ok';
+    el.innerHTML = '✓ 漢字リストは正常です（' + kanjiList.length + ' 件）';
+  } else {
+    let html = '';
+    if (issues.errors.length > 0) {
+      el.className = 'validation ng';
+      html = '<strong>エラー：' + issues.errors.length + ' 件</strong>';
+      html += '<ul>' + issues.errors.map(e => '<li>' + escapeHtml(e) + '</li>').join('') + '</ul>';
+    }
+    if (issues.warnings.length > 0) {
+      if (issues.errors.length === 0) el.className = 'validation warn';
+      html += (html ? '<div style="margin-top:6px;">' : '') + '<strong>警告：' + issues.warnings.length + ' 件</strong>';
+      html += '<ul>' + issues.warnings.map(w => '<li>' + escapeHtml(w) + '</li>').join('') + '</ul>';
+      if (issues.errors.length === 0) html += '</div>';
+    }
+    el.innerHTML = html;
+  }
+  return issues;
+}
+
+// ===== List UI =====
+function renderTable() {
+  const issues = renderValidation();
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  const f = filterText.trim();
+  let shown = 0;
+  kanjiList.forEach((pair, idx) => {
+    if (f && !pair[0].includes(f) && !pair[1].includes(f)) return;
+    shown++;
+    const tr = document.createElement('tr');
+    let warnText = '';
+    if (issues.duplicateRowSet.has(idx)) { tr.classList.add('dup'); warnText = '⚠ 重複'; }
+    else if (issues.emptyRows.has(idx)) { tr.classList.add('empty-val'); warnText = '⚠ 空欄'; }
+    else if (issues.kanjiValueRows.has(idx)) { tr.classList.add('kanji-val'); warnText = '⚠ 漢字残り'; }
+    const td1 = document.createElement('td');
+    const td2 = document.createElement('td');
+    const td3 = document.createElement('td'); td3.className = 'warn'; td3.textContent = warnText;
+    const td4 = document.createElement('td'); td4.className = 'del';
+    const inp1 = document.createElement('input'); const inp2 = document.createElement('input');
+    inp1.value = pair[0]; inp2.value = pair[1];
+    inp1.onchange = () => { kanjiList[idx][0] = inp1.value; saveList(); renderTable(); };
+    inp2.onchange = () => { kanjiList[idx][1] = inp2.value; saveList(); renderTable(); };
+    const delBtn = document.createElement('button'); delBtn.textContent = '×';
+    delBtn.onclick = () => { kanjiList.splice(idx, 1); saveList(); renderTable(); };
+    td1.appendChild(inp1); td2.appendChild(inp2); td4.appendChild(delBtn);
+    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+    tbody.appendChild(tr);
+  });
+  document.getElementById('entryCount').textContent = '登録数：' + kanjiList.length + (f ? '（表示 ' + shown + '）' : '');
+}
+
+document.getElementById('btnAdd').onclick = () => {
+  kanjiList.push(['','']); saveList(); renderTable();
+  const scroll = document.querySelector('.scroll'); scroll.scrollTop = scroll.scrollHeight;
+  const inputs = document.querySelectorAll('#tbody tr:last-child input');
+  if (inputs.length) inputs[0].focus();
+};
+document.getElementById('btnReset').onclick = () => {
+  if (!confirm('漢字リストを初期値（' + DEFAULT_KANJI.length + '件）に戻します。よろしいですか？')) return;
+  kanjiList = DEFAULT_KANJI.map(p => p.slice()); saveList(); renderTable();
+  log('漢字リストを初期化しました。');
+};
+document.getElementById('btnExportList').onclick = () => {
+  const csv = '漢字,ひらがな\n' + kanjiList.map(p => '"' + p[0].replace(/"/g,'""') + '","' + p[1].replace(/"/g,'""') + '"').join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob); const a = document.createElement('a');
+  a.href = url; a.download = '漢字リスト.csv'; a.click(); URL.revokeObjectURL(url);
+  log('漢字リストを CSV としてダウンロードしました。');
+};
+document.getElementById('btnImportList').onclick = () => document.getElementById('csvFile').click();
+document.getElementById('csvFile').onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const text = await f.text(); const clean = text.replace(/^﻿/, '');
+  const rows = parseCSV(clean); const newList = [];
+  rows.forEach((r, i) => {
+    if (i === 0 && (r[0]||'').includes('漢字')) return;
+    if ((r[0]||'').trim() && (r[1]||'').trim()) newList.push([r[0].trim(), r[1].trim()]);
+  });
+  if (newList.length === 0) { alert('有効なデータが見つかりませんでした。'); return; }
+  kanjiList = newList; saveList(); renderTable();
+  log('CSV から ' + newList.length + ' 件読み込みました。');
+  e.target.value = '';
+};
+document.getElementById('filter').oninput = (e) => { filterText = e.target.value; renderTable(); };
+
+function loadMode() { try { const s = localStorage.getItem('mode_v3'); if (s && s !== 'red') return s; } catch(e) {} return 'range'; }
+function saveMode(s) { try { localStorage.setItem('mode_v3', s); } catch(e) {} }
+function getMode() {
+  const els = document.querySelectorAll('input[name="mode"]');
+  for (const e of els) if (e.checked) return e.value;
+  return 'red';
+}
+function setMode(m) {
+  const el = document.getElementById('mode' + m.charAt(0).toUpperCase() + m.slice(1));
+  if (el) el.checked = true;
+}
+document.getElementById('rangeInput').value = loadRange();
+setMode(loadMode());
+document.querySelectorAll('input[name="mode"]').forEach(el => {
+  el.onchange = () => {
+    saveMode(getMode());
+    log('対象選択方法を「' + ({range:'セル範囲を指定',all:'全セル'}[getMode()]) + '」に変更しました。');
+  };
+});
+document.getElementById('rangeInput').onchange = () => saveRange(document.getElementById('rangeInput').value);
+document.getElementById('btnPresetMenu').onclick = () => {
+  document.getElementById('rangeInput').value = DEFAULT_RANGE;
+  saveRange(DEFAULT_RANGE);
+  setMode('range'); saveMode('range');
+  log('対象範囲を「' + DEFAULT_RANGE + '」（メニュー領域）に戻しました。');
+};
+
+function parseCSV(text) {
+  const rows = []; let row = []; let cur = ''; let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i+1] === '"') { cur += '"'; i++; } else inQ = false; }
+      else cur += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { row.push(cur); cur = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (cur || row.length) { row.push(cur); rows.push(row); row = []; cur = ''; }
+        if (c === '\r' && text[i+1] === '\n') i++;
+      } else cur += c;
+    }
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows;
+}
+
+const dropEl = document.getElementById('drop'); const fileInput = document.getElementById('file');
+['dragenter', 'dragover'].forEach(ev => dropEl.addEventListener(ev, e => { e.preventDefault(); dropEl.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => dropEl.addEventListener(ev, e => { e.preventDefault(); dropEl.classList.remove('over'); }));
+dropEl.addEventListener('drop', e => { if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+
+async function handleFile(f) {
+  lastFile = f;
+  document.getElementById('fileInfo').textContent = '選択中：' + f.name + '（' + Math.round(f.size/1024) + ' KB）';
+  log('ファイルを読み込み中：' + f.name);
+  try {
+    lastBytes = await f.arrayBuffer();
+    document.getElementById('btnConvert').disabled = false;
+    document.getElementById('btnPreview').disabled = false;
+    document.getElementById('ngArea').innerHTML = '';
+    lastUnconverted = null;
+    lastUnconvertedAdded.clear();
+    log('読み込み完了。');
+  } catch (err) {
+    log('読み込みエラー：' + err.message, 'err');
+    alert('ファイルの読み込みに失敗しました：' + err.message);
+  }
+}
+
+function buildKeysSorted() {
+  const map = {}; const issues = validateList();
+  if (issues.errors.length > 0) return { map: null, keys: null, error: issues.errors.join(' / ') };
+  for (const [k, v] of kanjiList) {
+    const kk = (k||'').trim(); const vv = (v||'').trim();
+    if (kk && vv) map[kk] = vv;
+  }
+  const keys = Object.keys(map).sort((a, b) => b.length - a.length);
+  return { map, keys };
+}
+function applyReplace(s, map, keys) {
+  const out = []; let i = 0; const n = s.length;
+  while (i < n) {
+    let matched = false;
+    for (const k of keys) {
+      const kl = k.length;
+      if (kl && i + kl <= n && s.substr(i, kl) === k) { out.push(map[k]); i += kl; matched = true; break; }
+    }
+    if (!matched) { out.push(s[i]); i++; }
+  }
+  return out.join('');
+}
+function decodeXmlEntities(s) {
+  return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+          .replace(/&#x([0-9A-Fa-f]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+          .replace(/&#([0-9]+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+          .replace(/&amp;/g, '&');
+}
+function encodeXmlText(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+// ===== Main workbook processing (cell-level, range-aware) =====
+async function processWorkbook(zip, map, keys, opts) {
+  const stats = { totalCells: 0, convertedCells: 0, unconvertedKanji: new Set(), furigana: {}, inRange: 0, outRange: 0 };
+  const collectOnly = opts && opts.collectOnly;
+  const mode = (opts && opts.mode) || 'range';
+  const ranges = opts && opts.ranges ? opts.ranges : null;
+
+  // Build sharedStrings map and extract rPh furigana
+  const ssMap = []; const ssIsRich = [];
+  const ssFile = zip.file('xl/sharedStrings.xml');
+  if (ssFile) {
+    const ssText = await ssFile.async('string');
+    let idx = 0;
+    ssText.replace(/<si\b[^>]*>([\s\S]*?)<\/si>/g, (full, inner) => {
+      const isRich = /<r\b/.test(inner);
+      ssIsRich[idx] = isRich;
+      if (isRich) {
+        let combined = '';
+        inner.replace(/<t\b[^>]*>([\s\S]*?)<\/t>/g, (m, t) => { combined += decodeXmlEntities(t); return m; });
+        ssMap[idx] = combined;
+      } else {
+        const tm = inner.match(/<t\b[^>]*>([\s\S]*?)<\/t>/);
+        ssMap[idx] = tm ? decodeXmlEntities(tm[1]) : '';
+        // Extract rPh for furigana suggestions (from main_text)
+        if (tm) {
+          const mainText = decodeXmlEntities(tm[1]);
+          const rphRe = /<rPh\s+sb="(\d+)"\s+eb="(\d+)"[^>]*>\s*<t\b[^>]*>([\s\S]*?)<\/t>\s*<\/rPh>/g;
+          let rm;
+          while ((rm = rphRe.exec(inner)) !== null) {
+            const sb = parseInt(rm[1]); const eb = parseInt(rm[2]);
+            const reading = decodeXmlEntities(rm[3]);
+            const kanjiPart = mainText.substring(sb, eb);
+            if (kanjiPart && reading && !stats.furigana[kanjiPart]) {
+              stats.furigana[kanjiPart] = kataToHira(reading);
+            }
+          }
+        }
+      }
+      idx++;
+      return full;
+    });
+  }
+
+  // Process each worksheet at the cell level
+  const wsFiles = Object.keys(zip.files).filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n));
+  for (const name of wsFiles) {
+    let xml = await zip.file(name).async('string');
+    xml = xml.replace(/<c\b([^>]*)>([\s\S]*?)<\/c>/g, (full, attrs, inner) => {
+      const ra = attrs.match(/\br="([^"]+)"/);
+      if (!ra) return full;
+      const addr = ra[1];
+      let inR;
+      if (mode === 'range') {
+        inR = inAnyRange(addr, ranges);
+      } else {
+        inR = true; // all
+      }
+      if (!inR) { stats.outRange++; return full; }
+      stats.inRange++;
+
+      const ta = attrs.match(/\bt="([^"]+)"/);
+      const type = ta ? ta[1] : 'n';
+      let originalText = null;
+      let fromRichSS = false;
+      if (type === 's') {
+        const vm = inner.match(/<v>(\d+)<\/v>/);
+        if (!vm) return full;
+        const sIdx = parseInt(vm[1]);
+        originalText = ssMap[sIdx];
+        fromRichSS = ssIsRich[sIdx];
+      } else if (type === 'inlineStr') {
+        const tm = inner.match(/<t\b[^>]*>([\s\S]*?)<\/t>/);
+        if (!tm) return full;
+        originalText = decodeXmlEntities(tm[1]);
+      } else if (type === 'str') {
+        const vm = inner.match(/<v>([\s\S]*?)<\/v>/);
+        if (!vm) return full;
+        originalText = decodeXmlEntities(vm[1]);
+      } else {
+        return full; // numbers, dates, errors etc.
+      }
+
+      if (originalText == null || originalText === '') return full;
+
+      stats.totalCells++;
+      const converted = applyReplace(originalText, map, keys);
+      findKanjiRuns(converted).forEach(w => stats.unconvertedKanji.add(w));
+
+      if (collectOnly) return full;
+      if (converted === originalText) return full;
+      stats.convertedCells++;
+
+      // Replace cell with inlineStr (to avoid affecting other cells sharing the same string).
+      // Rich text formatting is lost for converted cells, but plain styles (font/color from cell style) remain.
+      let newAttrs = attrs.replace(/\bt="[^"]+"\s*/, '').trim();
+      if (newAttrs) newAttrs = ' ' + newAttrs;
+      const openTag = (converted[0] === ' ' || converted[converted.length-1] === ' ' || converted.includes('\n'))
+        ? '<t xml:space="preserve">' : '<t>';
+      return '<c' + newAttrs + ' t="inlineStr"><is>' + openTag + encodeXmlText(converted) + '</t></is></c>';
+    });
+    if (!collectOnly) zip.file(name, xml);
+  }
+
+  return stats;
+}
+
+document.getElementById('btnConvert').onclick = async () => {
+  if (!lastBytes) return;
+  const built = buildKeysSorted();
+  if (built.error) { alert('漢字リストにエラーがあります：\n' + built.error + '\n\n修正してから実行してください。'); return; }
+  if (built.keys.length === 0) { alert('漢字リストが空です。'); return; }
+  const mode = getMode();
+  const rangeStr = document.getElementById('rangeInput').value;
+  const ranges = mode === 'range' ? parseRanges(rangeStr) : null;
+  document.getElementById('btnConvert').disabled = true;
+  document.getElementById('convStat').textContent = '変換中...';
+  try {
+    const zip = await JSZip.loadAsync(lastBytes);
+    const stats = await processWorkbook(zip, built.map, built.keys, { collectOnly: false, ranges, mode });
+    
+    const out = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const orig = lastFile.name.replace(/\.[^.]+$/, '');
+    const a = document.createElement('a'); const url = URL.createObjectURL(out);
+    a.href = url; a.download = orig + '_ひらがな.xlsx'; a.click(); URL.revokeObjectURL(url);
+    const modeLabel = ({range:'指定範囲',all:'全セル'})[mode];
+    document.getElementById('convStat').innerHTML =
+      '<span class="stat ok">変換セル：' + stats.convertedCells + '</span>' +
+      '<span class="stat">対象（' + modeLabel + '）：' + stats.inRange + '</span>' +
+      '<span class="stat">対象外（保持）：' + stats.outRange + '</span>' +
+      (stats.unconvertedKanji.size > 0 ? '<span class="stat ng">未変換漢字：' + stats.unconvertedKanji.size + '</span>' : '');
+    log('変換完了（' + modeLabel + 'モード）：' + stats.convertedCells + ' セル変換、' + stats.outRange + ' セル保持。' + a.download + ' をダウンロードしました。', 'ok');
+  } catch (err) {
+    log('変換エラー：' + err.message, 'err'); alert('変換中にエラーが発生しました：' + err.message);
+  } finally { document.getElementById('btnConvert').disabled = false; }
+};
+
+document.getElementById('btnPreview').onclick = async () => {
+  if (!lastBytes) return;
+  const built = buildKeysSorted();
+  if (built.error) { alert('漢字リストにエラーがあります：\n' + built.error); return; }
+  const mode = getMode();
+  const rangeStr = document.getElementById('rangeInput').value;
+  const ranges = mode === 'range' ? parseRanges(rangeStr) : null;
+  try {
+    const zip = await JSZip.loadAsync(lastBytes);
+    const stats = await processWorkbook(zip, built.map, built.keys, { collectOnly: true, ranges, mode });
+    lastUnconverted = [...stats.unconvertedKanji].sort();
+    lastFurigana = stats.furigana || {};
+    lastUnconvertedAdded.clear();
+    renderUnconvertedTable();
+    const rphCount = Object.keys(lastFurigana).filter(k => lastUnconverted.includes(k)).length;
+    if (rphCount > 0) log('支給ファイルから ' + rphCount + ' 件のふりがな（rPh）を取得しました。', 'ok');
+    const modeLabel = ({range:'指定範囲',all:'全セル'})[mode];
+    log('対象（' + modeLabel + '）：' + stats.inRange + ' セル / 対象外：' + stats.outRange + ' セル');
+  } catch (err) { log('プレビューエラー：' + err.message, 'err'); }
+};
+
+function getSuggestedReading(w) {
+  if (lastFurigana[w]) return { reading: lastFurigana[w], src: 'rPh' };
+  if (kuromojiState === 'ready' && kuromojiTokenizer) {
+    try {
+      const tokens = kuromojiTokenizer.tokenize(w);
+      const reading = tokens.map(t => t.reading || t.surface_form).join('');
+      return { reading: kataToHira(reading), src: '辞書' };
+    } catch (e) {}
+  }
+  return null;
+}
+async function ensureKuromojiLoaded() {
+  if (kuromojiState === 'ready' || kuromojiState === 'loading') return;
+  kuromojiState = 'loading';
+  log('日本語形態素解析の辞書を読み込み中...');
+  return new Promise((resolve) => {
+    if (typeof kuromoji === 'undefined') {
+      kuromojiState = 'failed';
+      log('kuromoji ライブラリが読み込めませんでした。', 'err');
+      resolve();
+      return;
+    }
+    kuromoji.builder({ dicPath: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/' })
+      .build((err, tokenizer) => {
+        if (err) { kuromojiState = 'failed'; log('辞書の読み込みに失敗しました：' + err, 'err'); resolve(); }
+        else { kuromojiTokenizer = tokenizer; kuromojiState = 'ready'; log('辞書の読み込み完了。', 'ok'); resolve(); }
+      });
+  });
+}
+
+function renderUnconvertedTable() {
+  const ngArea = document.getElementById('ngArea');
+  if (!lastUnconverted) { ngArea.innerHTML = ''; return; }
+  if (lastUnconverted.length === 0) {
+    ngArea.innerHTML = '<span class="stat ok">対象範囲内の漢字はすべて漢字リストでカバーされています</span>';
+    return;
+  }
+  const registeredKeys = new Set();
+  kanjiList.forEach(p => { if ((p[0]||'').trim()) registeredKeys.add(p[0].trim()); });
+
+  let suggestedCount = 0;
+  lastUnconverted.forEach(w => { if (getSuggestedReading(w)) suggestedCount++; });
+
+  let html = '<div style="margin-bottom:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">';
+  html += '<strong style="font-size:13px;">未変換の漢字単語：' + lastUnconverted.length + ' 件</strong>';
+  if (suggestedCount > 0) html += '<span class="stat ok">' + suggestedCount + ' 件は自動入力済</span>';
+  if (kuromojiState !== 'ready') html += '<button id="btnLoadKuromoji" class="secondary">' + (kuromojiState === 'loading' ? '辞書読込中...' : 'ふりがな自動入力 (辞書読込)') + '</button>';
+  html += '<button id="btnAddAll" class="success">すべて追加（入力欄の値ごと）</button>';
+  html += '<button id="btnHideAdded" class="secondary">追加済を非表示</button>';
+  html += '</div>';
+  html += '<p style="font-size:12px; color:#666; margin: 0 0 8px;">「rPh」は支給ファイルのふりがな情報、「辞書」は形態素解析の自動推測です。必要に応じて修正してから登録してください。Enter または「登録」で漢字リストに追加。</p>';
+  html += '<table class="ng-table"><thead><tr><th style="width:25%">漢字</th><th style="width:40%">ひらがな（入力）</th><th style="width:10%">出典</th><th style="width:25%">操作</th></tr></thead><tbody>';
+  lastUnconverted.forEach((w, i) => {
+    const already = registeredKeys.has(w) || lastUnconvertedAdded.has(w);
+    const trCls = already ? ' class="added"' : '';
+    const sug = already ? null : getSuggestedReading(w);
+    const initVal = sug ? sug.reading : '';
+    const srcLabel = sug ? '<span class="stat ' + (sug.src === 'rPh' ? 'ok' : 'warn') + '" style="margin:0; font-size:11px; padding:2px 7px;">' + sug.src + '</span>' : '';
+    html += '<tr' + trCls + ' data-w="' + escapeHtml(w) + '">';
+    html += '<td class="ng-kanji">' + escapeHtml(w) + '</td>';
+    html += '<td><input type="text" data-idx="' + i + '" value="' + escapeHtml(initVal) + '" placeholder="ひらがなを入力..." ' + (already ? 'disabled' : '') + '></td>';
+    html += '<td>' + srcLabel + '</td>';
+    html += '<td class="ng-actions">';
+    if (already) html += '<span style="color:#1e8449; font-size:12px;">追加済</span>';
+    else html += '<button class="success btn-add-ng" data-idx="' + i + '">登録</button><button class="secondary btn-skip-ng" data-idx="' + i + '">スキップ</button>';
+    html += '</td></tr>';
+  });
+  html += '</tbody></table>';
+  ngArea.innerHTML = html;
+
+  document.getElementById('btnAddAll').onclick = () => {
+    let added = 0, withReading = 0;
+    lastUnconverted.forEach((w, idx) => {
+      if (!registeredKeys.has(w) && !lastUnconvertedAdded.has(w)) {
+        const inp = ngArea.querySelector('input[data-idx="' + idx + '"]');
+        const reading = inp ? inp.value.trim() : '';
+        kanjiList.push([w, reading]); lastUnconvertedAdded.add(w);
+        added++; if (reading) withReading++;
+      }
+    });
+    saveList(); renderTable(); renderUnconvertedTable();
+    log(added + ' 件を漢字リストに追加しました（うち ' + withReading + ' 件にひらがなあり）。');
+  };
+  const lkmBtn = document.getElementById('btnLoadKuromoji');
+  if (lkmBtn) {
+    lkmBtn.onclick = async () => {
+      lkmBtn.disabled = true; lkmBtn.textContent = '辞書読込中...';
+      await ensureKuromojiLoaded(); renderUnconvertedTable();
+    };
+  }
+  document.getElementById('btnHideAdded').onclick = () => {
+    ngArea.querySelectorAll('tr.added').forEach(tr => tr.style.display = 'none');
+  };
+  ngArea.querySelectorAll('.btn-add-ng').forEach(btn => {
+    btn.onclick = () => {
+      const idx = parseInt(btn.getAttribute('data-idx'));
+      const w = lastUnconverted[idx];
+      const inp = ngArea.querySelector('input[data-idx="' + idx + '"]');
+      const reading = inp.value.trim();
+      if (registeredKeys.has(w)) { alert('「' + w + '」は既に漢字リストに登録されています。'); return; }
+      kanjiList.push([w, reading]); lastUnconvertedAdded.add(w);
+      saveList(); renderTable(); renderUnconvertedTable();
+      log('「' + w + '」→「' + reading + '」を漢字リストに追加しました。');
+    };
+  });
+  ngArea.querySelectorAll('.btn-skip-ng').forEach(btn => {
+    btn.onclick = () => { btn.closest('tr').style.display = 'none'; };
+  });
+  ngArea.querySelectorAll('input[data-idx]').forEach(inp => {
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const idx = parseInt(inp.getAttribute('data-idx'));
+        const btn = ngArea.querySelector('.btn-add-ng[data-idx="' + idx + '"]');
+        if (btn) btn.click();
+      }
+    });
+  });
+}
+
+const migrated = applyHiraganaMigrations(kanjiList);
+if (migrated.length > 0) {
+  saveList();
+  migrated.forEach(m => log('修正：「' + m.kanji + '」→「' + m.from + '」を「' + m.to + '」に変更しました。', 'ok'));
+}
+renderTable();
+log('準備完了。漢字リスト ' + kanjiList.length + ' 件、対象「' + loadRange() + '」をロードしました。' + (migrated.length > 0 ? ' （' + migrated.length + ' 件の読みを自動修正しました）' : ''));
+</script>
+</body>
+</html>
